@@ -230,7 +230,7 @@ Validate before uploading:
 ## 11. Submission checklist
 
 - [x] Publisher/contact set to `lllhcbjj` / GitHub Issues in `docs/privacy.html` and `PRIVACY.md`.
-- [ ] Verify `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html` is live (GitHub Pages `/docs`).
+- [x] Verify `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html` is live (GitHub Pages `/docs`, status built).
 - [ ] Capture real screenshots at 1280×800 or 640×480.
 - [x] Logo 300×300 and optional tiles generated in `docs/store/`.
 - [ ] Create/verify Partner Center individual account (free).
