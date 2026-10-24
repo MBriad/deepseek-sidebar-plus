@@ -298,6 +298,12 @@ deepseek-sidebar-plus/
 **Q：更新扩展后设置丢了？**  
 设置保存在扩展 ID 对应的 `chrome.storage.local`。只要从同一目录加载，ID 不变，设置会保留；移动目录可能导致 ID 变化。
 
+## License
+
+- **源代码和本文档**采用 [MIT License](LICENSE)，Copyright (c) 2026 lllhcbjj。
+- **不包含在 MIT 内**：`icons/` 里的狐狸图标、`docs/store/` 里由它衍生的 Logo/宣传图，以及 DeepSeek 名称和相关商标。详见 [NOTICE](NOTICE)。
+- 本扩展是非官方项目，与 DeepSeek 官方无关联。如果你要把项目用于商业分发，建议替换图标/宣传图，并自行确认 DeepSeek 商标使用权限。
+
 ## 版本
 
 - **v1.8.0**：Edge Add-ons 商店候选准备：名称加“非官方”、en/zh 本地化、隐私政策、权限说明、商店文案、Logo 和宣传图；商店包不包含开发文档。
@@ -313,4 +319,4 @@ deepseek-sidebar-plus/
 
 ---
 
-图标沿用原扩展；本项目仅用于个人学习与自用，非官方产品。
+图标和宣传图沿用/衍生自原扩展，不包含在 MIT 许可内；详见 [NOTICE](NOTICE)。本项目是非官方产品。

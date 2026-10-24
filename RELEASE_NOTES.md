@@ -28,6 +28,10 @@ Edge 侧边栏增强版 v1.8.0。非官方扩展，与 DeepSeek 官方无关联�
 
 详细说明见仓库中的 [INSTALL.md](INSTALL.md)。
 
+## License
+
+源代码和文档采用 MIT License（见 `LICENSE`）。`icons/` 狐狸图标、`docs/store/` 衍生宣传图和 DeepSeek 商标不包含在 MIT 内，详见 `NOTICE`。非官方项目，与 DeepSeek 官方无关联。
+
 ## 注意
 
 - 需要 Microsoft Edge 桌面版 116+；手机 Edge 不支持这类侧边栏扩展。

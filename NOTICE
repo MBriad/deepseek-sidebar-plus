@@ -1,0 +1,23 @@
+DeepSeek Sidebar Enhanced (Unofficial)
+Copyright (c) 2026 lllhcbjj
+
+The MIT license in LICENSE applies to the source code and documentation
+authored for this project, except for the exclusions below.
+
+Excluded assets and marks
+-------------------------
+- The fox artwork in icons/ and the promotional images in docs/store/ derived
+  from it are brand assets and are NOT licensed under the MIT license. They are
+  derived from the icon of the original "Deepseek Chat Sidebar (Unofficial)"
+  extension. All rights remain with their respective rights holder. Do not
+  reuse these images commercially or in a way that implies endorsement without
+  permission.
+- "DeepSeek" and related names, logos, and trademarks belong to their
+  respective owner. They are used only to describe compatibility. This project
+  is unofficial and is not affiliated with, endorsed by, or operated by
+  DeepSeek.
+- Third-party websites, services, and dependencies remain subject to their own
+  terms and licenses.
+
+If you want a fully MIT-licensed package, replace the excluded icon and promo
+artwork with assets you own, and remove the DeepSeek branding from your fork.
