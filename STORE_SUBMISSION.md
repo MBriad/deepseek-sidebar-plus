@@ -204,15 +204,15 @@ Capture at 1280×800 (browser window) or 640×480; keep text readable and do not
 Build the minimal store package (no dev docs, no README, no privacy page inside):
 
 ```powershell
-$root = "E:\workspce\WEI\deepseek-sidebar-plus"
-$dist = "E:\workspce\WEI\.store-build\v1.8.0"
+$root = "C:\path\to\deepseek-sidebar-plus"
+$dist = Join-Path $env:TEMP "deepseek-sidebar-store\v1.8.0"
 Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 Copy-Item "$root\manifest.json","$root\background.js","$root\rules.json" $dist
 Copy-Item "$root\icons" $dist -Recurse
 Copy-Item "$root\src" $dist -Recurse
 Copy-Item "$root\_locales" $dist -Recurse
-Compress-Archive -Path "$dist\*" -DestinationPath "E:\workspce\WEI\deepseek-sidebar-plus-v1.8.0-store.zip" -Force
+Compress-Archive -Path "$dist\*" -DestinationPath (Join-Path $env:TEMP "deepseek-sidebar-plus-v1.8.0-store.zip") -Force
 ```
 
 The ZIP must have `manifest.json` at its root. Do not add `key` or `update_url`; Partner Center assigns those for store packages.

@@ -17,7 +17,7 @@
 你安装的商店版扩展 ID 是 `nohnmlomaejjhleigmkbcdebkcidnpjd`，实际文件位于：
 
 ```text
-C:\Users\hzn\AppData\Local\Microsoft\Edge\User Data\Default\Extensions\nohnmlomaejjhleigmkbcdebkcidnpjd\1.0_0
+%LOCALAPPDATA%\Microsoft\Edge\User Data\<Profile>\Extensions\nohnmlomaejjhleigmkbcdebkcidnpjd\1.0_0
 ```
 
 原版真正生效的代码只有四个文件：
