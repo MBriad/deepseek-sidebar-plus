@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "description": "扩展名称",
+    "message": "DeepSeek 侧边栏增强版（非官方）"
+  },
+  "extDescription": {
+    "description": "商店短描述",
+    "message": "非官方 DeepSeek 侧边栏：读取网页、划词自动填入、引用对话、提示词库、PDF 支持。"
+  },
+  "actionTitle": {
+    "description": "工具栏按钮提示",
+    "message": "打开 DeepSeek 侧边栏"
+  }
+}

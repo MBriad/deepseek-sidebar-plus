@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "description": "Extension name shown in Edge and the store listing",
+    "message": "DeepSeek Sidebar Enhanced (Unofficial)"
+  },
+  "extDescription": {
+    "description": "Short store description (keep under 132 characters)",
+    "message": "Unofficial DeepSeek sidebar: page reader, selection autofill, chat quotes, prompt library, and PDF support."
+  },
+  "actionTitle": {
+    "description": "Toolbar button tooltip",
+    "message": "Open DeepSeek sidebar"
+  }
+}

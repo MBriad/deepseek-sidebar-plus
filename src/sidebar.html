@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DeepSeek 侧边栏增强版（非官方）</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar">
+      <div class="brand" title="DeepSeek 侧边栏增强版">
+        <img class="brand-icon" src="../icons/icon32.png" width="20" height="20" alt="">
+        <span class="brand-name">DeepSeek<span class="brand-plus">+</span></span>
+      </div>
+
+      <div class="tools">
+        <button id="btn-read" class="tool" type="button" title="读取当前网页正文" aria-label="读取当前网页正文">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3.5h8.5L19 8v12.5H6z"></path>
+            <path d="M14 3.5V8h5"></path>
+            <path d="M9 12h7M9 15.5h7M9 19h4"></path>
+          </svg>
+          <span class="label">读本页</span>
+        </button>
+
+        <button id="btn-autofill" class="tool toggle active" type="button" aria-pressed="true" title="划词自动填入：开">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 4.5l4 4-8.8 8.8-4.8 1 1-4.8z"></path>
+            <path d="M12.8 7.2l4 4"></path>
+            <path d="M5 20h7"></path>
+          </svg>
+          <span class="label">划词</span>
+          <span class="toggle-dot" aria-hidden="true"></span>
+        </button>
+
+        <button id="btn-paste" class="tool icon-only" type="button" title="从剪贴板填入（本地 PDF 可用）" aria-label="从剪贴板填入">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="4" width="14" height="17" rx="2"></rect>
+            <path d="M9 4.5V3h6v1.5"></path>
+            <path d="M12 9v6"></path>
+            <path d="M9.5 12.5L12 15l2.5-2.5"></path>
+          </svg>
+        </button>
+
+        <button id="btn-prompts" class="tool icon-only" type="button" title="提示词库" aria-label="提示词库">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 4.5h12v16l-6-4-6 4z"></path>
+            <path d="M9 8.5h6M9 12h6"></path>
+          </svg>
+        </button>
+
+        <button id="btn-settings" class="tool icon-only" type="button" title="设置" aria-label="设置">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.4a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.2z"></path>
+          </svg>
+        </button>
+      </div>
+
+      <button id="conn" class="conn connecting" type="button" data-state="connecting" title="正在连接 DeepSeek…" aria-label="连接状态">
+        <span class="conn-dot"></span>
+      </button>
+    </header>
+
+    <div id="banner" class="banner hidden" role="status" aria-live="polite">
+      <span id="banner-text"></span>
+      <button id="banner-action" class="link-btn hidden" type="button"></button>
+      <button id="banner-close" class="banner-close" type="button" title="关闭" aria-label="关闭提示">×</button>
+    </div>
+
+    <main id="frame-wrap">
+      <iframe id="ds-frame" title="DeepSeek" allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>
+      <div id="frame-loading" class="frame-overlay">
+        <div class="spinner" aria-hidden="true"></div>
+        <div id="frame-loading-text" class="frame-loading-text">正在加载 DeepSeek…</div>
+        <button id="frame-retry" class="btn small hidden" type="button">重新加载</button>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- 网页正文预览 -->
+    <div id="page-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="page-sheet-title">
+      <div class="sheet-backdrop" data-close="page"></div>
+      <section class="sheet-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">当前网页</div>
+            <h2 id="page-sheet-title">网页正文</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="page" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div id="page-meta" class="page-meta"></div>
+        <div id="page-warning" class="page-warning hidden"></div>
+        <pre id="page-preview" class="page-preview"></pre>
+        <div class="sheet-actions">
+          <button id="btn-fill-ask" class="btn primary" type="button" title="把网页正文作为 .txt 文件附加到 DeepSeek">文件提问</button>
+          <button id="btn-fill-summary" class="btn" type="button" title="附加网页正文文件，并填入总结指令">总结本页</button>
+          <button id="btn-fill-raw" class="btn ghost" type="button" title="把网页正文直接写进输入框">直接填入</button>
+          <button id="btn-copy-page" class="btn ghost" type="button">复制</button>
+        </div>
+        <p class="hint">文件提问/总结本页会把完整正文作为 .txt 附加到 DeepSeek，输入框只保留简短问题；直接填入仍会把正文写进输入框。</p>
+      </section>
+    </div>
+
+    <!-- 提示词库 -->
+    <div id="prompt-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
+      <div class="sheet-backdrop" data-close="prompt"></div>
+      <section class="sheet-card prompt-sheet-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">Prompt Library</div>
+            <h2 id="prompt-title">提示词库</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="prompt" title="关闭" aria-label="关闭">×</button>
+        </div>
+
+        <div class="prompt-toolbar">
+          <input id="prompt-search" class="text-input" type="search" placeholder="搜索名称、内容或标签">
+          <button id="btn-save-input" class="btn primary" type="button">保存当前输入</button>
+        </div>
+
+        <div id="prompt-form" class="prompt-form hidden">
+          <div class="prompt-form-row">
+            <input id="prompt-name" class="text-input" type="text" placeholder="名称，例如：代码审查">
+            <input id="prompt-tags" class="text-input" type="text" placeholder="标签，逗号分隔">
+          </div>
+          <textarea id="prompt-text" class="prompt-textarea" placeholder="提示词内容"></textarea>
+          <div class="prompt-form-actions">
+            <button id="btn-prompt-save" class="btn primary" type="button">保存</button>
+            <button id="btn-prompt-cancel" class="btn ghost" type="button">取消</button>
+            <span id="prompt-form-hint" class="prompt-form-hint"></span>
+          </div>
+        </div>
+
+        <div id="prompt-list" class="prompt-list"></div>
+
+        <div class="prompt-footer">
+          <span id="prompt-count" class="prompt-count"></span>
+          <div class="prompt-footer-actions">
+            <button id="btn-prompt-import" class="btn ghost small" type="button">导入</button>
+            <button id="btn-prompt-export" class="btn ghost small" type="button">导出</button>
+            <input id="prompt-import-file" type="file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 设置 -->
+    <div id="settings-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="sheet-backdrop" data-close="settings"></div>
+      <section class="sheet-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">DeepSeek+</div>
+            <h2 id="settings-title">设置</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="settings" title="关闭" aria-label="关闭">×</button>
+        </div>
+
+        <div class="settings-body">
+          <label class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">划词自动填入</span>
+              <span class="setting-desc">在网页中高亮选中文字后，自动填入 DeepSeek 输入框</span>
+            </span>
+            <span class="switch">
+              <input id="setting-autofill" type="checkbox">
+              <span class="slider" aria-hidden="true"></span>
+            </span>
+          </label>
+
+          <div class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">填入方式</span>
+              <span class="setting-desc">输入框已有内容时怎么处理</span>
+            </span>
+            <select id="setting-mode" class="select" aria-label="划词填入方式">
+              <option value="smart">智能追加</option>
+              <option value="replace">覆盖</option>
+              <option value="append">追加</option>
+            </select>
+          </div>
+
+          <label class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">附带网页来源</span>
+              <span class="setting-desc">划词填入时附上页面标题和链接</span>
+            </span>
+            <span class="switch">
+              <input id="setting-attach" type="checkbox">
+              <span class="slider" aria-hidden="true"></span>
+            </span>
+          </label>
+
+          <label class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">网页内轻提示</span>
+              <span class="setting-desc">划词发送后，在网页右下角显示约 2 秒提示</span>
+            </span>
+            <span class="switch">
+              <input id="setting-page-toast" type="checkbox">
+              <span class="slider" aria-hidden="true"></span>
+            </span>
+          </label>
+
+          <div class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">读取网页方式</span>
+              <span class="setting-desc">智能正文会去掉导航、广告和评论区</span>
+            </span>
+            <select id="setting-extract-mode" class="select" aria-label="读取网页方式">
+              <option value="readable">智能正文</option>
+              <option value="full">整页文本</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">直接填入字数上限</span>
+              <span class="setting-desc">仅“直接填入”生效；文件附件保留完整正文（最多 50,000 字）</span>
+            </span>
+            <select id="setting-maxchars" class="select" aria-label="最多读取字数">
+              <option value="6000">6,000 字</option>
+              <option value="12000">12,000 字</option>
+              <option value="20000">20,000 字</option>
+              <option value="30000">30,000 字</option>
+            </select>
+          </div>
+
+          <div class="settings-actions">
+            <button id="btn-grab-selection" class="btn" type="button">填入当前选中文字</button>
+            <button id="btn-open-tab" class="btn ghost" type="button">在标签页打开 chat.deepseek.com</button>
+            <button id="btn-open-reader" class="btn ghost" type="button">用增强阅读器打开当前 PDF</button>
+            <button id="btn-open-sidebar-tab" class="btn ghost" type="button">在标签页打开侧边栏（移动/分屏）</button>
+            <button id="btn-reload-frame" class="btn ghost" type="button">重新加载 DeepSeek</button>
+            <button id="btn-reset-settings" class="btn ghost danger" type="button">恢复默认设置</button>
+          </div>
+
+          <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前打开的 DeepSeek 输入框。本扩展为非官方版本。</p>
+          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.8.0</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>
+
