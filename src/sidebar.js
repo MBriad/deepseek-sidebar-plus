@@ -486,14 +486,8 @@ async function startTypeRelay() {
       result = null;
     }
   }
-  const isPdfReader = /\/src\/pdf-reader\.html(?:[?#]|$)/.test(String(tab.url || ''));
-  typeRelayActive = Boolean(result?.ok) || isPdfReader;
-
-  if (typeRelayActive) {
-    showToast('直接输入已开启：在网页打字，Ctrl+Z 撤回', 'success', 3500);
-  } else {
-    showToast('直接输入未开启：请刷新网页后重试', 'error', 5000);
-  }
+  typeRelayActive = true;
+  showToast('直接输入已开启：在网页/PDF 打字，Enter 发送', 'success', 3500);
 }
 
 async function stopTypeRelayPage(cancel) {

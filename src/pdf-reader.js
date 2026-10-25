@@ -256,16 +256,15 @@
       }
       return true;
     }
-    if (
-      event.key.length === 1
-      && !event.ctrlKey
-      && !event.metaKey
-      && !event.altKey
-    ) {
+    let character = event.key.length === 1 ? event.key : '';
+    if (!character && event.code === 'Space') character = ' ';
+    if (!character && /^Key[A-Z]$/.test(event.code || '')) character = event.code.slice(3).toLowerCase();
+    if (!character && /^Digit[0-9]$/.test(event.code || '')) character = event.code.slice(5);
+    if (character && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       event.stopPropagation();
       if (typeRelay) {
-        typeRelay.value += event.key;
+        typeRelay.value += character;
         relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
       }
       return true;
@@ -324,6 +323,9 @@
           pdfSelectionRect = null;
         }
 
+        if (typeRelayActive && document.activeElement !== typeRelay) {
+          typeRelay?.focus({ preventScroll: true });
+        }
         if (text !== lastText) handleSelection(text);
       } catch {
         // The PDF.js frame may still be loading.
