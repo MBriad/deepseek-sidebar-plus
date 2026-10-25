@@ -29,6 +29,7 @@
   let typeRelayActive = false;
   let typeRelayComposing = false;
   let typeRelayShortcut = 'Ctrl+Z';
+  let lastPointer = null;
 
   document.title = `${fileName} - DeepSeek PDF`;
   document.getElementById('file-name').textContent = fileName;
@@ -39,6 +40,17 @@
   window.addEventListener('message', onPdfMessage);
   window.addEventListener('pagehide', () => {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+  }, true);
+  document.addEventListener('pointerup', (event) => {
+    lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+    if (typeRelayActive) positionTypeRelay();
+  }, true);
+  window.addEventListener('resize', () => {
+    if (typeRelayActive) positionTypeRelay();
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -163,12 +175,30 @@
     return typeRelay;
   }
 
+  function positionTypeRelay() {
+    if (!typeRelay) return;
+    const width = Math.min(340, Math.max(220, window.innerWidth - 32));
+    typeRelay.style.width = `${width}px`;
+    let left = (window.innerWidth - width) / 2;
+    let top = window.innerHeight - 60;
+    if (lastPointer) {
+      left = Math.min(Math.max(8, lastPointer.x - 24), window.innerWidth - width - 8);
+      top = lastPointer.y + 16;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, lastPointer.y - 52);
+    }
+    typeRelay.style.left = `${left}px`;
+    typeRelay.style.top = `${top}px`;
+    typeRelay.style.bottom = 'auto';
+    typeRelay.style.transform = 'none';
+  }
+
   function startTypeRelay(shortcut) {
     if (!lastSelectionId) return;
     typeRelayShortcut = shortcut || 'Ctrl+Z';
     const relay = ensureTypeRelay();
     relay.value = '';
     relay.style.display = 'block';
+    positionTypeRelay();
     typeRelayActive = true;
     typeRelayComposing = false;
     try {

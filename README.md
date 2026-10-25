@@ -162,7 +162,7 @@
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.11.9-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.11.10-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -177,7 +177,7 @@
 
 ## Edge 商店提交材料
 
-**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.11.9 新增网页标签和 DeepSeek / ChatGPT 切换，暂不覆盖审核中的商店包，等审核结束后再提交。
+**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.11.10 新增网页标签和 DeepSeek / ChatGPT 切换，暂不覆盖审核中的商店包，等审核结束后再提交。
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
@@ -185,7 +185,7 @@
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
 - 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)
 - 当前审核包：`deepseek-sidebar-plus-v1.9.3-store.zip`
-- v1.11.9 商店包：`deepseek-sidebar-plus-v1.11.9-store.zip`（审核结束后再提交）
+- v1.11.10 商店包：`deepseek-sidebar-plus-v1.11.10-store.zip`（审核结束后再提交）
 
 **商店提交前还需要：**
 
@@ -350,7 +350,7 @@ deepseek-sidebar-plus/
 
 ## 版本
 
-- **v1.11.9**：从 v1.11.0 干净重做；保留 DeepSeek / ChatGPT 切换、网页标签和自动分类；划词填入后启用网页键盘转发，可直接打字同步到侧边栏；默认 Ctrl+Z / Esc 撤回，快捷键可自定义；修复 ChatGPT 撤销、`/` 命令快速 Enter 和隐藏输入框问题。
+- **v1.11.10**：从 v1.11.0 干净重做；保留 DeepSeek / ChatGPT 切换、网页标签和自动分类；划词填入后启用网页键盘转发，可直接打字同步到侧边栏；默认 Ctrl+Z / Esc 撤回，快捷键可自定义；修复 ChatGPT 撤销、`/` 命令快速 Enter 和隐藏输入框问题。
 - **v1.9.3**：更换为原创图标（聊天气泡 + 侧边栏 + 命令符号），移除原版狐狸图标；图标和商店宣传图纳入 MIT，Logo/宣传图已重新生成。
 - **v1.9.2**：`@` 增加置顶的“当前页”项（`@` 后直接 Enter 即可把当前页作为文档附加），标签页列表覆盖所有窗口并取消条数截断；本地 PDF“读本页”附加后默认自动打开增强阅读器，可在设置关闭。
 - **v1.9.1**：新增 `@` 读取其他已打开标签页（自动排除当前页，作为文档附加）；完善本地 `file://` PDF 的“读本页”读取和文件访问提示。

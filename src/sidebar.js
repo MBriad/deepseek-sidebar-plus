@@ -483,7 +483,8 @@ async function startTypeRelay() {
       result = null;
     }
   }
-  typeRelayActive = Boolean(result?.ok);
+  const isPdfReader = /\/src\/pdf-reader\.html(?:[?#]|$)/.test(String(tab.url || ''));
+  typeRelayActive = Boolean(result?.ok) || isPdfReader;
 
   if (typeRelayActive) {
     showToast('直接输入已开启：在网页打字，Ctrl+Z 撤回', 'success', 3500);

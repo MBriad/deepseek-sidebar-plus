@@ -627,7 +627,7 @@
 
   function installCommandPalette() {
     document.addEventListener('input', scheduleCommandPalette, true);
-    document.addEventListener('keydown', handleCommandKeyDown, true);
+    window.addEventListener('keydown', handleCommandKeyDown, true);
 
     document.addEventListener('mousedown', (event) => {
       if (commandHost && event.composedPath().includes(commandHost)) return;
@@ -948,11 +948,13 @@
   function handleCommandKeyDown(event) {
     if (event.isComposing || event.keyCode === 229) return;
 
-    const input = findInput();
-    if (!input) return;
-    if (!(event.target === input || input.contains(event.target))) return;
-
     const visible = Boolean(commandHost && commandHost.style.display !== 'none');
+    const input = visible && commandMatch?.input?.isConnected
+      ? commandMatch.input
+      : findInput();
+    if (!input) return;
+    if (!visible && !(event.target === input || input.contains(event.target))) return;
+
     const wantsEnter = event.key === 'Enter' || event.key === 'Tab';
     const wantsArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
     if (!visible && !wantsEnter && !wantsArrow) return;
