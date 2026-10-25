@@ -1,11 +1,12 @@
-# v1.10.1 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.10.2 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.10.1。非官方扩展，与 DeepSeek 官方无关联。
+Edge 侧边栏增强版 v1.10.2。非官方扩展，与 DeepSeek 官方无关联。
 
 ## 网页标签
 
 - 工具栏新增标签按钮；给当前页输入标签后按 Enter 即保存，支持逗号分隔多个标签。
 - 自动保存网页标题、URL、标签和正文摘要，只存在本机 `chrome.storage.local`。
+- 本地自动分类：默认保存标签时根据标题、URL、摘要识别技术/设计/研究/学习/文档/新闻/工具/视频/阅读/购物/生活，自动补一个分类标签；也可以点“立即分类”手动补，或取消“保存时自动分类”。
 - 标签栏一键筛选；标签管理支持新建、改名、合并、删除。
 - 搜索支持自然语言描述，例如“找之前看过的关于 AI 设计的网页”；使用本地同义词 + 中文分词打分，不联网、不调用云端模型。
 - 切换标签页时自动识别当前页；标签输入框保留，保存会写到当前页，不会误写到上一页。
@@ -29,9 +30,9 @@ Edge 侧边栏增强版 v1.10.1。非官方扩展，与 DeepSeek 官方无关联
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.10.1-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.10.1.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.10.1-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
+- `deepseek-sidebar-plus-v1.10.2-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.10.2.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.10.2-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
 
 ## 安装
 
@@ -50,7 +51,7 @@ Edge 侧边栏增强版 v1.10.1。非官方扩展，与 DeepSeek 官方无关联
 ## 注意
 
 - 需要 Microsoft Edge 桌面版 116+；手机 Edge 不支持这类侧边栏扩展。
-- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.10.1 新增网页标签，暂不覆盖审核中的商店包。
+- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.10.2 新增网页标签，暂不覆盖审核中的商店包。
 - 未上架商店时不会自动更新；更新请覆盖同一文件夹后点“重新加载”。
 - 未打包扩展的 ID 默认跟路径走；移动/换文件夹会丢失原设置和提示词库。
 - 隐私政策：https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html

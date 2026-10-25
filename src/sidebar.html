@@ -182,9 +182,16 @@
             <input id="page-tag-input" class="text-input" type="text" maxlength="60" placeholder="输入标签，Enter 保存当前页" autocomplete="off">
             <button id="btn-page-tag-add" class="btn primary" type="button">加标签</button>
           </div>
+          <div class="page-tag-auto-row">
+            <label class="page-tag-auto-toggle">
+              <input id="page-tag-auto-classify" type="checkbox" checked>
+              <span>保存时自动分类</span>
+            </label>
+            <button id="btn-page-tag-auto" class="link-btn" type="button">立即分类</button>
+          </div>
           <div id="page-tag-current-tags" class="page-tag-current-tags"></div>
           <div id="page-tag-suggestions" class="page-tag-suggestions"></div>
-          <p class="page-tag-hint">支持逗号分隔多个标签；切换标签页会自动识别当前页。标签只保存在本机，不会上传。</p>
+          <p class="page-tag-hint">支持逗号分隔多个标签；切换标签页会自动识别当前页；自动分类只在本机识别技术/设计/研究等。标签只保存在本机，不会上传。</p>
         </div>
 
         <div class="page-tag-search-row">
@@ -318,7 +325,7 @@
           </div>
 
           <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前打开的 DeepSeek 输入框。本扩展为非官方版本。</p>
-          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.10.1</p>
+          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.10.2</p>
         </div>
       </section>
     </div>

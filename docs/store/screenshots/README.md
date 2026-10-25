@@ -13,4 +13,4 @@ They show the actual extension UI with demo content; no DeepSeek account is requ
 
 Recommended order: 01 → 02 → 03 → 04 → 05.
 
-The store images contain demo content (the article, prompt names, sample PDF, and tagged pages are examples, not user data). The extension UI and icons are the real v1.10.0 assets.
+The store images contain demo content (the article, prompt names, sample PDF, and tagged pages are examples, not user data). The extension UI and icons are the real v1.10.2 assets.

@@ -903,6 +903,34 @@ input:focus-visible + .slider {
   font-size: 11px;
 }
 
+.page-tag-auto-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.page-tag-auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.page-tag-auto-toggle input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.page-tag-auto-row .link-btn {
+  font-size: 9.5px;
+}
+
 .page-tag-current-tags,
 .page-tag-suggestions {
   display: flex;

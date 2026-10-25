@@ -9,6 +9,7 @@ const PAGE_EXTRACT_MAX = 50000;
 const PROMPT_STORAGE_KEY = 'promptLibrary';
 const PAGE_TAG_KEY = 'pageTagLibrary';
 const PAGE_TAG_REGISTRY_KEY = 'pageTagRegistry';
+const PAGE_TAG_AUTO_KEY = 'pageTagAutoClassify';
 
 const DEFAULT_SETTINGS = {
   autoFillSelection: true,
@@ -47,6 +48,7 @@ const activePageTags = new Set();
 let pageTagTab = null;
 let pageTagCurrentEntry = null;
 let pageTagBusy = false;
+let pageTagAutoClassify = true;
 let pageTagRefreshTimer = 0;
 const pageSemanticCache = new Map();
 let promptFormMode = '';
@@ -1124,8 +1126,79 @@ const PAGE_TAG_SYNONYMS = {
   'design': '设计 ui ux',
   'research': '研究 study',
   'tutorial': '教程 guide',
-  'read later': '待读 稍后读'
+  'read later': '待读 稍后读',
+  '技术': 'technology tech code',
+  '设计': 'design',
+  '研究': 'research study',
+  '学习': 'learn learning course',
+  '文档': 'docs documentation',
+  '新闻': 'news',
+  '工具': 'tool',
+  '视频': 'video',
+  '阅读': 'read article',
+  '购物': 'shop shopping',
+  '生活': 'life'
 };
+
+const PAGE_AUTO_CATEGORIES = [
+  {
+    name: '技术',
+    words: ['编程', '代码', '开发', '技术', '人工智能', '模型', '算法', '数据库', '架构', '开源', 'programming', 'code', 'developer', 'software', 'api', 'github', 'javascript', 'typescript', 'python', 'linux', 'docker', 'database', 'ai', 'machine learning'],
+    domains: ['github.com', 'gitlab.com', 'stackoverflow.com', 'developer.mozilla.org', 'dev.to']
+  },
+  {
+    name: '设计',
+    words: ['设计', '交互', '视觉', '字体', '配色', '排版', '原型', 'design', 'ui', 'ux', 'figma', 'typography', 'layout', 'prototype'],
+    domains: ['figma.com', 'dribbble.com', 'behance.net']
+  },
+  {
+    name: '研究',
+    words: ['研究', '论文', '实验', '学术', '数据集', '调研', 'research', 'paper', 'study', 'experiment', 'survey', 'dataset', 'arxiv'],
+    domains: ['arxiv.org', 'scholar.google.com', 'researchgate.net', 'pubmed.ncbi.nlm.nih.gov']
+  },
+  {
+    name: '学习',
+    words: ['教程', '入门', '学习', '课程', '指南', '教学', 'tutorial', 'course', 'guide', 'learn', 'how to', 'lesson'],
+    domains: ['coursera.org', 'udemy.com', 'freecodecamp.org', 'w3schools.com', 'khanacademy.org']
+  },
+  {
+    name: '文档',
+    words: ['文档', '手册', '参考', '规范', '说明书', 'documentation', 'docs', 'manual', 'reference', 'specification'],
+    domains: ['docs.', 'learn.microsoft.com', 'developer.apple.com', 'developer.chrome.com']
+  },
+  {
+    name: '新闻',
+    words: ['新闻', '发布', '报道', '最新', '宣布', 'news', 'release', 'announce', 'launch', 'update'],
+    domains: ['techcrunch.com', 'theverge.com', '36kr.com', 'sspai.com']
+  },
+  {
+    name: '工具',
+    words: ['工具', '生成器', '转换', '在线', '计算器', 'tool', 'generator', 'converter', 'online', 'calculator'],
+    domains: ['tools.', 'tool.', 'tinypng.com', 'remove.bg']
+  },
+  {
+    name: '视频',
+    words: ['视频', '影片', '教程视频', 'video', 'youtube', 'bilibili', 'watch', 'vlog'],
+    domains: ['youtube.com', 'youtu.be', 'bilibili.com', 'vimeo.com']
+  },
+  {
+    name: '阅读',
+    words: ['阅读', '文章', '博客', '长文', '专栏', 'read', 'article', 'blog', 'essay', 'newsletter'],
+    domains: ['medium.com', 'substack.com', 'sspai.com']
+  },
+  {
+    name: '购物',
+    words: ['购买', '价格', '优惠', '购物', '商城', 'buy', 'price', 'shop', 'deal', 'amazon'],
+    domains: ['amazon.com', 'taobao.com', 'jd.com', 'tmall.com', 'ebay.com']
+  },
+  {
+    name: '生活',
+    words: ['健康', '旅行', '美食', '菜谱', '生活', 'health', 'travel', 'food', 'recipe', 'life'],
+    domains: []
+  }
+];
+
+const PAGE_CATEGORY_NAMES = new Set(PAGE_AUTO_CATEGORIES.map((category) => category.name));
 
 function normalizePageTagName(value) {
   return String(value || '')
@@ -1286,6 +1359,9 @@ async function loadTaggedPages() {
 
 async function openPageTags() {
   await loadTaggedPages();
+  const autoState = await chrome.storage.local.get(PAGE_TAG_AUTO_KEY);
+  pageTagAutoClassify = autoState?.[PAGE_TAG_AUTO_KEY] !== false;
+  $('#page-tag-auto-classify').checked = pageTagAutoClassify;
   activePageTags.clear();
   $('#page-tag-search').value = '';
   $('#page-tag-manager').classList.add('hidden');
@@ -1448,8 +1524,15 @@ async function addTagsToCurrentPage(values) {
     renderPageTagList();
     showToast(`已标记：${names.join('、')}`);
 
+    const shouldAutoClassify = pageTagAutoClassify && pageTagCurrentEntry?.id === entry.id;
     if (!entry.excerpt) {
-      capturePageExcerpt(entry, pageTagTab.id).catch(() => {});
+      capturePageExcerpt(entry, pageTagTab.id).finally(() => {
+        if (shouldAutoClassify && pageTagAutoClassify && pageTagCurrentEntry?.id === entry.id) {
+          autoClassifyEntry(entry).catch(() => {});
+        }
+      });
+    } else if (shouldAutoClassify) {
+      autoClassifyEntry(entry).catch(() => {});
     }
   } finally {
     pageTagBusy = false;
@@ -1769,6 +1852,107 @@ function pageSemanticScore(entry, term, queryTerms = pageSemanticTerms(term)) {
     if (queryTerms.has(tag.toLowerCase())) score += 8;
   }
   return score;
+}
+
+function pageContainsTerm(text, term) {
+  const haystack = String(text || '').toLowerCase();
+  const needle = String(term || '').toLowerCase();
+  if (!haystack || !needle) return false;
+  if (/^[a-z0-9+#. /_-]+$/i.test(needle)) {
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, 'i').test(haystack);
+  }
+  return haystack.includes(needle);
+}
+
+function classifyPage(entry) {
+  const title = String(entry.title || '').toLowerCase();
+  const excerpt = String(entry.excerpt || '').toLowerCase().slice(0, 1200);
+  const url = String(entry.url || '').toLowerCase();
+  const tags = entry.tags.join(' ').toLowerCase();
+  const host = pageDomain(entry.url).toLowerCase();
+
+  const scored = PAGE_AUTO_CATEGORIES.map((category) => {
+    let score = 0;
+    for (const word of category.words) {
+      if (pageContainsTerm(title, word)) score += 5;
+      else if (pageContainsTerm(host, word)) score += 2;
+      else if (pageContainsTerm(excerpt, word)) score += 1;
+      if (pageContainsTerm(tags, word)) score += 2;
+    }
+    if (category.domains.some((domain) => host === domain || host.endsWith(`.${domain}`) || host.includes(domain))) {
+      score += 8;
+    }
+    return { name: category.name, score };
+  }).sort((a, b) => b.score - a.score);
+
+  if (!scored.length || scored[0].score < 4) return null;
+  return scored[0];
+}
+
+async function autoClassifyEntry(entry, { manual = false } = {}) {
+  if (!entry || !taggedPages.some((item) => item.id === entry.id)) return false;
+  const existing = entry.tags.find((tag) => PAGE_CATEGORY_NAMES.has(tag));
+  if (existing) {
+    if (manual) showToast(`这个网页已经有分类：${existing}`);
+    return false;
+  }
+
+  const category = classifyPage(entry);
+  if (!category) {
+    if (manual) showToast('没有识别到明确分类，可手动加标签', 'info', 3200);
+    return false;
+  }
+
+  addPageTagToRegistryInMemory(category.name);
+  entry.tags.push(category.name);
+  entry.updatedAt = Date.now();
+  pageSemanticCache.clear();
+  await savePageTagState();
+  renderPageTagCurrent();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagList();
+  showToast(`已自动分类：${category.name}`);
+  return true;
+}
+
+async function autoClassifyCurrentPage() {
+  if (!pageTagTab) {
+    showToast('当前页不可分类');
+    return;
+  }
+  if (pageTagCurrentEntry) {
+    await autoClassifyEntry(pageTagCurrentEntry, { manual: true });
+    return;
+  }
+
+  const entry = {
+    id: makePageTagId(),
+    url: pageTagTab.url,
+    title: pageTagTab.title || pageTagTab.url,
+    excerpt: '',
+    tags: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  const category = classifyPage(entry);
+  if (!category) {
+    showToast('没有识别到明确分类，可手动加标签', 'info', 3200);
+    return;
+  }
+
+  entry.tags.push(category.name);
+  taggedPages.unshift(entry);
+  pageTagCurrentEntry = entry;
+  addPageTagToRegistryInMemory(category.name);
+  pageSemanticCache.clear();
+  await savePageTagState();
+  renderPageTagCurrent();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagList();
+  showToast(`已自动分类：${category.name}`);
 }
 
 function renderPageTagList() {
@@ -2597,6 +2781,16 @@ function bindUI() {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     $('#btn-page-tag-add').click();
+  });
+  $('#page-tag-auto-classify').addEventListener('change', (event) => {
+    pageTagAutoClassify = Boolean(event.target.checked);
+    chrome.storage.local.set({ [PAGE_TAG_AUTO_KEY]: pageTagAutoClassify }).catch(() => {});
+    if (pageTagAutoClassify && pageTagCurrentEntry) {
+      autoClassifyEntry(pageTagCurrentEntry).catch(() => {});
+    }
+  });
+  $('#btn-page-tag-auto').addEventListener('click', () => {
+    autoClassifyCurrentPage().catch((error) => showToast(`自动分类失败：${error.message}`, 'error', 4000));
   });
   $('#page-tag-search').addEventListener('input', renderPageTagList);
   $('#btn-page-tag-manager-close').addEventListener('click', () => {
