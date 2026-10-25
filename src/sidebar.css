@@ -751,6 +751,24 @@ input:focus-visible + .slider {
   box-shadow: 0 0 0 2px var(--accent-tint);
 }
 
+.shortcut-button {
+  flex: none;
+  min-width: 72px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--button-bg);
+  color: var(--text);
+  font: 11px/1.4 var(--font);
+  cursor: pointer;
+}
+
+.shortcut-button.capturing {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
 .switch {
   position: relative;
   display: inline-flex;

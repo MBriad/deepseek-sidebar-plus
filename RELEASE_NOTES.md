@@ -1,20 +1,26 @@
-# v1.11.5 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.11.6 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.11.5。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
+Edge 侧边栏增强版 v1.11.6。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
 
 ## 双聊天服务
 
 - 顶部新增“聊天服务”切换：DeepSeek / ChatGPT；选择会记住，切换后自动加载对应网页。
 - 页面读取、划词填入、引用、`/` 提示词命令、`@` 标签页、PDF 和网页标签都作用于当前服务。
 - ChatGPT 需要浏览器能访问 `chatgpt.com`；网络受限时需要代理。
-- 填入、划词或引用后先抑制页面 selection clear，再聚焦窗口、iframe 和输入框；自动填入不会被聚焦动作误撤回。
+- 划词填入后不用点侧边栏输入框：网页启用隐藏输入层，直接打字同步到当前聊天输入框。
+
+## 直接输入与撤回
+
+- 默认 `Ctrl+Z` 或 `Esc` 撤回自动填入并恢复之前草稿；快捷键可在设置里录制修改。
+- 点击页面或侧边栏结束直接输入；之后仍可点输入框继续编辑。
+- 输入法、退格、换行和粘贴都由网页隐藏输入层接管，再同步到聊天输入框。
 
 ## ChatGPT 兼容修复
 
-- 取消高亮时更可靠地撤回自动填入文字并恢复之前草稿，兼容 ChatGPT 对输入值的规范化；点击页面会立即结束聚焦保护并重新检查选区。
+- 取消高亮时更可靠地撤回自动填入文字并恢复之前草稿，兼容 ChatGPT 对输入值的规范化。
 - `/` 命令在快速按 Enter 时同步解析并拦截原生提交，避免把 `/f` 发给 ChatGPT 或弹出反馈窗口；没有匹配的提示词时放行 ChatGPT 自己的 `/` 命令。
 - ChatGPT 登录后优先选择可见的 `#prompt-textarea`，避免隐藏的 mobile composer 导致填入不可见。
-- 这是从 v1.11.0 干净重做的版本：保留双服务、网页标签、撤销和 `/` 修复；聚焦前先确认页面已设置选区保护，再执行聚焦。
+- 这是从 v1.11.0 干净重做的版本：保留双服务、网页标签、撤销和 `/` 修复。
 
 ## 网页标签
 
@@ -44,9 +50,9 @@ Edge 侧边栏增强版 v1.11.5。非官方扩展，与 DeepSeek、OpenAI/ChatGP
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.11.5-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.11.5.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.11.5-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
+- `deepseek-sidebar-plus-v1.11.6-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.11.6.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.11.6-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
 
 ## 安装
 
@@ -65,7 +71,7 @@ Edge 侧边栏增强版 v1.11.5。非官方扩展，与 DeepSeek、OpenAI/ChatGP
 ## 注意
 
 - 需要 Microsoft Edge 桌面版 116+；手机 Edge 不支持这类侧边栏扩展。
-- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.5 新增网页标签，暂不覆盖审核中的商店包。
+- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.6 新增网页标签，暂不覆盖审核中的商店包。
 - 未上架商店时不会自动更新；更新请覆盖同一文件夹后点“重新加载”。
 - 未打包扩展的 ID 默认跟路径走；移动/换文件夹会丢失原设置和提示词库。
 - 隐私政策：https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html

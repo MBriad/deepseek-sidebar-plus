@@ -34,7 +34,8 @@ const DEFAULT_SETTINGS = {
   maxPageChars: 12000,
   extractMode: 'readable',
   showPageToast: true,
-  autoOpenLocalPdfReader: true
+  autoOpenLocalPdfReader: true,
+  undoShortcut: 'Ctrl+Z'
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -56,6 +57,7 @@ let toastTimer = null;
 let pageData = null;
 let pendingSelection = null;
 let activeSelectionId = '';
+let typeRelayActive = false;
 let lastClearedSelectionId = '';
 let prompts = [];
 let taggedPages = [];
@@ -257,7 +259,8 @@ function onFrameMessage(event) {
     data.type === 'ATTACH_RESULT' ||
     data.type === 'CLEAR_SELECTION_RESULT' ||
     data.type === 'QUOTE_RESULT' ||
-    data.type === 'INPUT_RESULT'
+    data.type === 'INPUT_RESULT' ||
+    data.type === 'RELAY_RESULT'
   ) {
     const resolve = pendingRequests.get(data.requestId);
     if (resolve) {
@@ -416,6 +419,101 @@ document.addEventListener('visibilitychange', () => {
 /* Fill                                                               */
 /* ------------------------------------------------------------------ */
 
+function normalizeShortcutString(value) {
+  const parts = String(value || '').split('+').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return 'Ctrl+Z';
+  const key = parts.pop();
+  if (!key || key.length > 12) return 'Ctrl+Z';
+  const modifiers = [];
+  if (parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part))) modifiers.push('Ctrl');
+  if (parts.some((part) => /^alt$/i.test(part))) modifiers.push('Alt');
+  if (parts.some((part) => /^shift$/i.test(part))) modifiers.push('Shift');
+  if (!modifiers.length) return 'Ctrl+Z';
+  return `${modifiers.join('+')}+${key.toUpperCase()}`;
+}
+
+function shortcutFromEvent(event) {
+  const modifiers = [];
+  if (event.ctrlKey || event.metaKey) modifiers.push('Ctrl');
+  if (event.altKey) modifiers.push('Alt');
+  if (event.shiftKey) modifiers.push('Shift');
+  const key = String(event.key || '');
+  if (!key || ['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return '';
+  if (!modifiers.length) return '';
+  return `${modifiers.join('+')}+${key.toUpperCase()}`;
+}
+
+function shortcutMatches(event, shortcut) {
+  const parts = String(shortcut || 'Ctrl+Z').split('+').map((part) => part.trim()).filter(Boolean);
+  const key = parts.pop() || 'Z';
+  const ctrl = parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part));
+  const alt = parts.some((part) => /^alt$/i.test(part));
+  const shift = parts.some((part) => /^shift$/i.test(part));
+  const hasCtrl = event.ctrlKey || event.metaKey;
+  return hasCtrl === ctrl
+    && event.altKey === alt
+    && event.shiftKey === shift
+    && String(event.key || '').toLowerCase() === key.toLowerCase();
+}
+
+async function startTypeRelay() {
+  if (!activeSelectionId) return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+
+  await sendToFrame('DS_RELAY_START', {}, 4000);
+  try {
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      type: 'DS_START_TYPE_RELAY',
+      shortcut: settings.undoShortcut || 'Ctrl+Z'
+    });
+    typeRelayActive = Boolean(result?.ok);
+  } catch {
+    typeRelayActive = false;
+  }
+}
+
+async function stopTypeRelayPage(cancel) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'DS_STOP_TYPE_RELAY',
+        cancel: Boolean(cancel)
+      }).catch(() => {});
+    }
+  } catch {
+    // Ignore.
+  }
+}
+
+async function applyTypeRelayText(text) {
+  if (!typeRelayActive) return;
+  await sendToFrame('DS_RELAY_SET', { text: String(text || '') }, 4000);
+}
+
+async function finishTypeRelay(commit) {
+  if (!typeRelayActive) return;
+  typeRelayActive = false;
+  if (commit) {
+    await sendToFrame('DS_RELAY_END', {}, 4000);
+    activeSelectionId = '';
+  } else {
+    await sendToFrame('DS_RELAY_CANCEL', {}, 4000);
+    activeSelectionId = '';
+  }
+  pendingSelection = null;
+}
+
+async function cancelTypeRelayFromSidebar() {
+  if (!activeSelectionId) return;
+  typeRelayActive = false;
+  await stopTypeRelayPage(true);
+  await sendToFrame('DS_RELAY_CANCEL', {}, 4000);
+  activeSelectionId = '';
+  pendingSelection = null;
+}
+
 async function focusChatFrame() {
   // Set the page-side suppression first. Without awaiting this, focusing the
   // sidebar can race with the page selection-clear notification and undo the
@@ -482,7 +580,6 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     setConnection('ready');
     activeSelectionId = selectionId;
     hideBanner();
-    focusChatFrame();
     return true;
   }
 
@@ -537,6 +634,7 @@ async function fillSelection(selection, { auto = false } = {}) {
     hideBanner();
     if (!clearedAfterFill) {
       showToast(auto ? `已填入选中文字 · ${formatChars(text.length)}` : '已填入选中文字');
+      await startTypeRelay();
     }
   }
 
@@ -2657,6 +2755,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       return false;
 
+    case 'DS_TYPE_RELAY_TEXT':
+      applyTypeRelayText(message.text).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
+    case 'DS_TYPE_RELAY_END':
+      finishTypeRelay(true).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
+    case 'DS_TYPE_RELAY_CANCEL':
+      finishTypeRelay(false).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
     case 'DS_NOTICE':
       showBanner(message.message || '操作失败。', '重试', readPage, {
         type: message.level === 'error' ? 'error' : 'info',
@@ -2766,6 +2879,7 @@ function normalizeSettings(value) {
     attachPageInfo: Boolean(value.attachPageInfo),
     showPageToast: value.showPageToast !== false,
     autoOpenLocalPdfReader: value.autoOpenLocalPdfReader !== false,
+    undoShortcut: normalizeShortcutString(value.undoShortcut),
     extractMode: value.extractMode === 'full' ? 'full' : 'readable',
     maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000
   };
@@ -2787,6 +2901,7 @@ function applySettingsToUI() {
   const localPdfReader = $('#setting-local-pdf-reader');
   const extractMode = $('#setting-extract-mode');
   const maxChars = $('#setting-maxchars');
+  const undoShortcut = $('#btn-undo-shortcut');
 
   if (autoFill) autoFill.checked = Boolean(settings.autoFillSelection);
   if (mode) mode.value = settings.selectionMode;
@@ -2795,6 +2910,7 @@ function applySettingsToUI() {
   if (localPdfReader) localPdfReader.checked = Boolean(settings.autoOpenLocalPdfReader);
   if (extractMode) extractMode.value = settings.extractMode;
   if (maxChars) maxChars.value = String(settings.maxPageChars);
+  if (undoShortcut) undoShortcut.textContent = settings.undoShortcut;
 
   updateAutofillButton();
 }
@@ -2854,6 +2970,34 @@ function bindUI() {
     updateAutofillButton();
     saveSettings();
     showToast(settings.autoFillSelection ? '划词自动填入已开启' : '划词自动填入已关闭');
+  });
+
+  const shortcutButton = $('#btn-undo-shortcut');
+  shortcutButton.addEventListener('click', () => {
+    if (shortcutButton.classList.contains('capturing')) return;
+    shortcutButton.classList.add('capturing');
+    shortcutButton.textContent = '请按快捷键…';
+
+    const onKeyDown = (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === 'Escape') {
+        cleanup();
+        return;
+      }
+      const combo = shortcutFromEvent(event);
+      if (!combo) return;
+      settings.undoShortcut = normalizeShortcutString(combo);
+      saveSettings();
+      cleanup();
+      showToast(`撤销快捷键：${settings.undoShortcut}`);
+    };
+    const cleanup = () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      shortcutButton.classList.remove('capturing');
+      shortcutButton.textContent = settings.undoShortcut;
+    };
+    document.addEventListener('keydown', onKeyDown, true);
   });
 
   $('#setting-mode').addEventListener('change', (event) => {
@@ -2996,6 +3140,12 @@ function bindUI() {
   });
 
   document.addEventListener('keydown', (event) => {
+    if (activeSelectionId && (event.key === 'Escape' || shortcutMatches(event, settings.undoShortcut))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      cancelTypeRelayFromSidebar().catch(() => {});
+      return;
+    }
     if (event.key !== 'Escape') return;
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');

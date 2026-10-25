@@ -222,6 +222,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((error) => sendResponse({ ok: false, error: error.message }));
       return true;
 
+    case 'DS_TYPE_RELAY_TEXT':
+    case 'DS_TYPE_RELAY_END':
+    case 'DS_TYPE_RELAY_CANCEL':
+      chrome.runtime.sendMessage({ ...message, source: 'ds-page-relay' }).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
     default:
       return;
   }

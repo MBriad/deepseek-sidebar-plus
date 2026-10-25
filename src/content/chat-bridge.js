@@ -24,6 +24,8 @@
     : 'DeepSeek';
   let lastInserted = '';
   let autoSelection = null;
+  let relayActive = false;
+  let relayBase = '';
   let toastHost = null;
   let toastTimer = null;
   let quoteHost = null;
@@ -138,6 +140,60 @@
       case 'DS_FOCUS_INPUT': {
         const input = findInput();
         if (input) focusInputEnd(input, isValueInput(input) ? 'value' : 'editable');
+        break;
+      }
+
+      case 'DS_RELAY_START': {
+        const input = findInput();
+        if (input) {
+          const kind = isValueInput(input) ? 'value' : 'editable';
+          relayBase = readValue(input, kind);
+          relayActive = true;
+          post('RELAY_RESULT', { requestId: data.requestId, ok: true });
+        } else {
+          relayActive = false;
+          post('RELAY_RESULT', { requestId: data.requestId, ok: false, error: '没有找到输入框' });
+        }
+        break;
+      }
+
+      case 'DS_RELAY_SET': {
+        if (!relayActive) {
+          post('RELAY_RESULT', { requestId: data.requestId, ok: false, error: '没有开始直接输入' });
+          break;
+        }
+        const input = findInput();
+        if (!input) {
+          post('RELAY_RESULT', { requestId: data.requestId, ok: false, error: '没有找到输入框' });
+          break;
+        }
+        const kind = isValueInput(input) ? 'value' : 'editable';
+        const next = `${relayBase}${String(data.text || '')}`;
+        if (kind === 'value') setValueInput(input, next, { focus: false });
+        else setEditableInput(input, next, { focus: false });
+        post('RELAY_RESULT', { requestId: data.requestId, ok: true });
+        break;
+      }
+
+      case 'DS_RELAY_END':
+        relayActive = false;
+        relayBase = '';
+        autoSelection = null;
+        post('RELAY_RESULT', { requestId: data.requestId, ok: true });
+        break;
+
+      case 'DS_RELAY_CANCEL': {
+        relayActive = false;
+        relayBase = '';
+        const input = findInput();
+        const previous = autoSelection?.previousValue ?? '';
+        autoSelection = null;
+        if (input) {
+          const kind = isValueInput(input) ? 'value' : 'editable';
+          if (kind === 'value') setValueInput(input, previous, { focus: false });
+          else setEditableInput(input, previous, { focus: false });
+        }
+        post('RELAY_RESULT', { requestId: data.requestId, ok: true });
         break;
       }
 
