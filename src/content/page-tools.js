@@ -55,6 +55,7 @@
   let selectionClearTimer = null;
   let selectionSeq = 0;
   let activeSelectionId = '';
+  let suppressClearUntil = 0;
   let pdfBridgeInstalled = false;
   let pdfBridgeTried = false;
   let pdfListenerAttached = false;
@@ -101,6 +102,15 @@
 
     document.addEventListener('pointerup', schedule, true);
     document.addEventListener('touchend', schedule, true);
+
+    // A real click on the page is an explicit cancel/return: end any focus
+    // suppression immediately and re-check the selection.
+    document.addEventListener('pointerdown', () => {
+      if (!activeSelectionId) return;
+      suppressClearUntil = 0;
+      clearTimeout(selectionClearTimer);
+      selectionClearTimer = setTimeout(notifySelectionCleared, 180);
+    }, true);
     document.addEventListener('keyup', (event) => {
       if (event.key === 'Shift' || event.shiftKey) schedule();
     }, true);
@@ -116,17 +126,33 @@
       selectionClearTimer = setTimeout(notifySelectionCleared, 260);
     });
 
+    try {
+      chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type !== 'DS_SUPPRESS_SELECTION_CLEAR') return;
+        suppressClearUntil = Date.now() + Math.max(0, Math.min(Number(message.ms) || 900, 2000));
+        sendResponse({ ok: true });
+      });
+    } catch {
+      // Extension context can be invalidated during a reload.
+    }
+
     // Do not clear while the page has lost focus to the side panel; check
     // again when the user returns to the page.
     window.addEventListener('focus', () => {
+      suppressClearUntil = 0;
       if (!activeSelectionId) return;
       clearTimeout(selectionClearTimer);
       selectionClearTimer = setTimeout(notifySelectionCleared, 120);
+      // Catch a click/focus that collapses the selection slightly later.
+      setTimeout(() => {
+        if (activeSelectionId) notifySelectionCleared();
+      }, 460);
     });
   }
 
   function notifySelectionCleared() {
     if (!activeSelectionId) return;
+    if (Date.now() < suppressClearUntil) return;
     if (!document.hasFocus()) return;
 
     const selection = window.getSelection();

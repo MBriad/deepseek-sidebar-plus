@@ -416,12 +416,38 @@ document.addEventListener('visibilitychange', () => {
 /* Fill                                                               */
 /* ------------------------------------------------------------------ */
 
-function focusChatFrame() {
+async function focusChatFrame() {
+  // Set the page-side suppression first. Without awaiting this, focusing the
+  // sidebar can race with the page selection-clear notification and undo the
+  // text that was just inserted.
   try {
-    frame.focus();
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'DS_SUPPRESS_SELECTION_CLEAR',
+        ms: 700
+      }).catch(() => {});
+    }
   } catch {
-    // Cross-origin focus is best-effort; the bridge also focuses the input.
+    // Ignore; focus still proceeds.
   }
+
+  const apply = () => {
+    try { window.focus(); } catch { /* Ignore. */ }
+    try { frame.focus(); } catch { /* Ignore. */ }
+    try {
+      frame.contentWindow?.postMessage({
+        source: 'ds-sidebar',
+        type: 'DS_FOCUS_INPUT'
+      }, CHAT_ORIGIN);
+    } catch {
+      // Ignore while navigating.
+    }
+  };
+
+  apply();
+  setTimeout(apply, 100);
+  setTimeout(apply, 280);
 }
 
 function fillChat(text, mode = 'smart', options = {}) {

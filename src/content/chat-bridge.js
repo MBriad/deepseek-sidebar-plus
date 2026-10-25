@@ -135,6 +135,12 @@
         handleGetInputRequest(data);
         break;
 
+      case 'DS_FOCUS_INPUT': {
+        const input = findInput();
+        if (input) focusInputEnd(input, isValueInput(input) ? 'value' : 'editable');
+        break;
+      }
+
       case 'TABS_RESULT':
         handleTabsResult(data);
         break;
