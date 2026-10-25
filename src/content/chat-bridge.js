@@ -901,6 +901,19 @@
       return;
     }
 
+    const query = match.query.toLowerCase();
+    const hasPromptMatch = promptCommands.some((prompt) =>
+      !query
+      || prompt.command.toLowerCase().includes(query)
+      || prompt.name.toLowerCase().includes(query)
+      || prompt.text.toLowerCase().includes(query)
+    );
+    if (!hasPromptMatch) {
+      // Do not hijack ChatGPT's own slash commands when no saved prompt matches.
+      if (visible) hideCommandPalette();
+      return;
+    }
+
     if (wantsEnter) {
       event.preventDefault();
       event.stopPropagation();
@@ -1733,7 +1746,10 @@
       || element.getAttribute('data-testid') === 'prompt-textarea'
       || element.getAttribute('data-testid') === 'composer-input'
     ) {
-      score += 1200;
+      score += 3000;
+    }
+    if (element.id === 'mobile-composer-prompt') {
+      score -= 1200;
     }
 
     const placeholder = String(element.getAttribute('placeholder') || '').toLowerCase();
