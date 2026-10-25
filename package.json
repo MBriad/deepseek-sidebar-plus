@@ -1,6 +1,6 @@
 {
   "name": "deepseek-sidebar-plus",
-  "version": "1.11.16",
+  "version": "1.11.17",
   "private": true,
   "description": "Unofficial Edge side panel for DeepSeek and ChatGPT",
   "scripts": {

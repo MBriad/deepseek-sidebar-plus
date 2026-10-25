@@ -202,7 +202,8 @@ async function testPdfFollowAndSend() {
     timeout: 25000,
     message: 'PDF.js iframe'
   });
-  await frame.waitForSelector('.textLayer span', { timeout: 25000 });
+  await frame.waitForSelector('.textLayer span', { state: 'attached', timeout: 25000 });
+  await frame.waitForTimeout(500);
 
   const selected = await frame.evaluate(() => {
     const span = document.querySelectorAll('.textLayer span')[1] || document.querySelector('.textLayer span');
