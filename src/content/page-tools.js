@@ -58,10 +58,12 @@
   let suppressClearUntil = 0;
   let typeRelay = null;
   let typeRelayHost = null;
-  let typeRelayRange = null;
+  let typeRelayAnchor = null;
   let typeRelayActive = false;
   let typeRelayComposing = false;
   let typeRelayShortcut = 'Ctrl+Z';
+  let lastSelectionRect = null;
+  let lastPointer = null;
   let pdfBridgeInstalled = false;
   let pdfBridgeTried = false;
   let pdfListenerAttached = false;
@@ -106,8 +108,15 @@
       selectionTimer = setTimeout(captureSelection, 160);
     };
 
-    document.addEventListener('pointerup', schedule, true);
-    document.addEventListener('touchend', schedule, true);
+    document.addEventListener('pointerup', (event) => {
+      lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+      schedule();
+    }, true);
+    document.addEventListener('touchend', (event) => {
+      const touch = event.changedTouches?.[0];
+      if (touch) lastPointer = { x: touch.clientX, y: touch.clientY };
+      schedule();
+    }, true);
 
     // A real click on the page is an explicit cancel/return: end any focus
     // suppression immediately and re-check the selection.
@@ -244,16 +253,18 @@
 
   function positionTypeRelay() {
     if (!typeRelayHost) return;
-    const rect = typeRelayRange?.getBoundingClientRect();
     const width = Math.min(320, Math.max(220, window.innerWidth - 16));
     typeRelayHost.style.width = `${width}px`;
 
     let left = 8;
     let top = Math.max(8, window.innerHeight - 58);
-    if (rect && (rect.width || rect.height)) {
-      left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
-      top = rect.bottom + 8;
-      if (top + 42 > window.innerHeight - 8) top = Math.max(8, rect.top - 50);
+    if (typeRelayAnchor) {
+      const anchorLeft = typeRelayAnchor.left - window.scrollX;
+      const anchorTop = typeRelayAnchor.top - window.scrollY;
+      const anchorBottom = typeRelayAnchor.bottom - window.scrollY;
+      left = Math.min(Math.max(8, anchorLeft), Math.max(8, window.innerWidth - width - 8));
+      top = anchorBottom + 8;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, anchorTop - 50);
     }
     typeRelayHost.style.left = `${left}px`;
     typeRelayHost.style.top = `${top}px`;
@@ -308,7 +319,7 @@
       <div class="panel">
         <span class="dot"></span>
         <input id="ds-type-relay-input" type="text" autocomplete="off" spellcheck="false" placeholder="直接输入…">
-        <span class="hint">Ctrl+Z 撤回</span>
+        <span class="hint">Enter 完成 · Ctrl+Z 撤回</span>
       </div>`;
     document.documentElement.appendChild(typeRelayHost);
 
@@ -328,6 +339,13 @@
     });
     typeRelay.addEventListener('keydown', (event) => {
       if (!typeRelayActive) return;
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(false);
+        return;
+      }
       if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
         event.preventDefault();
         event.stopPropagation();
@@ -355,19 +373,23 @@
     if (!activeSelectionId) return;
     typeRelayShortcut = shortcut || 'Ctrl+Z';
 
-    try {
-      const selection = window.getSelection();
-      typeRelayRange = selection && selection.rangeCount
-        ? selection.getRangeAt(0).cloneRange()
+    typeRelayAnchor = lastSelectionRect
+      ? { ...lastSelectionRect }
+      : lastPointer
+        ? {
+            left: lastPointer.x + window.scrollX,
+            top: lastPointer.y + window.scrollY,
+            right: lastPointer.x + window.scrollX,
+            bottom: lastPointer.y + window.scrollY,
+            width: 0,
+            height: 0
+          }
         : null;
-    } catch {
-      typeRelayRange = null;
-    }
 
     const relay = ensureTypeRelay();
     relay.value = '';
     const hint = typeRelayHost?.shadowRoot?.querySelector('.hint');
-    if (hint) hint.textContent = `${typeRelayShortcut} 撤回`;
+    if (hint) hint.textContent = `Enter 完成 · ${typeRelayShortcut} 撤回`;
     typeRelayHost.style.display = 'block';
     positionTypeRelay();
     typeRelayActive = true;
@@ -396,7 +418,7 @@
       typeRelay?.blur();
       if (typeRelay) typeRelay.value = '';
       if (typeRelayHost) typeRelayHost.style.display = 'none';
-      typeRelayRange = null;
+      typeRelayAnchor = null;
     } catch {
       // Ignore.
     }
@@ -411,6 +433,39 @@
       showToast('已撤回自动填入');
     } else {
       relaySend('DS_TYPE_RELAY_END');
+    }
+  }
+
+  function captureSelectionRect() {
+    try {
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);
+      const rect = rects[rects.length - 1] || range.getBoundingClientRect();
+      if (rect && (rect.width || rect.height)) {
+        lastSelectionRect = {
+          left: rect.left + window.scrollX,
+          top: rect.top + window.scrollY,
+          right: rect.right + window.scrollX,
+          bottom: rect.bottom + window.scrollY,
+          width: rect.width,
+          height: rect.height
+        };
+        return;
+      }
+    } catch {
+      // Ignore unusual selections.
+    }
+    if (lastPointer) {
+      lastSelectionRect = {
+        left: lastPointer.x + window.scrollX,
+        top: lastPointer.y + window.scrollY,
+        right: lastPointer.x + window.scrollX,
+        bottom: lastPointer.y + window.scrollY,
+        width: 0,
+        height: 0
+      };
     }
   }
 
@@ -431,6 +486,7 @@
         return;
       }
 
+      captureSelectionRect();
       sendSelection(raw, document.title || '', location.href);
     } catch {
       // The extension was reloaded, or this page has an unusual selection.

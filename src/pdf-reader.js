@@ -122,7 +122,8 @@
       'box-shadow:0 10px 30px rgba(15,23,42,.22)',
       'z-index:2147483646',
       'font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif',
-      'outline:none'
+      'outline:none',
+      'display:none'
     ].join(';');
     document.documentElement.appendChild(typeRelay);
 
@@ -139,6 +140,13 @@
     });
     typeRelay.addEventListener('keydown', (event) => {
       if (!typeRelayActive) return;
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(false);
+        return;
+      }
       if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
         event.preventDefault();
         event.stopPropagation();
@@ -160,6 +168,7 @@
     typeRelayShortcut = shortcut || 'Ctrl+Z';
     const relay = ensureTypeRelay();
     relay.value = '';
+    relay.style.display = 'block';
     typeRelayActive = true;
     typeRelayComposing = false;
     try {
@@ -181,7 +190,10 @@
     lastSelectionId = '';
     try {
       typeRelay?.blur();
-      if (typeRelay) typeRelay.value = '';
+      if (typeRelay) {
+        typeRelay.value = '';
+        typeRelay.style.display = 'none';
+      }
     } catch {
       // Ignore.
     }
