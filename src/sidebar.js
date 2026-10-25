@@ -3116,6 +3116,7 @@ window.__DS_TEST__ = {
   extractAndShow,
   grabCurrentSelection,
   handleIncomingSelection,
+  handleSelectionCleared,
   get settings() {
     return { ...settings };
   },

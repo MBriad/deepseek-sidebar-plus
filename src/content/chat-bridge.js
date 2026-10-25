@@ -223,7 +223,9 @@
           autoSelection = {
             id: selectionId,
             previousValue,
-            nextValue: finalValue
+            nextValue: finalValue,
+            insertedText: incoming,
+            mode
           };
         }
         showToast(`已填入 ${formatChars(incoming.length)}`);
@@ -253,6 +255,42 @@
         error: error?.message || '填入文字时出现异常。'
       });
     }
+  }
+
+  function computeAutoUndoValue(current, record) {
+    if (!record) return null;
+    const next = String(record.nextValue ?? '');
+    const previous = String(record.previousValue ?? '');
+    const inserted = String(record.insertedText ?? '');
+    const currentValue = String(current ?? '');
+    const normalize = (value) => value.replace(/\r\n/g, '\n').trim();
+
+    if (currentValue === next) return previous;
+    if (normalize(currentValue) === normalize(next)) return previous;
+
+    const cur = currentValue.replace(/\r\n/g, '\n');
+    const ins = inserted.replace(/\r\n/g, '\n');
+    if (!ins) return null;
+
+    if (record.mode === 'replace') {
+      if (normalize(cur) === normalize(ins)) return previous;
+      const index = cur.indexOf(ins);
+      if (index >= 0 && !normalize(cur.slice(0, index) + cur.slice(index + ins.length))) {
+        return previous;
+      }
+      return null;
+    }
+
+    // Smart/append: remove one inserted block and restore the draft when the
+    // remainder is still the original draft. This tolerates framework
+    // normalization (extra newlines/zero-width spaces) on ChatGPT.
+    const index = cur.lastIndexOf(ins);
+    if (index < 0) return null;
+    let without = cur.slice(0, index) + cur.slice(index + ins.length);
+    without = without.replace(/[\u200b-\u200d\ufeff]/g, '');
+    if (normalize(without) === normalize(previous)) return previous;
+    if (!previous.trim() && !without.trim()) return '';
+    return null;
   }
 
   function handleClearSelection(data) {
@@ -285,10 +323,11 @@
 
       const kind = isValueInput(input) ? 'value' : 'editable';
       const current = readValue(input, kind);
+      const previousValue = computeAutoUndoValue(current, record);
 
       // If the user edited the input after the auto-fill, never delete their
       // changes; only undo our own untouched insertion.
-      if (current !== record.nextValue) {
+      if (previousValue === null) {
         autoSelection = null;
         post('CLEAR_SELECTION_RESULT', {
           requestId,
@@ -300,9 +339,9 @@
       }
 
       if (kind === 'value') {
-        setValueInput(input, record.previousValue, { focus: false });
+        setValueInput(input, previousValue, { focus: false });
       } else {
-        setEditableInput(input, record.previousValue, { focus: false });
+        setEditableInput(input, previousValue, { focus: false });
       }
 
       autoSelection = null;
@@ -845,25 +884,61 @@
   }
 
   function handleCommandKeyDown(event) {
-    if (!commandHost || commandHost.style.display === 'none') return;
     if (event.isComposing || event.keyCode === 229) return;
 
     const input = findInput();
     if (!input) return;
     if (!(event.target === input || input.contains(event.target))) return;
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    const visible = Boolean(commandHost && commandHost.style.display !== 'none');
+    const wantsEnter = event.key === 'Enter' || event.key === 'Tab';
+    const wantsArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
+    if (!visible && !wantsEnter && !wantsArrow) return;
+
+    const match = getCommandMatch(input);
+    if (!match) {
+      if (visible && (wantsEnter || wantsArrow)) hideCommandPalette();
+      return;
+    }
+
+    if (wantsEnter) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
+    }
+
+    // ChatGPT/React can intercept the final Enter before the debounced
+    // palette is painted. Resolve the match synchronously and stop the
+    // native keydown so "/f" inserts the saved prompt instead of being
+    // submitted as a chat command.
+    if (!visible || wantsEnter) {
+      commandMatch = match;
+      commandIndex = 0;
+      renderCommandPalette();
+    }
+
+    if (!commandItems.length) {
+      if (visible || wantsEnter) {
+        hideCommandPalette();
+        showToast('没有匹配的提示词命令');
+      }
+      return;
+    }
+
+    if (wantsArrow) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       const direction = event.key === 'ArrowDown' ? 1 : -1;
       commandIndex = (commandIndex + direction + commandItems.length) % commandItems.length;
       renderCommandPalette();
       return;
     }
 
-    if (event.key === 'Enter' || event.key === 'Tab') {
+    if (wantsEnter) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       chooseCommand(commandIndex);
       return;
     }
@@ -871,6 +946,7 @@
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       hideCommandPalette();
     }
   }
