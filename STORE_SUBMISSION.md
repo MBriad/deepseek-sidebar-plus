@@ -1,9 +1,9 @@
-# Edge Add-ons Submission Pack — v1.9.2
+# Edge Add-ons Submission Pack — v1.9.3
 
 This is the submission worksheet for **DeepSeek Sidebar Enhanced (Unofficial)**.  
 It is not a guarantee of approval; it prepares the package and the answers reviewers will look for.
 
-**Remaining before submitting: capture real screenshots and provide a test account or reviewer login instructions. Privacy URL, publisher, and support contact are already filled for `lllhcbjj`.**
+**Screenshots are ready in `docs/store/screenshots/`. Remaining before submitting: decide how to handle DeepSeek login for reviewers (test account or a clear note) and complete the Partner Center upload. Privacy URL, publisher, and support contact are filled for `lllhcbjj`.**
 
 ---
 
@@ -13,7 +13,7 @@ It is not a guarantee of approval; it prepares the package and the answers revie
 | --- | --- |
 | Extension name (en) | `DeepSeek Sidebar Enhanced (Unofficial)` |
 | Extension name (zh-CN) | `DeepSeek 侧边栏增强版（非官方）` |
-| Version | `1.9.2` |
+| Version | `1.9.3` |
 | Category | Productivity |
 | Languages | en-US, zh-CN (from `_locales`) |
 | Publisher display name | `lllhcbjj` |
@@ -187,17 +187,16 @@ Required / recommended:
 | Asset | Spec | File |
 | --- | --- | --- |
 | Logo | 300×300 recommended, minimum 128×128, 1:1 | `docs/store/logo-300.png` |
-| Screenshots | 640×480 or 1280×800, max 6 | capture from the real extension; see below |
+| Screenshots | 1280×800, max 6 | `docs/store/screenshots/store-01-page.png` … `store-04-settings.png` |
 | Small promotional tile | 440×280, optional | `docs/store/small-promo-440x280.png` |
 | Large promotional tile | 1400×560, optional | `docs/store/large-promo-1400x560.png` |
 
-Screenshots to capture from a real logged-in Edge session (do not use test-page text):
+Ready screenshots (actual v1.9.3 UI, 1280×800, demo article/prompt/PDF content; no DeepSeek login required):
 
-1. **Page context** — side panel with the page preview sheet and the “附加文档 / 填入正文” buttons visible.
-2. **Prompt library** — a saved prompt with command, plus the paste-create and import/export controls.
-3. **Command preview** — typing `/` in the DeepSeek input with the command list and prompt preview visible.
-4. **PDF reader** — the enhanced reader with a real PDF and the “选中文字会自动填入” status.
-5. Optional: quote button visible over a real DeepSeek reply.
+1. `store-01-page.png` — page preview with “附加文档 / 填入正文 / 复制”
+2. `store-02-prompts.png` — prompt library with paste-create, command chips, tags
+3. `store-03-pdf.png` — local PDF enhanced reader with selection hint
+4. `store-04-settings.png` — settings including “本地 PDF 自动打开阅读器”
 
 Capture at 1280×800 (browser window) or 640×480; keep text readable and do not stretch. If you only have a narrow side panel capture, place it on a clean 1280×800 canvas without fake chat text.
 
@@ -209,21 +208,21 @@ Build the minimal store package (no dev docs, no README, no privacy page inside)
 
 ```powershell
 $root = "C:\path\to\deepseek-sidebar-plus"
-$dist = Join-Path $env:TEMP "deepseek-sidebar-store\v1.9.2"
+$dist = Join-Path $env:TEMP "deepseek-sidebar-store\v1.9.3"
 Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 Copy-Item "$root\manifest.json","$root\background.js","$root\rules.json" $dist
 Copy-Item "$root\icons" $dist -Recurse
 Copy-Item "$root\src" $dist -Recurse
 Copy-Item "$root\_locales" $dist -Recurse
-Compress-Archive -Path "$dist\*" -DestinationPath (Join-Path $env:TEMP "deepseek-sidebar-plus-v1.9.2-store.zip") -Force
+Compress-Archive -Path "$dist\*" -DestinationPath (Join-Path $env:TEMP "deepseek-sidebar-plus-v1.9.3-store.zip") -Force
 ```
 
 The ZIP must have `manifest.json` at its root. Do not add `key` or `update_url`; Partner Center assigns those for store packages.
 
 Validate before uploading:
 
-- `manifest.json` parses and version is `1.9.2`.
+- `manifest.json` parses and version is `1.9.3`.
 - `_locales/en` and `_locales/zh_CN` exist and `default_locale` is `en`.
 - No `key` / `update_url` in the store manifest.
 - The extension loads unpacked and the side panel opens.
@@ -238,7 +237,7 @@ Validate before uploading:
 - [ ] Capture real screenshots at 1280×800 or 640×480.
 - [x] Logo 300×300 and optional tiles generated in `docs/store/`.
 - [ ] Create/verify Partner Center individual account (free).
-- [ ] Create extension; upload `deepseek-sidebar-plus-v1.9.2-store.zip`.
+- [ ] Create extension; upload `deepseek-sidebar-plus-v1.9.3-store.zip`.
 - [ ] Properties: Productivity; support contact; optional website.
 - [ ] Privacy: single purpose; permission justifications; remote code = No; data usage; privacy URL.
 - [ ] Store listing: en-US and zh-CN descriptions, logo, screenshots.

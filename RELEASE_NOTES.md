@@ -1,6 +1,10 @@
-# v1.9.2 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.9.3 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.9.2。非官方扩展，与 DeepSeek 官方无关联。
+Edge 侧边栏增强版 v1.9.3。非官方扩展，与 DeepSeek 官方无关联。
+
+## 图标
+
+更换为原创图标：聊天气泡 + 侧边栏 + 命令符号，移除原版狐狸图标；图标、Logo 和宣传图纳入 MIT。
 
 ## 功能
 
@@ -16,9 +20,9 @@ Edge 侧边栏增强版 v1.9.2。非官方扩展，与 DeepSeek 官方无关联�
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.9.2-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.9.2.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.9.2-store.zip` — 最小 Edge Add-ons 提交包；不含开发文档。
+- `deepseek-sidebar-plus-v1.9.3-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.9.3.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.9.3-store.zip` — 最小 Edge Add-ons 提交包；不含开发文档。
 
 ## 安装
 
@@ -32,7 +36,7 @@ Edge 侧边栏增强版 v1.9.2。非官方扩展，与 DeepSeek 官方无关联�
 
 ## License
 
-源代码和文档采用 MIT License（见 `LICENSE`）。`icons/` 狐狸图标、`docs/store/` 衍生宣传图和 DeepSeek 商标不包含在 MIT 内，详见 `NOTICE`。非官方项目，与 DeepSeek 官方无关联。
+源码、文档、原创图标和商店宣传图采用 MIT License（见 `LICENSE`）。DeepSeek 名称和相关商标不包含在 MIT 内，详见 `NOTICE`。非官方项目，与 DeepSeek 官方无关联。
 
 ## 注意
 

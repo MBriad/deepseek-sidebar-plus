@@ -136,7 +136,7 @@
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.9.2-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.9.3-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -151,13 +151,14 @@
 
 ## Edge 商店提交材料
 
-v1.9.2 已按 Microsoft Edge Add-ons 的要求做了商店候选版：
+v1.9.3 已按 Microsoft Edge Add-ons 的要求做了商店候选版：
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
 - 隐私政策：[docs/privacy.html](docs/privacy.html)、[PRIVACY.md](PRIVACY.md)
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
-- 最小商店包：`deepseek-sidebar-plus-v1.9.2-store.zip`
+- 商店截图（1280×800，4 张）：[docs/store/screenshots/](docs/store/screenshots/)
+- 最小商店包：`deepseek-sidebar-plus-v1.9.3-store.zip`
 
 **商店提交前还需要：**
 
@@ -222,7 +223,7 @@ deepseek-sidebar-plus/
 ├─ docs/
 │  ├─ privacy.html               可托管的隐私政策页面
 │  ├─ reader.png                 PDF 阅读器截图
-│  └─ store/                     商店 Logo、宣传图、生成脚本
+│  └─ store/                     商店 Logo、宣传图、4 张截图、生成脚本
 ├─ PRIVACY.md                    隐私政策摘要
 └─ STORE_SUBMISSION.md           Edge Add-ons 提交流程、权限说明、认证备注
 ```
@@ -316,11 +317,13 @@ deepseek-sidebar-plus/
 ## License
 
 - **源代码和本文档**采用 [MIT License](LICENSE)，Copyright (c) 2026 lllhcbjj。
-- **不包含在 MIT 内**：`icons/` 里的狐狸图标、`docs/store/` 里由它衍生的 Logo/宣传图，以及 DeepSeek 名称和相关商标。详见 [NOTICE](NOTICE)。
-- 本扩展是非官方项目，与 DeepSeek 官方无关联。如果你要把项目用于商业分发，建议替换图标/宣传图，并自行确认 DeepSeek 商标使用权限。
+- **包含在 MIT 内**：源码、文档、`icons/` 的原创图标（聊天气泡 + 侧边栏 + 命令符号）和 `docs/store/` 的衍生 Logo/宣传图。
+- **不包含在 MIT 内**：DeepSeek 名称和相关商标；第三方网站/服务仍受各自条款约束。详见 [NOTICE](NOTICE)。
+- 本扩展是非官方项目，与 DeepSeek 官方无关联。商业分发前请自行确认 DeepSeek 商标使用权限。
 
 ## 版本
 
+- **v1.9.3**：更换为原创图标（聊天气泡 + 侧边栏 + 命令符号），移除原版狐狸图标；图标和商店宣传图纳入 MIT，Logo/宣传图已重新生成。
 - **v1.9.2**：`@` 增加置顶的“当前页”项（`@` 后直接 Enter 即可把当前页作为文档附加），标签页列表覆盖所有窗口并取消条数截断；本地 PDF“读本页”附加后默认自动打开增强阅读器，可在设置关闭。
 - **v1.9.1**：新增 `@` 读取其他已打开标签页（自动排除当前页，作为文档附加）；完善本地 `file://` PDF 的“读本页”读取和文件访问提示。
 - **v1.9.0**：读页/PDF 只附加文档，不再自动填写提示词；提示词库支持粘贴创建、自定义 `/命令`；DeepSeek 输入框支持 `/` 命令列表和对应提示词预览，Enter 插入。
@@ -337,4 +340,4 @@ deepseek-sidebar-plus/
 
 ---
 
-图标和宣传图沿用/衍生自原扩展，不包含在 MIT 许可内；详见 [NOTICE](NOTICE)。本项目是非官方产品。
+当前图标是原创几何设计（聊天气泡 + 侧边栏 + 命令符号），和宣传图一起包含在 MIT 许可内；DeepSeek 商标除外，详见 [NOTICE](NOTICE)。本项目是非官方产品。
