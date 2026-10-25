@@ -100,26 +100,29 @@
 
   function ensureTypeRelay() {
     if (typeRelay) return typeRelay;
-    typeRelay = document.createElement('textarea');
+    typeRelay = document.createElement('input');
+    typeRelay.type = 'text';
     typeRelay.id = 'ds-type-relay';
-    typeRelay.setAttribute('aria-hidden', 'true');
+    typeRelay.setAttribute('aria-label', '直接输入到侧边栏');
     typeRelay.autocomplete = 'off';
     typeRelay.spellcheck = false;
+    typeRelay.placeholder = '直接输入… Ctrl+Z 撤回';
     typeRelay.style.cssText = [
       'position:fixed',
-      'left:0',
-      'bottom:0',
-      'width:2px',
-      'height:2px',
-      'padding:0',
-      'border:0',
-      'opacity:0.01',
+      'left:50%',
+      'bottom:22px',
+      'transform:translateX(-50%)',
+      'width:min(340px,calc(100vw - 32px))',
+      'height:38px',
+      'padding:0 12px',
+      'border:1px solid #4d6bfe',
+      'border-radius:10px',
+      'background:#fff',
+      'color:#1b1f2a',
+      'box-shadow:0 10px 30px rgba(15,23,42,.22)',
       'z-index:2147483646',
-      'font-size:16px',
-      'background:transparent',
-      'color:transparent',
-      'caret-color:transparent',
-      'pointer-events:none'
+      'font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif',
+      'outline:none'
     ].join(';');
     document.documentElement.appendChild(typeRelay);
 

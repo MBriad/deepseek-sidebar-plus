@@ -57,6 +57,8 @@
   let activeSelectionId = '';
   let suppressClearUntil = 0;
   let typeRelay = null;
+  let typeRelayHost = null;
+  let typeRelayRange = null;
   let typeRelayActive = false;
   let typeRelayComposing = false;
   let typeRelayShortcut = 'Ctrl+Z';
@@ -240,31 +242,78 @@
     }
   }
 
-  function ensureTypeRelay() {
-    if (typeRelay) return typeRelay;
+  function positionTypeRelay() {
+    if (!typeRelayHost) return;
+    const rect = typeRelayRange?.getBoundingClientRect();
+    const width = Math.min(320, Math.max(220, window.innerWidth - 16));
+    typeRelayHost.style.width = `${width}px`;
 
-    typeRelay = document.createElement('textarea');
-    typeRelay.id = 'ds-type-relay';
-    typeRelay.setAttribute('aria-hidden', 'true');
-    typeRelay.autocomplete = 'off';
-    typeRelay.spellcheck = false;
-    typeRelay.style.cssText = [
-      'position:fixed',
-      'left:0',
-      'bottom:0',
-      'width:2px',
-      'height:2px',
-      'padding:0',
-      'border:0',
-      'opacity:0.01',
-      'z-index:2147483646',
-      'font-size:16px',
-      'background:transparent',
-      'color:transparent',
-      'caret-color:transparent',
-      'pointer-events:none'
-    ].join(';');
-    document.documentElement.appendChild(typeRelay);
+    let left = 8;
+    let top = Math.max(8, window.innerHeight - 58);
+    if (rect && (rect.width || rect.height)) {
+      left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      top = rect.bottom + 8;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, rect.top - 50);
+    }
+    typeRelayHost.style.left = `${left}px`;
+    typeRelayHost.style.top = `${top}px`;
+  }
+
+  function ensureTypeRelay() {
+    if (typeRelayHost) return typeRelay;
+
+    typeRelayHost = document.createElement('div');
+    typeRelayHost.id = 'ds-type-relay';
+    typeRelayHost.style.cssText = 'all:initial;position:fixed;z-index:2147483647;display:none;';
+    const root = typeRelayHost.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        * { box-sizing: border-box; }
+        .panel {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 9px;
+          border: 1px solid #4d6bfe;
+          border-radius: 10px;
+          background: #fff;
+          color: #1b1f2a;
+          box-shadow: 0 10px 30px rgba(15, 23, 42, .22);
+          font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+        .dot {
+          flex: none;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #4d6bfe;
+        }
+        input {
+          min-width: 0;
+          flex: 1;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: #1b1f2a;
+          font: 13px/1.4 inherit;
+        }
+        input::placeholder { color: #8a96a8; }
+        .hint {
+          flex: none;
+          color: #8a96a8;
+          font-size: 9.5px;
+          white-space: nowrap;
+        }
+      </style>
+      <div class="panel">
+        <span class="dot"></span>
+        <input id="ds-type-relay-input" type="text" autocomplete="off" spellcheck="false" placeholder="直接输入…">
+        <span class="hint">Ctrl+Z 撤回</span>
+      </div>`;
+    document.documentElement.appendChild(typeRelayHost);
+
+    typeRelay = root.querySelector('#ds-type-relay-input');
+    root.querySelector('.hint').textContent = `${typeRelayShortcut} 撤回`;
 
     typeRelay.addEventListener('compositionstart', () => {
       typeRelayComposing = true;
@@ -290,9 +339,14 @@
       if (!typeRelayActive) return;
       setTimeout(() => {
         if (!typeRelayActive) return;
-        if (document.activeElement !== typeRelay) stopTypeRelay(false);
+        if (!typeRelayHost?.shadowRoot?.activeElement) stopTypeRelay(false);
       }, 0);
     });
+    typeRelayHost.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+    });
+    window.addEventListener('scroll', positionTypeRelay, true);
+    window.addEventListener('resize', positionTypeRelay);
 
     return typeRelay;
   }
@@ -300,8 +354,22 @@
   function startTypeRelay(shortcut) {
     if (!activeSelectionId) return;
     typeRelayShortcut = shortcut || 'Ctrl+Z';
+
+    try {
+      const selection = window.getSelection();
+      typeRelayRange = selection && selection.rangeCount
+        ? selection.getRangeAt(0).cloneRange()
+        : null;
+    } catch {
+      typeRelayRange = null;
+    }
+
     const relay = ensureTypeRelay();
     relay.value = '';
+    const hint = typeRelayHost?.shadowRoot?.querySelector('.hint');
+    if (hint) hint.textContent = `${typeRelayShortcut} 撤回`;
+    typeRelayHost.style.display = 'block';
+    positionTypeRelay();
     typeRelayActive = true;
     typeRelayComposing = false;
     try {
@@ -309,8 +377,9 @@
     } catch {
       // Focus is best-effort.
     }
-    if (document.activeElement !== relay) {
+    if (typeRelayHost.shadowRoot?.activeElement !== relay) {
       typeRelayActive = false;
+      typeRelayHost.style.display = 'none';
       return;
     }
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
@@ -326,6 +395,8 @@
     try {
       typeRelay?.blur();
       if (typeRelay) typeRelay.value = '';
+      if (typeRelayHost) typeRelayHost.style.display = 'none';
+      typeRelayRange = null;
     } catch {
       // Ignore.
     }
