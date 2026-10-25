@@ -47,6 +47,7 @@ const activePageTags = new Set();
 let pageTagTab = null;
 let pageTagCurrentEntry = null;
 let pageTagBusy = false;
+let pageTagRefreshTimer = 0;
 const pageSemanticCache = new Map();
 let promptFormMode = '';
 let promptEditId = '';
@@ -1308,6 +1309,41 @@ async function openPageTags() {
   }, 100);
 }
 
+function schedulePageTagRefresh() {
+  if (!isSheetOpen('#page-tags-sheet')) return;
+  clearTimeout(pageTagRefreshTimer);
+  pageTagRefreshTimer = setTimeout(() => {
+    refreshCurrentPageTab().catch(() => {});
+  }, 120);
+}
+
+async function refreshCurrentPageTab() {
+  if (!isSheetOpen('#page-tags-sheet') || pageTagBusy) return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const next = tab?.id && isPageTagUrl(tab.url)
+    ? {
+        id: tab.id,
+        url: canonicalPageUrl(tab.url),
+        title: tab.title || tab.url
+      }
+    : null;
+
+  if (
+    (pageTagTab?.id || 0) === (next?.id || 0)
+    && (pageTagTab?.url || '') === (next?.url || '')
+    && (pageTagTab?.title || '') === (next?.title || '')
+  ) {
+    return;
+  }
+
+  pageTagTab = next;
+  pageTagCurrentEntry = next
+    ? taggedPages.find((entry) => entry.url === next.url) || null
+    : null;
+  renderPageTagCurrent();
+  renderPageTagList();
+}
+
 function renderPageTagCurrent() {
   const title = $('#page-tag-current-title');
   const domain = $('#page-tag-current-domain');
@@ -1418,6 +1454,7 @@ async function addTagsToCurrentPage(values) {
   } finally {
     pageTagBusy = false;
     renderPageTagCurrent();
+    schedulePageTagRefresh();
   }
 }
 
@@ -2576,6 +2613,11 @@ function bindUI() {
     event.preventDefault();
     $('#btn-page-tag-registry-add').click();
   });
+  chrome.tabs.onActivated.addListener(schedulePageTagRefresh);
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+    if (changeInfo.url || changeInfo.title) schedulePageTagRefresh();
+  });
+  chrome.windows.onFocusChanged.addListener(schedulePageTagRefresh);
   $('#btn-prompts').addEventListener('click', () => {
     openPromptLibrary().catch((error) => showToast(`打开提示词库失败：${error.message}`, 'error', 4000));
   });
