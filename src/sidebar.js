@@ -14,7 +14,8 @@ const DEFAULT_SETTINGS = {
   attachPageInfo: false,
   maxPageChars: 12000,
   extractMode: 'readable',
-  showPageToast: true
+  showPageToast: true,
+  autoOpenLocalPdfReader: true
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -705,14 +706,35 @@ async function attachPdfToChat(info) {
 
     if (!result?.ok) throw new Error(result?.error || '无法把 PDF 添加到 DeepSeek。');
 
-    showBanner(
-      /^file:/i.test(info.pdfUrl)
-        ? 'PDF 已附加到 DeepSeek。输入框没有改动；本地 PDF 无法自动划词，选中文字后可按 Ctrl+C，再点工具栏剪贴板按钮。'
-        : 'PDF 已附加到 DeepSeek。输入框没有改动，请自行输入问题。',
-      '知道了',
-      hideBanner,
-      { type: 'success' }
-    );
+    const isLocalFile = /^file:/i.test(info.pdfUrl);
+    let readerOpened = false;
+
+    if (isLocalFile && settings.autoOpenLocalPdfReader) {
+      try {
+        await openPdfReader(info.pdfUrl, title);
+        readerOpened = true;
+      } catch {
+        // Fall back to the banner action below.
+      }
+    }
+
+    if (isLocalFile) {
+      showBanner(
+        readerOpened
+          ? 'PDF 已附加到 DeepSeek；增强阅读器已打开，选中文字会自动填入。'
+          : 'PDF 已附加到 DeepSeek。输入框没有改动；可以打开增强阅读器划词。',
+        readerOpened ? '知道了' : '打开增强阅读器',
+        readerOpened ? hideBanner : () => openPdfReader(info.pdfUrl, title),
+        { type: 'success' }
+      );
+    } else {
+      showBanner(
+        'PDF 已附加到 DeepSeek。输入框没有改动，请自行输入问题。',
+        '知道了',
+        hideBanner,
+        { type: 'success' }
+      );
+    }
     showToast('PDF 已附加');
     lastPdfAttachUrl = info.pdfUrl;
     lastPdfAttachAt = Date.now();
@@ -944,32 +966,54 @@ async function attachPageFile(page) {
   }
 }
 
+function mentionTabSummary(tab) {
+  return {
+    id: tab.id,
+    title: String(tab.title || tab.url || '').slice(0, 140),
+    url: tab.url || '',
+    windowId: tab.windowId,
+    active: Boolean(tab.active),
+    pdf: isPdfTabUrl(tab.url)
+  };
+}
+
 async function listOpenTabs() {
-  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentWindowId = activeTab?.windowId;
+  const tabs = await chrome.tabs.query({});
+
   return tabs
-    // @ is for the OTHER open tabs. The page currently behind the sidebar is
-    // handled by the normal “读本页” button and is intentionally excluded.
-    .filter((tab) => tab?.id && !tab.active && /^(https?|file):/i.test(tab.url || ''))
-    .map((tab) => ({
-      id: tab.id,
-      title: String(tab.title || tab.url || '').slice(0, 140),
-      url: tab.url || '',
-      pdf: isPdfTabUrl(tab.url)
-    }))
-    .sort((a, b) => a.title.localeCompare(b.title))
-    .slice(0, 20);
+    // The current page is handled by the “读本页” flow and is exposed as a
+    // separate “当前页” item; the normal tab list is for all OTHER tabs.
+    .filter((tab) => tab?.id && tab.id !== activeTab?.id && /^(https?|file):/i.test(tab.url || ''))
+    .map(mentionTabSummary)
+    .sort((a, b) => {
+      const aCurrentWindow = a.windowId === currentWindowId ? 0 : 1;
+      const bCurrentWindow = b.windowId === currentWindowId ? 0 : 1;
+      return aCurrentWindow - bCurrentWindow
+        || (b.active ? 1 : 0) - (a.active ? 1 : 0)
+        || a.title.localeCompare(b.title);
+    })
+    .slice(0, 200);
+}
+
+async function getCurrentMentionTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^(https?|file):/i.test(tab.url || '')) return null;
+  return { ...mentionTabSummary(tab), current: true };
 }
 
 async function respondTabsRequest(source, requestId) {
   try {
-    const tabs = await listOpenTabs();
-    source.postMessage({ source: 'ds-sidebar', type: 'TABS_RESULT', requestId, tabs }, CHAT_ORIGIN);
+    const [tabs, current] = await Promise.all([listOpenTabs(), getCurrentMentionTab()]);
+    source.postMessage({ source: 'ds-sidebar', type: 'TABS_RESULT', requestId, tabs, current }, CHAT_ORIGIN);
   } catch (error) {
     source.postMessage({
       source: 'ds-sidebar',
       type: 'TABS_RESULT',
       requestId,
       tabs: [],
+      current: null,
       error: error.message || '读取标签页列表失败'
     }, CHAT_ORIGIN);
   }
@@ -1608,6 +1652,7 @@ function normalizeSettings(value) {
     selectionMode: ['smart', 'replace', 'append'].includes(value.selectionMode) ? value.selectionMode : 'smart',
     attachPageInfo: Boolean(value.attachPageInfo),
     showPageToast: value.showPageToast !== false,
+    autoOpenLocalPdfReader: value.autoOpenLocalPdfReader !== false,
     extractMode: value.extractMode === 'full' ? 'full' : 'readable',
     maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000
   };
@@ -1626,6 +1671,7 @@ function applySettingsToUI() {
   const mode = $('#setting-mode');
   const attach = $('#setting-attach');
   const pageToast = $('#setting-page-toast');
+  const localPdfReader = $('#setting-local-pdf-reader');
   const extractMode = $('#setting-extract-mode');
   const maxChars = $('#setting-maxchars');
 
@@ -1633,6 +1679,7 @@ function applySettingsToUI() {
   if (mode) mode.value = settings.selectionMode;
   if (attach) attach.checked = Boolean(settings.attachPageInfo);
   if (pageToast) pageToast.checked = Boolean(settings.showPageToast);
+  if (localPdfReader) localPdfReader.checked = Boolean(settings.autoOpenLocalPdfReader);
   if (extractMode) extractMode.value = settings.extractMode;
   if (maxChars) maxChars.value = String(settings.maxPageChars);
 
@@ -1702,6 +1749,11 @@ function bindUI() {
 
   $('#setting-page-toast').addEventListener('change', (event) => {
     settings.showPageToast = event.target.checked;
+    saveSettings();
+  });
+
+  $('#setting-local-pdf-reader').addEventListener('change', (event) => {
+    settings.autoOpenLocalPdfReader = event.target.checked;
     saveSettings();
   });
 
@@ -1920,6 +1972,7 @@ window.__DS_TEST__ = {
   attachPageFile,
   fillPageText,
   listOpenTabs,
+  getCurrentMentionTab,
   handleMentionTab,
   readPage,
   extractAndShow,

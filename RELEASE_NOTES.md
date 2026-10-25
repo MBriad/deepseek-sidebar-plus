@@ -1,6 +1,6 @@
-# v1.9.1 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.9.2 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.9.1。非官方扩展，与 DeepSeek 官方无关联。
+Edge 侧边栏增强版 v1.9.2。非官方扩展，与 DeepSeek 官方无关联。
 
 ## 功能
 
@@ -9,16 +9,16 @@ Edge 侧边栏增强版 v1.9.1。非官方扩展，与 DeepSeek 官方无关联�
 - **引用对话**：选中 DeepSeek 回复中的文字，点浮出的“引用”或右键，插入 Markdown `>` 引用。
 - **提示词库**：保存当前输入，或直接粘贴文本创建；支持自定义 `/命令`、搜索/编辑/置顶/删除、JSON 导入导出，本地保存。
 - **命令行调用**：在 DeepSeek 输入框输入 `/`，显示命令列表和对应提示词预览；`↑↓` 选择、`Enter` 插入、`Esc` 关闭。
-- **@ 读取其他标签页**：输入 `@` 列出当前窗口的其他标签页（自动排除侧边栏所在当前页），选择后把正文作为 `.txt` 文档附加，输入框保持不变。
-- **PDF**：只附加文件，不填提示词；本地 `file://` PDF 的“读本页”已支持，需要允许访问文件 URL；本地 PDF 可用增强阅读器恢复划词。
+- **@ 读取标签页（含当前页）**：输入 `@` 当前页置顶，下面列出所有窗口的其他标签页；`@` 后直接 Enter 即可把当前页作为 `.txt` 文档附加，其他标签页也可直接附加，输入框保持不变。
+- **PDF**：只附加文件，不填提示词；本地 `file://` PDF 的“读本页”会附加文件并默认自动打开增强阅读器，方便直接划词（可在设置关闭）。
 - **移动/窄屏**：320–430px 响应式布局、触摸目标、安全区；无 `sidePanel` 时回退到全页标签。
 - **商店候选**：非官方名称、en/zh 本地化、隐私政策、权限说明、商店文案和素材。
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.9.1-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.9.1.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.9.1-store.zip` — 最小 Edge Add-ons 提交包；不含开发文档。
+- `deepseek-sidebar-plus-v1.9.2-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.9.2.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.9.2-store.zip` — 最小 Edge Add-ons 提交包；不含开发文档。
 
 ## 安装
 

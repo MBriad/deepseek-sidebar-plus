@@ -13,7 +13,8 @@ const DEFAULT_SETTINGS = {
   attachPageInfo: false,
   maxPageChars: 12000,
   extractMode: 'readable',
-  showPageToast: true
+  showPageToast: true,
+  autoOpenLocalPdfReader: true
 };
 
 /* ------------------------------------------------------------------ */

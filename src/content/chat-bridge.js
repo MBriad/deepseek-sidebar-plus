@@ -39,7 +39,7 @@
   let mentionTimer = null;
   let mentionSeq = 0;
   let mentionRequestSeq = 0;
-  let mentionCache = { tabs: [], at: 0 };
+  let mentionCache = { tabs: [], current: null, at: 0 };
   const pendingTabRequests = new Map();
   let rootsCache = null;
   let rootsCacheAt = 0;
@@ -939,17 +939,28 @@
     mentionMatch = match;
     hideCommandPalette();
     const requestSeq = ++mentionRequestSeq;
-    const tabs = await requestTabs();
+    const cache = await requestTabs();
     if (requestSeq !== mentionRequestSeq || !mentionMatch) return;
 
     const query = match.query.toLowerCase();
-    mentionItems = tabs
-      .filter((tab) => {
+    const tabs = Array.isArray(cache.tabs) ? cache.tabs : [];
+    const current = cache.current || null;
+    const currentAliases = ['本页', '当前页', '当前', 'current', 'this'];
+    const currentMatches = Boolean(current) && (
+      !query
+      || currentAliases.includes(query)
+      || String(current.title || '').toLowerCase().includes(query)
+      || String(current.url || '').toLowerCase().includes(query)
+    );
+
+    mentionItems = [
+      ...(currentMatches ? [current] : []),
+      ...tabs.filter((tab) => {
         if (!query) return true;
         return String(tab.title || '').toLowerCase().includes(query)
           || String(tab.url || '').toLowerCase().includes(query);
       })
-      .slice(0, 10);
+    ];
 
     mentionIndex = 0;
     renderMentionPalette();
@@ -957,13 +968,13 @@
 
   function requestTabs() {
     const now = Date.now();
-    if (now - mentionCache.at < 1500) return Promise.resolve(mentionCache.tabs);
+    if (now - mentionCache.at < 1500) return Promise.resolve(mentionCache);
 
     const requestId = ++mentionSeq;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         pendingTabRequests.delete(requestId);
-        resolve([]);
+        resolve({ tabs: [], current: null });
       }, 4000);
 
       pendingTabRequests.set(requestId, { resolve, timer });
@@ -977,8 +988,9 @@
     clearTimeout(pending.timer);
     pendingTabRequests.delete(data.requestId);
     const tabs = Array.isArray(data.tabs) ? data.tabs : [];
-    mentionCache = { tabs, at: Date.now() };
-    pending.resolve(tabs);
+    const current = data.current || null;
+    mentionCache = { tabs, current, at: Date.now() };
+    pending.resolve(mentionCache);
   }
 
   function getMentionMatch(input) {
@@ -1064,6 +1076,7 @@
         .item-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
         .item-url { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; color: #8a96a8; font-size: 10px; }
         .badge { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: #e8edff; color: #3d63dd; font-size: 9px; font-weight: 700; vertical-align: 1px; }
+        .badge.current { background: #e6f6ec; color: #1f7a4d; }
       </style>
       <div class="panel">
         <div class="head"><span class="title">打开标签页</span><span class="hint">↑↓ 选择 · Enter 读取 · Esc 关闭</span></div>
@@ -1095,6 +1108,13 @@
       const title = document.createElement('span');
       title.className = 'item-title';
       title.textContent = tab.title || tab.url;
+
+      if (tab.current) {
+        const badge = document.createElement('span');
+        badge.className = 'badge current';
+        badge.textContent = '当前页';
+        title.appendChild(badge);
+      }
 
       if (tab.pdf) {
         const badge = document.createElement('span');
