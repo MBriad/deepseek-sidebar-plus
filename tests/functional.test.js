@@ -136,6 +136,18 @@ async function testWebRelay() {
     message: 'floating input focus'
   });
 
+  await article.evaluate(() => {
+    const input = document.querySelector('#ds-type-relay').shadowRoot.querySelector('input');
+    input.focus();
+    input.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+    input.value = '中文';
+    input.dispatchEvent(new InputEvent('input', { data: '中文', isComposing: true, bubbles: true }));
+    input.dispatchEvent(new CompositionEvent('compositionend', { data: '中文' }));
+  });
+  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes('中文'), {
+    message: 'Chinese IME composition relay'
+  });
+
   await article.keyboard.type(' DIRECT TYPING');
   await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes('DIRECT TYPING'), {
     message: 'direct typing relay'
@@ -220,6 +232,18 @@ async function testPdfFollowAndSend() {
     layout.top >= layout.frameTop + selected.bottom - 4,
     `PDF floating input should be below selection (input=${layout.top}, selection=${layout.frameTop + selected.bottom})`
   );
+
+  await reader.evaluate(() => {
+    const input = document.querySelector('#ds-type-relay');
+    input.focus();
+    input.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+    input.value = '中文';
+    input.dispatchEvent(new InputEvent('input', { data: '中文', isComposing: true, bubbles: true }));
+    input.dispatchEvent(new CompositionEvent('compositionend', { data: '中文' }));
+  });
+  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes('中文'), {
+    message: 'PDF Chinese IME composition relay'
+  });
 
   await reader.keyboard.type(' PDF SEND');
   await reader.keyboard.press('Enter');

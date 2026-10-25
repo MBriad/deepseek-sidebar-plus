@@ -339,6 +339,7 @@
     });
     typeRelay.addEventListener('keydown', (event) => {
       if (!typeRelayActive) return;
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();

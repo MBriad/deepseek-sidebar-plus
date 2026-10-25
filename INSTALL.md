@@ -1,6 +1,6 @@
 # 安装 / 更新 / 卸载（分享给他人时看这份）
 
-**DeepSeek 侧边栏增强版（非官方） v1.11.13**  
+**DeepSeek 侧边栏增强版（非官方） v1.11.14**  
 适用于 **Microsoft Edge 桌面版 116+**（Windows / macOS / Linux）。手机 Edge 不支持这类侧边栏扩展。
 
 ## 1. 安装

@@ -144,6 +144,7 @@
       'z-index:2147483646',
       'font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif',
       'outline:none',
+      'caret-color:#1b1f2a',
       'display:none'
     ].join(';');
     document.documentElement.appendChild(typeRelay);
@@ -161,6 +162,7 @@
     });
     typeRelay.addEventListener('keydown', (event) => {
       if (!typeRelayActive) return;
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
@@ -233,6 +235,7 @@
 
   function handlePdfRelayKey(event) {
     if (!typeRelayActive) return false;
+    if (event.isComposing || event.keyCode === 229) return false;
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
