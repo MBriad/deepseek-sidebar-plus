@@ -50,6 +50,13 @@
           </svg>
         </button>
 
+        <button id="btn-page-tags" class="tool icon-only" type="button" title="网页标签：标记和搜索网页" aria-label="网页标签">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4.5h7.5L20 13l-7.5 7.5H4z"></path>
+            <circle cx="8.5" cy="9" r="1.2"></circle>
+          </svg>
+        </button>
+
         <button id="btn-settings" class="tool icon-only" type="button" title="设置" aria-label="设置">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"></circle>
@@ -146,6 +153,64 @@
             <button id="btn-prompt-export" class="btn ghost small" type="button">导出</button>
             <input id="prompt-import-file" type="file" accept=".json,application/json" hidden>
           </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 网页标签 -->
+    <div id="page-tags-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="page-tags-title">
+      <div class="sheet-backdrop" data-close="page-tags"></div>
+      <section class="sheet-card page-tags-sheet-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">Page Tags</div>
+            <h2 id="page-tags-title">网页标签</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="page-tags" title="关闭" aria-label="关闭">×</button>
+        </div>
+
+        <div id="page-tag-current-card" class="page-tag-current">
+          <div class="page-tag-current-head">
+            <div class="page-tag-favicon" aria-hidden="true">#</div>
+            <div class="page-tag-current-copy">
+              <strong id="page-tag-current-title">当前页</strong>
+              <small id="page-tag-current-domain"></small>
+            </div>
+            <span id="page-tag-current-status" class="page-tag-status">未标记</span>
+          </div>
+          <div class="page-tag-add-row">
+            <input id="page-tag-input" class="text-input" type="text" maxlength="60" placeholder="输入标签，Enter 保存当前页" autocomplete="off">
+            <button id="btn-page-tag-add" class="btn primary" type="button">加标签</button>
+          </div>
+          <div id="page-tag-current-tags" class="page-tag-current-tags"></div>
+          <div id="page-tag-suggestions" class="page-tag-suggestions"></div>
+          <p class="page-tag-hint">支持逗号分隔多个标签；标签只保存在本机，不会上传。</p>
+        </div>
+
+        <div class="page-tag-search-row">
+          <input id="page-tag-search" class="text-input" type="search" placeholder="搜索已标记网页，或描述用途" title="本地语义搜索，不联网">
+        </div>
+
+        <div id="page-tag-bar" class="tag-bar" role="toolbar" aria-label="网页标签筛选"></div>
+
+        <div id="page-tag-manager" class="tag-manager hidden">
+          <div class="tag-manager-head">
+            <span>标签管理</span>
+            <button id="btn-page-tag-manager-close" class="icon-btn" type="button" title="收起标签管理" aria-label="收起标签管理">×</button>
+          </div>
+          <div id="page-tag-manager-list" class="tag-manager-list"></div>
+          <div class="tag-manager-add">
+            <input id="page-tag-new-name" class="text-input" type="text" maxlength="20" placeholder="新标签，例如：待读" autocomplete="off">
+            <button id="btn-page-tag-registry-add" class="btn" type="button">添加</button>
+          </div>
+          <p class="tag-manager-hint">改名会同步到所有网页；改成已有标签会自动合并。删除标签不会删除网页记录（除非该网页没有其他标签）。</p>
+        </div>
+
+        <div id="page-tag-list" class="page-tag-list"></div>
+
+        <div class="prompt-footer">
+          <span id="page-tag-count" class="prompt-count"></span>
+          <span class="page-tag-footer-hint">本地保存 · 语义搜索</span>
         </div>
       </section>
     </div>
@@ -253,7 +318,7 @@
           </div>
 
           <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前打开的 DeepSeek 输入框。本扩展为非官方版本。</p>
-          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.9.3</p>
+          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.10.0</p>
         </div>
       </section>
     </div>

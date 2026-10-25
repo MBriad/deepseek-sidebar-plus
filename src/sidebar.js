@@ -7,6 +7,8 @@ const CHAT_ORIGIN = 'https://chat.deepseek.com';
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
 const PAGE_EXTRACT_MAX = 50000;
 const PROMPT_STORAGE_KEY = 'promptLibrary';
+const PAGE_TAG_KEY = 'pageTagLibrary';
+const PAGE_TAG_REGISTRY_KEY = 'pageTagRegistry';
 
 const DEFAULT_SETTINGS = {
   autoFillSelection: true,
@@ -39,6 +41,13 @@ let pendingSelection = null;
 let activeSelectionId = '';
 let lastClearedSelectionId = '';
 let prompts = [];
+let taggedPages = [];
+let pageTags = [];
+const activePageTags = new Set();
+let pageTagTab = null;
+let pageTagCurrentEntry = null;
+let pageTagBusy = false;
+const pageSemanticCache = new Map();
 let promptFormMode = '';
 let promptEditId = '';
 let promptSearchTerm = '';
@@ -1075,6 +1084,779 @@ async function copyPage() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Page tags                                                          */
+/* ------------------------------------------------------------------ */
+
+const PAGE_TAG_STOP = new Set([
+  '的', '了', '和', '是', '我', '你', '请', '帮', '找', '一', '个', '要', '把', '到',
+  '用', '与', '或', '在', '有', '这', '那', '些', '吗', '呢', '它', '他', '她',
+  'the', 'a', 'an', 'to', 'for', 'of', 'and', 'or', 'in', 'on', 'with', 'please',
+  'help', 'find', 'me', 'my', 'i', 'you', 'it', 'this', 'that', 'is', 'are'
+]);
+
+const PAGE_TAG_SYNONYMS = {
+  '翻译': 'translate english translation 英文 英语',
+  '总结': 'summary summarize notes 摘要 要点',
+  '摘要': 'summary 总结',
+  '代码': 'code coding programming 编程',
+  '审查': 'review audit 检查',
+  '润色': 'polish edit 修改',
+  '写作': 'writing write 文案',
+  '提示词': 'prompt command 指令',
+  '命令': 'command prompt',
+  '标签': 'tag tags',
+  '网页': 'page web article 页面',
+  '页面': 'page web 网页',
+  '文章': 'article page 网页',
+  '引用': 'quote citation',
+  '对话': 'chat conversation',
+  '文档': 'document pdf documentation docs',
+  '教程': 'tutorial guide 指南',
+  '研究': 'research study',
+  '待读': 'read later 稍后读',
+  '工具': 'tool 工具',
+  '设计': 'design ui ux',
+  '新闻': 'news',
+  '数据': 'data analysis',
+  '人工智能': 'ai artificial intelligence',
+  'ai': '人工智能 artificial intelligence',
+  'design': '设计 ui ux',
+  'research': '研究 study',
+  'tutorial': '教程 guide',
+  'read later': '待读 稍后读'
+};
+
+function normalizePageTagName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^#+/, '')
+    .replace(/[,，\n\r\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 20);
+}
+
+function normalizePageTagList(value) {
+  const list = Array.isArray(value) ? value : [];
+  const result = [];
+  for (const item of list) {
+    const tag = normalizePageTagName(item);
+    if (tag && !result.includes(tag)) result.push(tag);
+  }
+  return result;
+}
+
+function parsePageTagInput(value) {
+  return [...new Set(String(value || '')
+    .split(/[,，\n]/)
+    .map((tag) => normalizePageTagName(tag))
+    .filter(Boolean))].slice(0, 12);
+}
+
+function canonicalPageUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    url.hash = '';
+    return url.href;
+  } catch {
+    return raw;
+  }
+}
+
+function pageDomain(value) {
+  try {
+    return new URL(value).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+}
+
+function isPageTagUrl(value) {
+  return /^(https?|file):/i.test(String(value || ''));
+}
+
+function makePageTagId() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `page-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+function addPageTagToRegistryInMemory(value) {
+  const tag = normalizePageTagName(value);
+  if (!tag) return false;
+  if (pageTags.includes(tag)) return false;
+  pageTags.push(tag);
+  pageTags.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  return true;
+}
+
+function allPageTags() {
+  const tags = new Set(pageTags);
+  for (const entry of taggedPages) {
+    for (const tag of entry.tags) tags.add(tag);
+  }
+  return [...tags].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+}
+
+function pageTagCounts() {
+  const counts = new Map();
+  for (const entry of taggedPages) {
+    for (const tag of entry.tags) counts.set(tag, (counts.get(tag) || 0) + 1);
+  }
+  return counts;
+}
+
+async function saveTaggedPages() {
+  try {
+    await chrome.storage.local.set({ [PAGE_TAG_KEY]: taggedPages });
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+async function savePageTagRegistry() {
+  try {
+    await chrome.storage.local.set({ [PAGE_TAG_REGISTRY_KEY]: pageTags });
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+async function savePageTagState() {
+  await Promise.all([saveTaggedPages(), savePageTagRegistry()]);
+}
+
+async function loadTaggedPages() {
+  try {
+    const stored = await chrome.storage.local.get([PAGE_TAG_KEY, PAGE_TAG_REGISTRY_KEY]);
+    const raw = stored?.[PAGE_TAG_KEY];
+    const list = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.pages)
+        ? raw.pages
+        : [];
+
+    const byUrl = new Map();
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const url = canonicalPageUrl(item.url);
+      if (!url || !isPageTagUrl(url)) continue;
+      const tags = normalizePageTagList(item.tags);
+      if (!tags.length) continue;
+      const title = String(item.title || url).trim().slice(0, 200);
+      const excerpt = String(item.excerpt || '').replace(/\s+/g, ' ').trim().slice(0, 1200);
+      const createdAt = Number(item.createdAt) || Date.now();
+      const updatedAt = Number(item.updatedAt) || createdAt;
+      const existing = byUrl.get(url);
+      if (existing) {
+        existing.tags = [...new Set([...existing.tags, ...tags])].slice(0, 20);
+        existing.updatedAt = Math.max(existing.updatedAt, updatedAt);
+        if (!existing.excerpt && excerpt) existing.excerpt = excerpt;
+      } else {
+        byUrl.set(url, {
+          id: String(item.id || '') || makePageTagId(),
+          url,
+          title,
+          excerpt,
+          tags: tags.slice(0, 20),
+          createdAt,
+          updatedAt
+        });
+      }
+    }
+
+    taggedPages = [...byUrl.values()]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 500);
+    pageTags = normalizePageTagList(stored?.[PAGE_TAG_REGISTRY_KEY]);
+    for (const entry of taggedPages) {
+      for (const tag of entry.tags) addPageTagToRegistryInMemory(tag);
+    }
+    pageSemanticCache.clear();
+  } catch {
+    taggedPages = [];
+    pageTags = [];
+  }
+}
+
+async function openPageTags() {
+  await loadTaggedPages();
+  activePageTags.clear();
+  $('#page-tag-search').value = '';
+  $('#page-tag-manager').classList.add('hidden');
+  pageTagBusy = false;
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  pageTagTab = tab?.id && isPageTagUrl(tab.url)
+    ? { id: tab.id, url: canonicalPageUrl(tab.url), title: tab.title || tab.url }
+    : null;
+  pageTagCurrentEntry = pageTagTab
+    ? taggedPages.find((entry) => entry.url === pageTagTab.url) || null
+    : null;
+
+  renderPageTagCurrent();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagList();
+  openSheet('#page-tags-sheet');
+  setTimeout(() => {
+    if (pageTagTab) $('#page-tag-input')?.focus({ preventScroll: true });
+  }, 100);
+}
+
+function renderPageTagCurrent() {
+  const title = $('#page-tag-current-title');
+  const domain = $('#page-tag-current-domain');
+  const status = $('#page-tag-current-status');
+  const input = $('#page-tag-input');
+  const add = $('#btn-page-tag-add');
+  const tags = $('#page-tag-current-tags');
+  const suggestions = $('#page-tag-suggestions');
+  if (!title || !domain || !status || !input || !add || !tags || !suggestions) return;
+
+  tags.textContent = '';
+  suggestions.textContent = '';
+  const available = Boolean(pageTagTab);
+  input.disabled = !available || pageTagBusy;
+  add.disabled = !available || pageTagBusy;
+
+  if (!available) {
+    title.textContent = '当前页不可标记';
+    domain.textContent = '只支持 http(s) 或本地文件页面';
+    status.textContent = '不可用';
+    status.classList.remove('saved');
+    input.placeholder = '切换到一个普通网页后再试';
+    return;
+  }
+
+  title.textContent = pageTagTab.title || pageTagTab.url;
+  title.title = title.textContent;
+  domain.textContent = pageDomain(pageTagTab.url) || pageTagTab.url;
+  status.textContent = pageTagCurrentEntry
+    ? `已标记 · ${pageTagCurrentEntry.tags.length} 个标签`
+    : '未标记';
+  status.classList.toggle('saved', Boolean(pageTagCurrentEntry));
+  input.placeholder = pageTagCurrentEntry
+    ? '继续加标签，Enter 保存'
+    : '输入标签，Enter 保存当前页';
+
+  for (const tag of pageTagCurrentEntry?.tags || []) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'page-tag-current-tag';
+    chip.title = `移除标签：${tag}`;
+    chip.textContent = `${tag} ×`;
+    chip.addEventListener('click', () => removeCurrentPageTag(tag));
+    tags.appendChild(chip);
+  }
+
+  const onPage = new Set(pageTagCurrentEntry?.tags || []);
+  const quick = allPageTags().filter((tag) => !onPage.has(tag)).slice(0, 10);
+  for (const tag of quick) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'page-tag-suggestion';
+    chip.textContent = `+ ${tag}`;
+    chip.title = `给当前页加上「${tag}」`;
+    chip.addEventListener('click', () => addTagsToCurrentPage([tag]));
+    suggestions.appendChild(chip);
+  }
+}
+
+async function addTagsToCurrentPage(values) {
+  if (pageTagBusy || !pageTagTab) return;
+  const names = (Array.isArray(values) ? values : parsePageTagInput(values))
+    .map(normalizePageTagName)
+    .filter(Boolean);
+  if (!names.length) return;
+
+  pageTagBusy = true;
+  const input = $('#page-tag-input');
+  const add = $('#btn-page-tag-add');
+  input.disabled = true;
+  add.disabled = true;
+
+  try {
+    let entry = pageTagCurrentEntry;
+    if (!entry) {
+      entry = {
+        id: makePageTagId(),
+        url: pageTagTab.url,
+        title: pageTagTab.title || pageTagTab.url,
+        excerpt: '',
+        tags: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      taggedPages.unshift(entry);
+      pageTagCurrentEntry = entry;
+    }
+
+    for (const tag of names) {
+      addPageTagToRegistryInMemory(tag);
+      if (!entry.tags.includes(tag)) entry.tags.push(tag);
+    }
+    entry.title = pageTagTab.title || entry.title;
+    entry.updatedAt = Date.now();
+    pageSemanticCache.clear();
+    await savePageTagState();
+
+    input.value = '';
+    renderPageTagCurrent();
+    renderPageTagBar();
+    renderPageTagManager();
+    renderPageTagList();
+    showToast(`已标记：${names.join('、')}`);
+
+    if (!entry.excerpt) {
+      capturePageExcerpt(entry, pageTagTab.id).catch(() => {});
+    }
+  } finally {
+    pageTagBusy = false;
+    renderPageTagCurrent();
+  }
+}
+
+async function capturePageExcerpt(entry, tabId) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'DS_EXTRACT_ACTIVE_PAGE',
+      tabId,
+      maxChars: 1600,
+      mode: 'readable'
+    });
+    if (!response?.ok || !response.page) return;
+    const excerpt = String(response.page.text || response.page.description || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1200);
+    if (!excerpt) return;
+    entry.excerpt = excerpt;
+    entry.title = String(response.page.title || entry.title).slice(0, 200);
+    entry.updatedAt = Date.now();
+    pageSemanticCache.clear();
+    await saveTaggedPages();
+    if (pageTagCurrentEntry?.id === entry.id) renderPageTagCurrent();
+    renderPageTagList();
+  } catch {
+    // A PDF/restricted page may not have readable text; title/URL are still saved.
+  }
+}
+
+async function removeCurrentPageTag(value) {
+  const tag = normalizePageTagName(value);
+  const entry = pageTagCurrentEntry;
+  if (!tag || !entry) return;
+  entry.tags = entry.tags.filter((item) => item !== tag);
+  entry.updatedAt = Date.now();
+  pageSemanticCache.clear();
+  if (!entry.tags.length) {
+    taggedPages = taggedPages.filter((item) => item.id !== entry.id);
+    pageTagCurrentEntry = null;
+  }
+  await savePageTagState();
+  renderPageTagCurrent();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagList();
+  showToast(`已移除标签「${tag}」`);
+}
+
+function togglePageTagFilter(value) {
+  const tag = normalizePageTagName(value);
+  if (!tag) return;
+  if (activePageTags.has(tag)) activePageTags.delete(tag);
+  else activePageTags.add(tag);
+  renderPageTagBar();
+  renderPageTagList();
+}
+
+function renderPageTagBar() {
+  const bar = $('#page-tag-bar');
+  if (!bar) return;
+  bar.textContent = '';
+  const tags = allPageTags();
+  const counts = pageTagCounts();
+
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.className = `tag-chip${activePageTags.size ? '' : ' active'}`;
+  all.textContent = '全部';
+  all.title = '清除标签筛选';
+  all.addEventListener('click', () => {
+    activePageTags.clear();
+    renderPageTagBar();
+    renderPageTagList();
+  });
+  bar.appendChild(all);
+
+  for (const tag of tags) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `tag-chip${activePageTags.has(tag) ? ' active' : ''}`;
+    chip.title = `筛选标签：${tag}`;
+    const label = document.createElement('span');
+    label.textContent = tag;
+    const count = document.createElement('span');
+    count.className = 'tag-count';
+    count.textContent = String(counts.get(tag) || 0);
+    chip.append(label, count);
+    chip.addEventListener('click', () => togglePageTagFilter(tag));
+    bar.appendChild(chip);
+  }
+
+  const manage = document.createElement('button');
+  manage.type = 'button';
+  manage.className = 'tag-chip manage';
+  manage.textContent = '管理';
+  manage.title = '管理网页标签';
+  manage.addEventListener('click', () => {
+    const manager = $('#page-tag-manager');
+    manager.classList.toggle('hidden');
+    if (!manager.classList.contains('hidden')) {
+      renderPageTagManager();
+      manager.scrollIntoView({ block: 'nearest' });
+    }
+  });
+  bar.appendChild(manage);
+}
+
+function renderPageTagManager() {
+  const list = $('#page-tag-manager-list');
+  if (!list) return;
+  list.textContent = '';
+  const tags = allPageTags();
+  const counts = pageTagCounts();
+
+  if (!tags.length) {
+    const empty = document.createElement('div');
+    empty.className = 'page-tag-empty';
+    empty.textContent = '还没有标签。给当前页加一个，或在下方新建。';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const tag of tags) {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+
+    const name = document.createElement('span');
+    name.className = 'tag-row-name';
+    name.textContent = tag;
+    name.title = tag;
+
+    const count = document.createElement('span');
+    count.className = 'tag-row-count';
+    count.textContent = `${counts.get(tag) || 0} 个网页`;
+
+    const actions = document.createElement('div');
+    actions.className = 'tag-row-actions';
+
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.textContent = '改名';
+    rename.addEventListener('click', () => beginPageTagRename(row, tag));
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'danger';
+    remove.textContent = '删除';
+    remove.addEventListener('click', () => deletePageTag(tag));
+
+    actions.append(rename, remove);
+    row.append(name, count, actions);
+    list.appendChild(row);
+  }
+}
+
+function beginPageTagRename(row, tag) {
+  const name = row.querySelector('.tag-row-name');
+  if (!name) return;
+  const input = document.createElement('input');
+  input.className = 'tag-rename-input';
+  input.type = 'text';
+  input.maxLength = 20;
+  input.value = tag;
+  name.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    if (save) await renamePageTag(tag, input.value);
+    else renderPageTagManager();
+  };
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+async function addPageTag(value) {
+  const tag = normalizePageTagName(value);
+  if (!tag) return;
+  if (allPageTags().includes(tag)) {
+    showToast(`标签「${tag}」已存在`);
+    return;
+  }
+  addPageTagToRegistryInMemory(tag);
+  await savePageTagRegistry();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagCurrent();
+  showToast(`已新建标签「${tag}」`);
+}
+
+async function renamePageTag(oldValue, newValue) {
+  const oldTag = normalizePageTagName(oldValue);
+  const newTag = normalizePageTagName(newValue);
+  if (!oldTag) return;
+  if (!newTag || oldTag === newTag) {
+    renderPageTagManager();
+    return;
+  }
+
+  const exists = allPageTags().includes(newTag);
+  pageTags = pageTags.filter((tag) => tag !== oldTag);
+  if (!pageTags.includes(newTag)) pageTags.push(newTag);
+  for (const entry of taggedPages) {
+    if (!entry.tags.includes(oldTag)) continue;
+    entry.tags = [...new Set(entry.tags.map((tag) => (tag === oldTag ? newTag : tag)))];
+    entry.updatedAt = Date.now();
+  }
+  if (activePageTags.delete(oldTag)) activePageTags.add(newTag);
+  pageSemanticCache.clear();
+  await savePageTagState();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagCurrent();
+  renderPageTagList();
+  showToast(exists ? `已合并到「${newTag}」` : `已改名为「${newTag}」`);
+}
+
+async function deletePageTag(value) {
+  const tag = normalizePageTagName(value);
+  if (!tag) return;
+  pageTags = pageTags.filter((item) => item !== tag);
+  for (const entry of taggedPages) {
+    if (!entry.tags.includes(tag)) continue;
+    entry.tags = entry.tags.filter((item) => item !== tag);
+    entry.updatedAt = Date.now();
+  }
+  taggedPages = taggedPages.filter((entry) => entry.tags.length);
+  if (pageTagCurrentEntry && !taggedPages.some((entry) => entry.id === pageTagCurrentEntry.id)) {
+    pageTagCurrentEntry = null;
+  }
+  activePageTags.delete(tag);
+  pageSemanticCache.clear();
+  await savePageTagState();
+  renderPageTagBar();
+  renderPageTagManager();
+  renderPageTagCurrent();
+  renderPageTagList();
+  showToast(`已删除标签「${tag}」`);
+}
+
+function pageSemanticTerms(raw) {
+  const text = String(raw || '').toLowerCase().normalize('NFKC');
+  const terms = new Set();
+  const add = (value) => {
+    const term = String(value || '').trim();
+    if (!term || PAGE_TAG_STOP.has(term)) return;
+    terms.add(term);
+  };
+
+  for (const word of text.match(/[a-z0-9][a-z0-9+#./_-]*/g) || []) add(word);
+  for (const sequence of text.match(/[\u4e00-\u9fa5]+/g) || []) {
+    if (sequence.length === 1) add(sequence);
+    for (let i = 0; i + 1 < sequence.length; i += 1) {
+      add(sequence.slice(i, i + 2));
+      if (i + 2 < sequence.length) add(sequence.slice(i, i + 3));
+    }
+  }
+
+  for (const term of [...terms]) {
+    const synonyms = PAGE_TAG_SYNONYMS[term];
+    if (!synonyms) continue;
+    for (const synonym of synonyms.split(/\s+/)) add(synonym);
+  }
+  return terms;
+}
+
+function pageEntryTerms(entry) {
+  const key = `${entry.id}:${entry.updatedAt}`;
+  if (pageSemanticCache.has(key)) return pageSemanticCache.get(key);
+  const terms = pageSemanticTerms([
+    entry.title,
+    entry.url,
+    entry.tags.join(' '),
+    entry.excerpt.slice(0, 1200)
+  ].join('\n'));
+  pageSemanticCache.set(key, terms);
+  return terms;
+}
+
+function pageSemanticScore(entry, term, queryTerms = pageSemanticTerms(term)) {
+  const query = term.toLowerCase();
+  const title = String(entry.title || '').toLowerCase();
+  const url = String(entry.url || '').toLowerCase();
+  const tags = entry.tags.join(' ').toLowerCase();
+  const excerpt = String(entry.excerpt || '').toLowerCase();
+  let score = 0;
+
+  if (title.includes(query)) score += 26;
+  if (tags.includes(query)) score += 20;
+  if (url.includes(query)) score += 10;
+  if (excerpt.includes(query)) score += 8;
+
+  const docTerms = pageEntryTerms(entry);
+  let overlap = 0;
+  for (const item of queryTerms) {
+    if (docTerms.has(item)) overlap += item.length >= 2 ? 2 : 1;
+  }
+  if (overlap) score += (overlap / Math.sqrt(docTerms.size + 1)) * 10;
+  for (const tag of entry.tags) {
+    if (queryTerms.has(tag.toLowerCase())) score += 8;
+  }
+  return score;
+}
+
+function renderPageTagList() {
+  const list = $('#page-tag-list');
+  if (!list) return;
+  list.textContent = '';
+
+  const term = $('#page-tag-search').value.trim();
+  const queryTerms = term ? pageSemanticTerms(term) : null;
+  const tagFiltered = taggedPages.filter((entry) =>
+    [...activePageTags].every((tag) => entry.tags.includes(tag))
+  );
+
+  let sorted;
+  if (term) {
+    sorted = tagFiltered
+      .map((entry) => ({ entry, score: pageSemanticScore(entry, term, queryTerms) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || b.entry.updatedAt - a.entry.updatedAt)
+      .map((item) => item.entry);
+  } else {
+    sorted = [...tagFiltered].sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  const count = $('#page-tag-count');
+  if (count) {
+    count.textContent = term || activePageTags.size
+      ? `${sorted.length} / ${taggedPages.length} 个网页`
+      : `${taggedPages.length} 个已标记网页`;
+  }
+
+  if (!sorted.length) {
+    const empty = document.createElement('div');
+    empty.className = 'page-tag-empty';
+    empty.textContent = taggedPages.length
+      ? '没有匹配的网页。试试更自然的描述，或清除标签筛选。'
+      : '还没有标记网页。给当前页输入一个标签即可开始；标签只保存在本机。';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const entry of sorted) {
+    list.appendChild(createPageTagElement(entry));
+  }
+}
+
+function createPageTagElement(entry) {
+  const item = document.createElement('div');
+  item.className = 'page-tag-item';
+
+  const head = document.createElement('div');
+  head.className = 'page-tag-item-head';
+
+  const copy = document.createElement('div');
+  copy.className = 'page-tag-item-copy';
+
+  const title = document.createElement('span');
+  title.className = 'page-tag-item-title';
+  title.textContent = entry.title || entry.url;
+  title.title = title.textContent;
+
+  const domain = document.createElement('span');
+  domain.className = 'page-tag-item-domain';
+  domain.textContent = pageDomain(entry.url) || entry.url;
+
+  copy.append(title, domain);
+  head.appendChild(copy);
+
+  if (pageTagTab?.url === entry.url) {
+    const badge = document.createElement('span');
+    badge.className = 'page-tag-current-badge';
+    badge.textContent = '当前';
+    head.appendChild(badge);
+  }
+
+  const tags = document.createElement('div');
+  tags.className = 'page-tag-item-tags';
+  for (const tag of entry.tags) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'page-tag-item-tag';
+    chip.textContent = tag;
+    chip.title = `筛选标签：${tag}`;
+    chip.addEventListener('click', () => togglePageTagFilter(tag));
+    tags.appendChild(chip);
+  }
+
+  const excerpt = document.createElement('p');
+  excerpt.className = 'page-tag-item-excerpt';
+  excerpt.textContent = entry.excerpt || '打开后可继续标记；暂未读取正文摘要。';
+
+  const actions = document.createElement('div');
+  actions.className = 'page-tag-item-actions';
+
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'btn primary';
+  open.textContent = '打开';
+  open.addEventListener('click', () => {
+    chrome.tabs.create({ url: entry.url }).catch(() => showToast('打开网页失败', 'error', 4000));
+  });
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn ghost danger';
+  remove.textContent = '移除';
+  remove.addEventListener('click', async () => {
+    if (!window.confirm(`移除「${entry.title || entry.url}」的网页标签记录？`)) return;
+    taggedPages = taggedPages.filter((item) => item.id !== entry.id);
+    if (pageTagCurrentEntry?.id === entry.id) pageTagCurrentEntry = null;
+    pageSemanticCache.clear();
+    await saveTaggedPages();
+    renderPageTagCurrent();
+    renderPageTagBar();
+    renderPageTagManager();
+    renderPageTagList();
+    showToast('已移除网页记录');
+  });
+
+  actions.append(open, remove);
+  item.append(head, tags, excerpt, actions);
+  return item;
+}
+
+/* ------------------------------------------------------------------ */
 /* Prompt library                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -1767,6 +2549,33 @@ function bindUI() {
     saveSettings();
   });
 
+  $('#btn-page-tags').addEventListener('click', () => {
+    openPageTags().catch((error) => showToast(`打开网页标签失败：${error.message}`, 'error', 4000));
+  });
+  $('#btn-page-tag-add').addEventListener('click', () => {
+    addTagsToCurrentPage($('#page-tag-input').value)
+      .catch((error) => showToast(`保存标签失败：${error.message}`, 'error', 4000));
+  });
+  $('#page-tag-input').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    $('#btn-page-tag-add').click();
+  });
+  $('#page-tag-search').addEventListener('input', renderPageTagList);
+  $('#btn-page-tag-manager-close').addEventListener('click', () => {
+    $('#page-tag-manager').classList.add('hidden');
+  });
+  $('#btn-page-tag-registry-add').addEventListener('click', () => {
+    const input = $('#page-tag-new-name');
+    addPageTag(input.value)
+      .then(() => { input.value = ''; input.focus(); })
+      .catch((error) => showToast(`新建标签失败：${error.message}`, 'error', 4000));
+  });
+  $('#page-tag-new-name').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    $('#btn-page-tag-registry-add').click();
+  });
   $('#btn-prompts').addEventListener('click', () => {
     openPromptLibrary().catch((error) => showToast(`打开提示词库失败：${error.message}`, 'error', 4000));
   });
@@ -1827,7 +2636,9 @@ function bindUI() {
         ? '#page-sheet'
         : target === 'prompt'
           ? '#prompt-sheet'
-          : '#settings-sheet';
+          : target === 'page-tags'
+            ? '#page-tags-sheet'
+            : '#settings-sheet';
       closeSheet(selector);
     });
   });
@@ -1836,6 +2647,7 @@ function bindUI() {
     if (event.key !== 'Escape') return;
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');
+    else if (isSheetOpen('#page-tags-sheet')) closeSheet('#page-tags-sheet');
     else if (isSheetOpen('#settings-sheet')) closeSheet('#settings-sheet');
   });
 
