@@ -57,6 +57,11 @@
     if (typeRelayActive) positionTypeRelay();
   });
 
+  document.addEventListener('keydown', (event) => {
+    if (event.target === typeRelay) return;
+    handlePdfRelayKey(event);
+  }, true);
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'DS_START_TYPE_RELAY' && message?.type !== 'DS_STOP_TYPE_RELAY') return;
 
@@ -214,11 +219,58 @@
     } catch {
       // Ignore.
     }
-    if (document.activeElement !== relay) {
-      typeRelayActive = false;
-      return;
-    }
+    setTimeout(() => {
+      if (typeRelayActive && document.activeElement !== relay) {
+        try {
+          relay.focus({ preventScroll: true });
+        } catch {
+          // Ignore.
+        }
+      }
+    }, 60);
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
+  }
+
+  function handlePdfRelayKey(event) {
+    if (!typeRelayActive) return false;
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      stopTypeRelay(false, true);
+      return true;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      stopTypeRelay(true);
+      return true;
+    }
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeRelay) {
+        typeRelay.value = typeRelay.value.slice(0, -1);
+        relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+      }
+      return true;
+    }
+    if (
+      event.key.length === 1
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeRelay) {
+        typeRelay.value += event.key;
+        relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+      }
+      return true;
+    }
+    return false;
   }
 
   function stopTypeRelay(cancel, send = false) {
@@ -278,6 +330,11 @@
       }
     };
     pdfJsFrame.addEventListener('load', () => {
+      try {
+        pdfJsFrame.contentWindow.addEventListener('keydown', handlePdfRelayKey, true);
+      } catch {
+        // The frame may not be ready yet.
+      }
       poll();
       pdfPollTimer = setInterval(poll, 320);
     }, { once: true });
