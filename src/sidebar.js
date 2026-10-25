@@ -34,7 +34,10 @@ const DEFAULT_SETTINGS = {
   maxPageChars: 12000,
   extractMode: 'readable',
   showPageToast: true,
-  autoOpenLocalPdfReader: true
+  autoOpenLocalPdfReader: true,
+  pdfJsFollow: true,
+  enterSendsMessage: true,
+  undoShortcut: 'Ctrl+Z'
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -56,6 +59,7 @@ let toastTimer = null;
 let pageData = null;
 let pendingSelection = null;
 let activeSelectionId = '';
+let typeRelayActive = false;
 let lastClearedSelectionId = '';
 let prompts = [];
 let taggedPages = [];
@@ -257,7 +261,9 @@ function onFrameMessage(event) {
     data.type === 'ATTACH_RESULT' ||
     data.type === 'CLEAR_SELECTION_RESULT' ||
     data.type === 'QUOTE_RESULT' ||
-    data.type === 'INPUT_RESULT'
+    data.type === 'INPUT_RESULT' ||
+    data.type === 'RELAY_RESULT' ||
+    data.type === 'SEND_RESULT'
   ) {
     const resolve = pendingRequests.get(data.requestId);
     if (resolve) {
@@ -416,17 +422,142 @@ document.addEventListener('visibilitychange', () => {
 /* Fill                                                               */
 /* ------------------------------------------------------------------ */
 
-function focusChatFrame() {
-  // Focusing the sidebar can collapse the page selection; suppress that
-  // transient clear so the newly inserted selection is not immediately undone.
+function normalizeShortcutString(value) {
+  const parts = String(value || '').split('+').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return 'Ctrl+Z';
+  const key = parts.pop();
+  if (!key || key.length > 12) return 'Ctrl+Z';
+  const modifiers = [];
+  if (parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part))) modifiers.push('Ctrl');
+  if (parts.some((part) => /^alt$/i.test(part))) modifiers.push('Alt');
+  if (parts.some((part) => /^shift$/i.test(part))) modifiers.push('Shift');
+  if (!modifiers.length) return 'Ctrl+Z';
+  return `${modifiers.join('+')}+${key.toUpperCase()}`;
+}
+
+function shortcutFromEvent(event) {
+  const modifiers = [];
+  if (event.ctrlKey || event.metaKey) modifiers.push('Ctrl');
+  if (event.altKey) modifiers.push('Alt');
+  if (event.shiftKey) modifiers.push('Shift');
+  const key = String(event.key || '');
+  if (!key || ['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return '';
+  if (!modifiers.length) return '';
+  return `${modifiers.join('+')}+${key.toUpperCase()}`;
+}
+
+function shortcutMatches(event, shortcut) {
+  const parts = String(shortcut || 'Ctrl+Z').split('+').map((part) => part.trim()).filter(Boolean);
+  const key = parts.pop() || 'Z';
+  const ctrl = parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part));
+  const alt = parts.some((part) => /^alt$/i.test(part));
+  const shift = parts.some((part) => /^shift$/i.test(part));
+  const hasCtrl = event.ctrlKey || event.metaKey;
+  return hasCtrl === ctrl
+    && event.altKey === alt
+    && event.shiftKey === shift
+    && String(event.key || '').toLowerCase() === key.toLowerCase();
+}
+
+async function startTypeRelay() {
+  if (!activeSelectionId) return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+
+  await sendToFrame('DS_RELAY_START', {}, 4000);
+  let result = null;
   try {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (!tab?.id) return;
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'DS_SUPPRESS_SELECTION_CLEAR',
-        ms: 900
+    result = await chrome.tabs.sendMessage(tab.id, {
+      type: 'DS_START_TYPE_RELAY',
+      shortcut: settings.undoShortcut || 'Ctrl+Z',
+      targetTabId: tab.id
+    });
+  } catch {
+    result = null;
+  }
+  if (!result?.ok) {
+    try {
+      result = await chrome.runtime.sendMessage({
+        type: 'DS_START_TYPE_RELAY',
+        shortcut: settings.undoShortcut || 'Ctrl+Z',
+        targetTabId: tab.id
+      });
+    } catch {
+      result = null;
+    }
+  }
+  typeRelayActive = true;
+  showToast('直接输入已开启：在网页/PDF 打字，Enter 发送', 'success', 3500);
+}
+
+async function stopTypeRelayPage(cancel) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'DS_STOP_TYPE_RELAY',
+        cancel: Boolean(cancel),
+        targetTabId: tab.id
       }).catch(() => {});
-    }).catch(() => {});
+      await chrome.runtime.sendMessage({
+        type: 'DS_STOP_TYPE_RELAY',
+        cancel: Boolean(cancel),
+        targetTabId: tab.id
+      }).catch(() => {});
+    }
+  } catch {
+    // Ignore.
+  }
+}
+
+async function applyTypeRelayText(text) {
+  if (!typeRelayActive) return;
+  await sendToFrame('DS_RELAY_SET', { text: String(text || '') }, 4000);
+}
+
+async function finishTypeRelay(commit, send = false) {
+  if (!typeRelayActive) return;
+  typeRelayActive = false;
+  chrome.storage.local.remove('dsTypeRelay').catch(() => {});
+  if (commit) {
+    await sendToFrame('DS_RELAY_END', {}, 4000);
+    activeSelectionId = '';
+    if (send && settings.enterSendsMessage !== false) {
+      try {
+        const result = await sendToFrame('DS_SEND_MESSAGE', {}, 6000);
+        if (!result?.ok) showToast('没有找到发送按钮，请手动点发送', 'error', 5000);
+      } catch {
+        showToast('发送失败，请手动点发送', 'error', 5000);
+      }
+    }
+  } else {
+    await sendToFrame('DS_RELAY_CANCEL', {}, 4000);
+    activeSelectionId = '';
+  }
+  pendingSelection = null;
+}
+
+async function cancelTypeRelayFromSidebar() {
+  if (!activeSelectionId) return;
+  typeRelayActive = false;
+  await stopTypeRelayPage(true);
+  await sendToFrame('DS_RELAY_CANCEL', {}, 4000);
+  activeSelectionId = '';
+  pendingSelection = null;
+}
+
+async function focusChatFrame() {
+  // Set the page-side suppression first. Without awaiting this, focusing the
+  // sidebar can race with the page selection-clear notification and undo the
+  // text that was just inserted.
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'DS_SUPPRESS_SELECTION_CLEAR',
+        ms: 700
+      }).catch(() => {});
+    }
   } catch {
     // Ignore; focus still proceeds.
   }
@@ -440,13 +571,13 @@ function focusChatFrame() {
         type: 'DS_FOCUS_INPUT'
       }, CHAT_ORIGIN);
     } catch {
-      // The frame may still be navigating.
+      // Ignore while navigating.
     }
   };
 
   apply();
-  setTimeout(apply, 80);
-  setTimeout(apply, 260);
+  setTimeout(apply, 100);
+  setTimeout(apply, 280);
 }
 
 function fillChat(text, mode = 'smart', options = {}) {
@@ -481,7 +612,6 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     setConnection('ready');
     activeSelectionId = selectionId;
     hideBanner();
-    focusChatFrame();
     return true;
   }
 
@@ -536,6 +666,7 @@ async function fillSelection(selection, { auto = false } = {}) {
     hideBanner();
     if (!clearedAfterFill) {
       showToast(auto ? `已填入选中文字 · ${formatChars(text.length)}` : '已填入选中文字');
+      await startTypeRelay();
     }
   }
 
@@ -2656,6 +2787,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       return false;
 
+    case 'DS_TYPE_RELAY_TEXT':
+      applyTypeRelayText(message.text).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
+    case 'DS_TYPE_RELAY_END':
+      finishTypeRelay(true).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
+    case 'DS_TYPE_RELAY_CANCEL':
+      finishTypeRelay(false).catch(() => {});
+      sendResponse({ ok: true });
+      return false;
+
     case 'DS_NOTICE':
       showBanner(message.message || '操作失败。', '重试', readPage, {
         type: message.level === 'error' ? 'error' : 'info',
@@ -2765,6 +2911,9 @@ function normalizeSettings(value) {
     attachPageInfo: Boolean(value.attachPageInfo),
     showPageToast: value.showPageToast !== false,
     autoOpenLocalPdfReader: value.autoOpenLocalPdfReader !== false,
+    pdfJsFollow: value.pdfJsFollow !== false,
+    enterSendsMessage: value.enterSendsMessage !== false,
+    undoShortcut: normalizeShortcutString(value.undoShortcut),
     extractMode: value.extractMode === 'full' ? 'full' : 'readable',
     maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000
   };
@@ -2786,6 +2935,9 @@ function applySettingsToUI() {
   const localPdfReader = $('#setting-local-pdf-reader');
   const extractMode = $('#setting-extract-mode');
   const maxChars = $('#setting-maxchars');
+  const undoShortcut = $('#btn-undo-shortcut');
+  const pdfJsFollow = $('#setting-pdfjs-follow');
+  const enterSendsMessage = $('#setting-enter-sends');
 
   if (autoFill) autoFill.checked = Boolean(settings.autoFillSelection);
   if (mode) mode.value = settings.selectionMode;
@@ -2794,6 +2946,9 @@ function applySettingsToUI() {
   if (localPdfReader) localPdfReader.checked = Boolean(settings.autoOpenLocalPdfReader);
   if (extractMode) extractMode.value = settings.extractMode;
   if (maxChars) maxChars.value = String(settings.maxPageChars);
+  if (undoShortcut) undoShortcut.textContent = settings.undoShortcut;
+  if (pdfJsFollow) pdfJsFollow.checked = Boolean(settings.pdfJsFollow);
+  if (enterSendsMessage) enterSendsMessage.checked = Boolean(settings.enterSendsMessage);
 
   updateAutofillButton();
 }
@@ -2855,6 +3010,34 @@ function bindUI() {
     showToast(settings.autoFillSelection ? '划词自动填入已开启' : '划词自动填入已关闭');
   });
 
+  const shortcutButton = $('#btn-undo-shortcut');
+  shortcutButton.addEventListener('click', () => {
+    if (shortcutButton.classList.contains('capturing')) return;
+    shortcutButton.classList.add('capturing');
+    shortcutButton.textContent = '请按快捷键…';
+
+    const onKeyDown = (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === 'Escape') {
+        cleanup();
+        return;
+      }
+      const combo = shortcutFromEvent(event);
+      if (!combo) return;
+      settings.undoShortcut = normalizeShortcutString(combo);
+      saveSettings();
+      cleanup();
+      showToast(`撤销快捷键：${settings.undoShortcut}`);
+    };
+    const cleanup = () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      shortcutButton.classList.remove('capturing');
+      shortcutButton.textContent = settings.undoShortcut;
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+  });
+
   $('#setting-mode').addEventListener('change', (event) => {
     settings.selectionMode = event.target.value;
     saveSettings();
@@ -2873,6 +3056,18 @@ function bindUI() {
   $('#setting-local-pdf-reader').addEventListener('change', (event) => {
     settings.autoOpenLocalPdfReader = event.target.checked;
     saveSettings();
+  });
+
+  $('#setting-pdfjs-follow').addEventListener('change', (event) => {
+    settings.pdfJsFollow = event.target.checked;
+    saveSettings();
+    showToast(settings.pdfJsFollow ? 'PDF.js 跟随已开启，重新打开 PDF 阅读器生效' : '已改回原生 PDF 阅读器', 'info', 4200);
+  });
+
+  $('#setting-enter-sends').addEventListener('change', (event) => {
+    settings.enterSendsMessage = event.target.checked;
+    saveSettings();
+    showToast(settings.enterSendsMessage ? '小窗 Enter 将直接发送' : '小窗 Enter 只完成，不发送');
   });
 
   $('#setting-extract-mode').addEventListener('change', (event) => {
@@ -2995,6 +3190,12 @@ function bindUI() {
   });
 
   document.addEventListener('keydown', (event) => {
+    if (activeSelectionId && (event.key === 'Escape' || shortcutMatches(event, settings.undoShortcut))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      cancelTypeRelayFromSidebar().catch(() => {});
+      return;
+    }
     if (event.key !== 'Escape') return;
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');
@@ -3003,9 +3204,20 @@ function bindUI() {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.settings) return;
-    settings = normalizeSettings(changes.settings.newValue || {});
-    applySettingsToUI();
+    if (area !== 'local') return;
+    if (changes.settings) {
+      settings = normalizeSettings(changes.settings.newValue || {});
+      applySettingsToUI();
+    }
+    const relay = changes.dsTypeRelay?.newValue;
+    if (!relay) return;
+    if (relay.type === 'DS_TYPE_RELAY_TEXT') {
+      applyTypeRelayText(relay.text).catch(() => {});
+    } else if (relay.type === 'DS_TYPE_RELAY_END') {
+      finishTypeRelay(true, Boolean(relay.send)).catch(() => {});
+    } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
+      finishTypeRelay(false).catch(() => {});
+    }
   });
 }
 

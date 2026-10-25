@@ -56,6 +56,14 @@
   let selectionSeq = 0;
   let activeSelectionId = '';
   let suppressClearUntil = 0;
+  let typeRelay = null;
+  let typeRelayHost = null;
+  let typeRelayAnchor = null;
+  let typeRelayActive = false;
+  let typeRelayComposing = false;
+  let typeRelayShortcut = 'Ctrl+Z';
+  let lastSelectionRect = null;
+  let lastPointer = null;
   let pdfBridgeInstalled = false;
   let pdfBridgeTried = false;
   let pdfListenerAttached = false;
@@ -100,8 +108,24 @@
       selectionTimer = setTimeout(captureSelection, 160);
     };
 
-    document.addEventListener('pointerup', schedule, true);
-    document.addEventListener('touchend', schedule, true);
+    document.addEventListener('pointerup', (event) => {
+      lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+      schedule();
+    }, true);
+    document.addEventListener('touchend', (event) => {
+      const touch = event.changedTouches?.[0];
+      if (touch) lastPointer = { x: touch.clientX, y: touch.clientY };
+      schedule();
+    }, true);
+
+    // A real click on the page is an explicit cancel/return: end any focus
+    // suppression immediately and re-check the selection.
+    document.addEventListener('pointerdown', () => {
+      if (!activeSelectionId) return;
+      suppressClearUntil = 0;
+      clearTimeout(selectionClearTimer);
+      selectionClearTimer = setTimeout(notifySelectionCleared, 180);
+    }, true);
     document.addEventListener('keyup', (event) => {
       if (event.key === 'Shift' || event.shiftKey) schedule();
     }, true);
@@ -117,15 +141,22 @@
       selectionClearTimer = setTimeout(notifySelectionCleared, 260);
     });
 
-    // The side panel focuses the chat input after autofill; this can make
-    // the page selection momentarily collapse. Suppress that specific clear
-    // so the just-inserted text is not undone. Returning to the page resets
-    // the suppression and allows a real cancel/undo.
     try {
       chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-        if (message?.type !== 'DS_SUPPRESS_SELECTION_CLEAR') return;
-        suppressClearUntil = Date.now() + Math.max(0, Math.min(Number(message.ms) || 700, 2000));
-        sendResponse({ ok: true });
+        if (message?.type === 'DS_SUPPRESS_SELECTION_CLEAR') {
+          suppressClearUntil = Date.now() + Math.max(0, Math.min(Number(message.ms) || 900, 2000));
+          sendResponse({ ok: true });
+          return;
+        }
+        if (message?.type === 'DS_START_TYPE_RELAY') {
+          startTypeRelay(String(message.shortcut || 'Ctrl+Z'));
+          sendResponse({ ok: typeRelayActive });
+          return;
+        }
+        if (message?.type === 'DS_STOP_TYPE_RELAY') {
+          stopTypeRelay(Boolean(message.cancel));
+          sendResponse({ ok: true });
+        }
       });
     } catch {
       // Extension context can be invalidated during a reload.
@@ -138,11 +169,16 @@
       if (!activeSelectionId) return;
       clearTimeout(selectionClearTimer);
       selectionClearTimer = setTimeout(notifySelectionCleared, 120);
+      // Catch a click/focus that collapses the selection slightly later.
+      setTimeout(() => {
+        if (activeSelectionId) notifySelectionCleared();
+      }, 460);
     });
   }
 
   function notifySelectionCleared() {
     if (!activeSelectionId) return;
+    if (typeRelayActive) return;
     if (Date.now() < suppressClearUntil) return;
     if (!document.hasFocus()) return;
 
@@ -188,6 +224,251 @@
     }
   }
 
+  function shortcutMatches(event, shortcut) {
+    const parts = String(shortcut || 'Ctrl+Z').split('+').map((part) => part.trim()).filter(Boolean);
+    const key = parts.pop() || 'Z';
+    const ctrl = parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part));
+    const alt = parts.some((part) => /^alt$/i.test(part));
+    const shift = parts.some((part) => /^shift$/i.test(part));
+    const hasCtrl = event.ctrlKey || event.metaKey;
+    return hasCtrl === ctrl
+      && event.altKey === alt
+      && event.shiftKey === shift
+      && String(event.key || '').toLowerCase() === key.toLowerCase();
+  }
+
+  function relaySend(type, payload = {}) {
+    try {
+      chrome.storage.local.set({
+        dsTypeRelay: {
+          type,
+          ...payload,
+          seq: Date.now()
+        }
+      }).catch(() => {});
+    } catch {
+      // Extension context invalidated.
+    }
+  }
+
+  function positionTypeRelay() {
+    if (!typeRelayHost) return;
+    const width = Math.min(320, Math.max(220, window.innerWidth - 16));
+    typeRelayHost.style.width = `${width}px`;
+
+    let left = 8;
+    let top = Math.max(8, window.innerHeight - 58);
+    if (typeRelayAnchor) {
+      const anchorLeft = typeRelayAnchor.left - window.scrollX;
+      const anchorTop = typeRelayAnchor.top - window.scrollY;
+      const anchorBottom = typeRelayAnchor.bottom - window.scrollY;
+      left = Math.min(Math.max(8, anchorLeft), Math.max(8, window.innerWidth - width - 8));
+      top = anchorBottom + 8;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, anchorTop - 50);
+    }
+    typeRelayHost.style.left = `${left}px`;
+    typeRelayHost.style.top = `${top}px`;
+  }
+
+  function ensureTypeRelay() {
+    if (typeRelayHost) return typeRelay;
+
+    typeRelayHost = document.createElement('div');
+    typeRelayHost.id = 'ds-type-relay';
+    typeRelayHost.style.cssText = 'all:initial;position:fixed;z-index:2147483647;display:none;';
+    const root = typeRelayHost.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        * { box-sizing: border-box; }
+        .panel {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 9px;
+          border: 1px solid #4d6bfe;
+          border-radius: 10px;
+          background: #fff;
+          color: #1b1f2a;
+          box-shadow: 0 10px 30px rgba(15, 23, 42, .22);
+          font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+        .dot {
+          flex: none;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #4d6bfe;
+        }
+        input {
+          min-width: 0;
+          flex: 1;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: #1b1f2a;
+          font: 13px/1.4 inherit;
+        }
+        input::placeholder { color: #8a96a8; }
+        .hint {
+          flex: none;
+          color: #8a96a8;
+          font-size: 9.5px;
+          white-space: nowrap;
+        }
+      </style>
+      <div class="panel">
+        <span class="dot"></span>
+        <input id="ds-type-relay-input" type="text" autocomplete="off" spellcheck="false" placeholder="直接输入…">
+        <span class="hint">Enter 完成 · Ctrl+Z 撤回</span>
+      </div>`;
+    document.documentElement.appendChild(typeRelayHost);
+
+    typeRelay = root.querySelector('#ds-type-relay-input');
+    root.querySelector('.hint').textContent = `${typeRelayShortcut} 撤回`;
+
+    typeRelay.addEventListener('compositionstart', () => {
+      typeRelayComposing = true;
+    });
+    typeRelay.addEventListener('compositionend', () => {
+      typeRelayComposing = false;
+      if (typeRelayActive) relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    });
+    typeRelay.addEventListener('input', () => {
+      if (!typeRelayActive || typeRelayComposing) return;
+      relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    });
+    typeRelay.addEventListener('keydown', (event) => {
+      if (!typeRelayActive) return;
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(false, true);
+        return;
+      }
+      if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(true);
+      }
+    }, true);
+    typeRelay.addEventListener('blur', () => {
+      if (!typeRelayActive) return;
+      setTimeout(() => {
+        if (!typeRelayActive) return;
+        if (!typeRelayHost?.shadowRoot?.activeElement) stopTypeRelay(false);
+      }, 0);
+    });
+    typeRelayHost.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+    });
+    window.addEventListener('scroll', positionTypeRelay, true);
+    window.addEventListener('resize', positionTypeRelay);
+
+    return typeRelay;
+  }
+
+  function startTypeRelay(shortcut) {
+    if (!activeSelectionId) return;
+    typeRelayShortcut = shortcut || 'Ctrl+Z';
+
+    typeRelayAnchor = lastSelectionRect
+      ? { ...lastSelectionRect }
+      : lastPointer
+        ? {
+            left: lastPointer.x + window.scrollX,
+            top: lastPointer.y + window.scrollY,
+            right: lastPointer.x + window.scrollX,
+            bottom: lastPointer.y + window.scrollY,
+            width: 0,
+            height: 0
+          }
+        : null;
+
+    const relay = ensureTypeRelay();
+    relay.value = '';
+    const hint = typeRelayHost?.shadowRoot?.querySelector('.hint');
+    if (hint) hint.textContent = `Enter 完成 · ${typeRelayShortcut} 撤回`;
+    typeRelayHost.style.display = 'block';
+    positionTypeRelay();
+    typeRelayActive = true;
+    typeRelayComposing = false;
+    try {
+      relay.focus({ preventScroll: true });
+    } catch {
+      // Focus is best-effort.
+    }
+    if (typeRelayHost.shadowRoot?.activeElement !== relay) {
+      typeRelayActive = false;
+      typeRelayHost.style.display = 'none';
+      return;
+    }
+    showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
+  }
+
+  function stopTypeRelay(cancel, send = false) {
+    if (!typeRelayActive) return;
+    typeRelayActive = false;
+    typeRelayComposing = false;
+    activeSelectionId = '';
+    lastSelectionText = '';
+    lastSelectionAt = 0;
+    try {
+      typeRelay?.blur();
+      if (typeRelay) typeRelay.value = '';
+      if (typeRelayHost) typeRelayHost.style.display = 'none';
+      typeRelayAnchor = null;
+    } catch {
+      // Ignore.
+    }
+
+    if (cancel) {
+      try {
+        window.getSelection()?.removeAllRanges();
+      } catch {
+        // Ignore.
+      }
+      relaySend('DS_TYPE_RELAY_CANCEL');
+      showToast('已撤回自动填入');
+    } else {
+      relaySend('DS_TYPE_RELAY_END', send ? { send: true } : {});
+    }
+  }
+
+  function captureSelectionRect() {
+    try {
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);
+      const rect = rects[rects.length - 1] || range.getBoundingClientRect();
+      if (rect && (rect.width || rect.height)) {
+        lastSelectionRect = {
+          left: rect.left + window.scrollX,
+          top: rect.top + window.scrollY,
+          right: rect.right + window.scrollX,
+          bottom: rect.bottom + window.scrollY,
+          width: rect.width,
+          height: rect.height
+        };
+        return;
+      }
+    } catch {
+      // Ignore unusual selections.
+    }
+    if (lastPointer) {
+      lastSelectionRect = {
+        left: lastPointer.x + window.scrollX,
+        top: lastPointer.y + window.scrollY,
+        right: lastPointer.x + window.scrollX,
+        bottom: lastPointer.y + window.scrollY,
+        width: 0,
+        height: 0
+      };
+    }
+  }
+
   function captureSelection() {
     try {
       const selection = window.getSelection();
@@ -205,6 +486,7 @@
         return;
       }
 
+      captureSelectionRect();
       sendSelection(raw, document.title || '', location.href);
     } catch {
       // The extension was reloaded, or this page has an unusual selection.

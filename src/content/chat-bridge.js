@@ -24,6 +24,8 @@
     : 'DeepSeek';
   let lastInserted = '';
   let autoSelection = null;
+  let relayActive = false;
+  let relayBase = '';
   let toastHost = null;
   let toastTimer = null;
   let quoteHost = null;
@@ -138,6 +140,66 @@
       case 'DS_FOCUS_INPUT': {
         const input = findInput();
         if (input) focusInputEnd(input, isValueInput(input) ? 'value' : 'editable');
+        break;
+      }
+
+      case 'DS_SEND_MESSAGE': {
+        const ok = sendCurrentMessage();
+        post('SEND_RESULT', { requestId: data.requestId, ok });
+        break;
+      }
+
+      case 'DS_RELAY_START': {
+        const input = findInput();
+        if (input) {
+          const kind = isValueInput(input) ? 'value' : 'editable';
+          relayBase = readValue(input, kind);
+          relayActive = true;
+          post('RELAY_RESULT', { requestId: data.requestId, ok: true });
+        } else {
+          relayActive = false;
+          post('RELAY_RESULT', { requestId: data.requestId, ok: false, error: '没有找到输入框' });
+        }
+        break;
+      }
+
+      case 'DS_RELAY_SET': {
+        if (!relayActive) {
+          post('RELAY_RESULT', { requestId: data.requestId, ok: false, error: '没有开始直接输入' });
+          break;
+        }
+        const input = findInput();
+        if (!input) {
+          post('RELAY_RESULT', { requestId: data.requestId, ok: false, error: '没有找到输入框' });
+          break;
+        }
+        const kind = isValueInput(input) ? 'value' : 'editable';
+        const next = `${relayBase}${String(data.text || '')}`;
+        if (kind === 'value') setValueInput(input, next, { focus: false });
+        else setEditableInput(input, next, { focus: false });
+        post('RELAY_RESULT', { requestId: data.requestId, ok: true });
+        break;
+      }
+
+      case 'DS_RELAY_END':
+        relayActive = false;
+        relayBase = '';
+        autoSelection = null;
+        post('RELAY_RESULT', { requestId: data.requestId, ok: true });
+        break;
+
+      case 'DS_RELAY_CANCEL': {
+        relayActive = false;
+        relayBase = '';
+        const input = findInput();
+        const previous = autoSelection?.previousValue ?? '';
+        autoSelection = null;
+        if (input) {
+          const kind = isValueInput(input) ? 'value' : 'editable';
+          if (kind === 'value') setValueInput(input, previous, { focus: false });
+          else setEditableInput(input, previous, { focus: false });
+        }
+        post('RELAY_RESULT', { requestId: data.requestId, ok: true });
         break;
       }
 
@@ -571,7 +633,7 @@
 
   function installCommandPalette() {
     document.addEventListener('input', scheduleCommandPalette, true);
-    document.addEventListener('keydown', handleCommandKeyDown, true);
+    window.addEventListener('keydown', handleCommandKeyDown, true);
 
     document.addEventListener('mousedown', (event) => {
       if (commandHost && event.composedPath().includes(commandHost)) return;
@@ -892,11 +954,13 @@
   function handleCommandKeyDown(event) {
     if (event.isComposing || event.keyCode === 229) return;
 
-    const input = findInput();
-    if (!input) return;
-    if (!(event.target === input || input.contains(event.target))) return;
-
     const visible = Boolean(commandHost && commandHost.style.display !== 'none');
+    const input = visible && commandMatch?.input?.isConnected
+      ? commandMatch.input
+      : findInput();
+    if (!input) return;
+    if (!visible && !(event.target === input || input.contains(event.target))) return;
+
     const wantsEnter = event.key === 'Enter' || event.key === 'Tab';
     const wantsArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
     if (!visible && !wantsEnter && !wantsArrow) return;
@@ -915,8 +979,7 @@
       || prompt.text.toLowerCase().includes(query)
     );
     if (!hasPromptMatch) {
-      // Let ChatGPT's own slash commands through when the user is not
-      // invoking one of our saved prompts.
+      // Do not hijack ChatGPT's own slash commands when no saved prompt matches.
       if (visible) hideCommandPalette();
       return;
     }
@@ -1471,6 +1534,58 @@
     } catch {
       // Focus is best-effort; the input may have been re-rendered.
     }
+  }
+
+  function sendCurrentMessage() {
+    const input = findInput();
+    if (!input) return false;
+    const kind = isValueInput(input) ? 'value' : 'editable';
+    const value = readValue(input, kind).trim();
+    if (!value) return false;
+
+    focusInputEnd(input, kind);
+
+    const selectors = [
+      '[data-testid="send-button"]',
+      'button[aria-label="Send prompt"]',
+      'button[aria-label*="Send message"]',
+      'button[aria-label*="发送"]',
+      'button[aria-label*="Send"]',
+      '#send-button',
+      'button[data-testid*="send"]',
+      'button[class*="send" i]'
+    ];
+    for (const selector of selectors) {
+      for (const button of document.querySelectorAll(selector)) {
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        if (rect.width < 1 || rect.height < 1) continue;
+        if (style.visibility === 'hidden' || style.display === 'none') continue;
+        if (button.disabled || button.getAttribute('aria-disabled') === 'true') continue;
+        button.click();
+        return true;
+      }
+    }
+
+    input.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }));
+    input.dispatchEvent(new KeyboardEvent('keyup', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }));
+    return true;
   }
 
   function dispatchInputEvents(element, value) {

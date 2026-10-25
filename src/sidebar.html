@@ -255,6 +255,14 @@
 
           <div class="setting-row">
             <span class="setting-copy">
+              <span class="setting-title">撤销填入快捷键</span>
+              <span class="setting-desc">自动填入后按此快捷键撤回；也可以在网页上直接输入</span>
+            </span>
+            <button id="btn-undo-shortcut" class="shortcut-button" type="button" title="点击后按下新的快捷键">Ctrl+Z</button>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-copy">
               <span class="setting-title">填入方式</span>
               <span class="setting-desc">输入框已有内容时怎么处理</span>
             </span>
@@ -298,6 +306,28 @@
             </span>
           </label>
 
+          <label class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">PDF 跟随选区（实验性）</span>
+              <span class="setting-desc">用本地 PDF.js 渲染阅读器，直接输入窗可以贴在高亮文字下方；关闭则使用 Edge 原生 PDF</span>
+            </span>
+            <span class="switch">
+              <input id="setting-pdfjs-follow" type="checkbox">
+              <span class="slider" aria-hidden="true"></span>
+            </span>
+          </label>
+
+          <label class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">小窗 Enter 直接发送</span>
+              <span class="setting-desc">在划词/PDF 小窗按 Enter 时直接点聊天发送按钮；关闭则只完成并关闭小窗</span>
+            </span>
+            <span class="switch">
+              <input id="setting-enter-sends" type="checkbox">
+              <span class="slider" aria-hidden="true"></span>
+            </span>
+          </label>
+
           <div class="setting-row">
             <span class="setting-copy">
               <span class="setting-title">读取网页方式</span>
@@ -332,7 +362,7 @@
           </div>
 
           <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前选择的聊天输入框。本扩展为非官方版本。</p>
-          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.11.3</p>
+          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.11.12</p>
         </div>
       </section>
     </div>

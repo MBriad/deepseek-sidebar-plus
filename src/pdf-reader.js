@@ -13,6 +13,7 @@
   const fileName = params.get('name') || deriveName(fileUrl);
 
   const viewer = document.getElementById('viewer');
+  const pdfJsFrame = document.getElementById('pdfjs-frame');
   const overlay = document.getElementById('overlay');
   const overlayText = document.getElementById('overlay-text');
   const status = document.getElementById('status');
@@ -25,6 +26,13 @@
   let selectionSeq = 0;
   let selectionClearTimer = null;
   let toastTimer = null;
+  let typeRelay = null;
+  let typeRelayActive = false;
+  let typeRelayComposing = false;
+  let typeRelayShortcut = 'Ctrl+Z';
+  let lastPointer = null;
+  let pdfSelectionRect = null;
+  let pdfPollTimer = null;
 
   document.title = `${fileName} - DeepSeek PDF`;
   document.getElementById('file-name').textContent = fileName;
@@ -34,10 +42,306 @@
 
   window.addEventListener('message', onPdfMessage);
   window.addEventListener('pagehide', () => {
+    clearInterval(pdfPollTimer);
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   });
 
+  document.addEventListener('pointerdown', (event) => {
+    lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+  }, true);
+  document.addEventListener('pointerup', (event) => {
+    lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+    if (typeRelayActive) positionTypeRelay();
+  }, true);
+  window.addEventListener('resize', () => {
+    if (typeRelayActive) positionTypeRelay();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.target === typeRelay) return;
+    handlePdfRelayKey(event);
+  }, true);
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'DS_START_TYPE_RELAY' && message?.type !== 'DS_STOP_TYPE_RELAY') return;
+
+    const handle = () => {
+      if (message.type === 'DS_START_TYPE_RELAY') {
+        startTypeRelay(String(message.shortcut || 'Ctrl+Z'));
+        sendResponse({ ok: typeRelayActive });
+      } else {
+        stopTypeRelay(Boolean(message.cancel));
+        sendResponse({ ok: true });
+      }
+    };
+
+    const target = Number(message.targetTabId || 0);
+    if (!target) {
+      handle();
+      return;
+    }
+    chrome.tabs.getCurrent((tab) => {
+      if (tab?.id && tab.id !== target) {
+        sendResponse({ ok: false });
+        return;
+      }
+      handle();
+    });
+    return true;
+  });
+
   loadPdf();
+
+  function shortcutMatches(event, shortcut) {
+    const parts = String(shortcut || 'Ctrl+Z').split('+').map((part) => part.trim()).filter(Boolean);
+    const key = parts.pop() || 'Z';
+    const ctrl = parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part));
+    const alt = parts.some((part) => /^alt$/i.test(part));
+    const shift = parts.some((part) => /^shift$/i.test(part));
+    const hasCtrl = event.ctrlKey || event.metaKey;
+    return hasCtrl === ctrl
+      && event.altKey === alt
+      && event.shiftKey === shift
+      && String(event.key || '').toLowerCase() === key.toLowerCase();
+  }
+
+  function relaySend(type, payload = {}) {
+    try {
+      chrome.storage.local.set({
+        dsTypeRelay: {
+          type,
+          ...payload,
+          seq: Date.now()
+        }
+      }).catch(() => {});
+    } catch {
+      // Extension context invalidated.
+    }
+  }
+
+  function ensureTypeRelay() {
+    if (typeRelay) return typeRelay;
+    typeRelay = document.createElement('input');
+    typeRelay.type = 'text';
+    typeRelay.id = 'ds-type-relay';
+    typeRelay.setAttribute('aria-label', '直接输入到侧边栏');
+    typeRelay.autocomplete = 'off';
+    typeRelay.spellcheck = false;
+    typeRelay.placeholder = '直接输入… Ctrl+Z 撤回';
+    typeRelay.style.cssText = [
+      'position:fixed',
+      'left:50%',
+      'bottom:22px',
+      'transform:translateX(-50%)',
+      'width:min(340px,calc(100vw - 32px))',
+      'height:38px',
+      'padding:0 12px',
+      'border:1px solid #4d6bfe',
+      'border-radius:10px',
+      'background:#fff',
+      'color:#1b1f2a',
+      'box-shadow:0 10px 30px rgba(15,23,42,.22)',
+      'z-index:2147483646',
+      'font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif',
+      'outline:none',
+      'display:none'
+    ].join(';');
+    document.documentElement.appendChild(typeRelay);
+
+    typeRelay.addEventListener('compositionstart', () => {
+      typeRelayComposing = true;
+    });
+    typeRelay.addEventListener('compositionend', () => {
+      typeRelayComposing = false;
+      if (typeRelayActive) relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    });
+    typeRelay.addEventListener('input', () => {
+      if (!typeRelayActive || typeRelayComposing) return;
+      relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    });
+    typeRelay.addEventListener('keydown', (event) => {
+      if (!typeRelayActive) return;
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(false, true);
+        return;
+      }
+      if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(true);
+      }
+    }, true);
+    typeRelay.addEventListener('blur', () => {
+      if (!typeRelayActive) return;
+      setTimeout(() => {
+        if (typeRelayActive && document.activeElement !== typeRelay) stopTypeRelay(false);
+      }, 0);
+    });
+    return typeRelay;
+  }
+
+  function positionTypeRelay() {
+    if (!typeRelay) return;
+    const width = Math.min(340, Math.max(220, window.innerWidth - 32));
+    typeRelay.style.width = `${width}px`;
+    let left = (window.innerWidth - width) / 2;
+    let top = window.innerHeight - 60;
+    if (pdfSelectionRect) {
+      left = Math.min(Math.max(8, pdfSelectionRect.left), window.innerWidth - width - 8);
+      top = pdfSelectionRect.bottom + 8;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, pdfSelectionRect.top - 52);
+    } else if (lastPointer) {
+      left = Math.min(Math.max(8, lastPointer.x - 24), window.innerWidth - width - 8);
+      top = lastPointer.y + 16;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, lastPointer.y - 52);
+    }
+    typeRelay.style.left = `${left}px`;
+    typeRelay.style.top = `${top}px`;
+    typeRelay.style.bottom = 'auto';
+    typeRelay.style.transform = 'none';
+  }
+
+  function startTypeRelay(shortcut) {
+    if (!lastSelectionId) return;
+    typeRelayShortcut = shortcut || 'Ctrl+Z';
+    const relay = ensureTypeRelay();
+    relay.value = '';
+    relay.style.display = 'block';
+    positionTypeRelay();
+    typeRelayActive = true;
+    typeRelayComposing = false;
+    try {
+      relay.focus({ preventScroll: true });
+    } catch {
+      // Ignore.
+    }
+    setTimeout(() => {
+      if (typeRelayActive && document.activeElement !== relay) {
+        try {
+          relay.focus({ preventScroll: true });
+        } catch {
+          // Ignore.
+        }
+      }
+    }, 60);
+    showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
+  }
+
+  function handlePdfRelayKey(event) {
+    if (!typeRelayActive) return false;
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      stopTypeRelay(false, true);
+      return true;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      stopTypeRelay(true);
+      return true;
+    }
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeRelay) {
+        typeRelay.value = typeRelay.value.slice(0, -1);
+        relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+      }
+      return true;
+    }
+    let character = event.key.length === 1 ? event.key : '';
+    if (!character && event.code === 'Space') character = ' ';
+    if (!character && /^Key[A-Z]$/.test(event.code || '')) character = event.code.slice(3).toLowerCase();
+    if (!character && /^Digit[0-9]$/.test(event.code || '')) character = event.code.slice(5);
+    if (character && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeRelay) {
+        typeRelay.value += character;
+        relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function stopTypeRelay(cancel, send = false) {
+    if (!typeRelayActive) return;
+    typeRelayActive = false;
+    typeRelayComposing = false;
+    lastSelectionId = '';
+    try {
+      typeRelay?.blur();
+      if (typeRelay) {
+        typeRelay.value = '';
+        typeRelay.style.display = 'none';
+      }
+    } catch {
+      // Ignore.
+    }
+    relaySend(cancel ? 'DS_TYPE_RELAY_CANCEL' : 'DS_TYPE_RELAY_END', send ? { send: true } : {});
+    if (cancel) showToast('已撤回自动填入');
+  }
+
+  function startPdfJs(blobUrl) {
+    pdfJsFrame.hidden = false;
+    pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`;
+    overlay.classList.add('hidden');
+    status.textContent = '选中文字会自动填入';
+
+    clearInterval(pdfPollTimer);
+    const poll = () => {
+      try {
+        const frameWindow = pdfJsFrame.contentWindow;
+        if (!frameWindow) return;
+        const selection = frameWindow.getSelection();
+        const text = selection?.toString().replace(/\u00a0/g, ' ').trim() || '';
+        const frameRect = pdfJsFrame.getBoundingClientRect();
+
+        if (text) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.width || rect.height) {
+            pdfSelectionRect = {
+              left: frameRect.left + rect.left,
+              top: frameRect.top + rect.top,
+              right: frameRect.left + rect.right,
+              bottom: frameRect.top + rect.bottom,
+              width: rect.width,
+              height: rect.height
+            };
+          }
+          if (typeRelayActive) positionTypeRelay();
+        } else {
+          pdfSelectionRect = null;
+        }
+
+        if (typeRelayActive && document.activeElement !== typeRelay) {
+          typeRelay?.focus({ preventScroll: true });
+        }
+        if (text !== lastText) handleSelection(text);
+      } catch {
+        // The PDF.js frame may still be loading.
+      }
+    };
+    pdfJsFrame.addEventListener('load', () => {
+      try {
+        pdfJsFrame.contentWindow.addEventListener('keydown', handlePdfRelayKey, true);
+      } catch {
+        // The frame may not be ready yet.
+      }
+      poll();
+      pdfPollTimer = setInterval(poll, 320);
+    }, { once: true });
+    poll();
+  }
 
   async function loadPdf() {
     if (!fileUrl) {
@@ -62,6 +366,12 @@
       }
 
       objectUrl = URL.createObjectURL(blob);
+      const stored = await chrome.storage.local.get('settings').catch(() => ({}));
+      if (stored.settings?.pdfJsFollow !== false) {
+        startPdfJs(objectUrl);
+        return;
+      }
+
       embed = document.createElement('embed');
       embed.type = 'application/pdf';
       embed.src = objectUrl;
@@ -114,6 +424,7 @@
 
     if (!value) {
       lastText = '';
+      if (typeRelayActive) return;
       if (!lastSelectionId) return;
 
       clearTimeout(selectionClearTimer);
