@@ -95,12 +95,11 @@
         <div id="page-warning" class="page-warning hidden"></div>
         <pre id="page-preview" class="page-preview"></pre>
         <div class="sheet-actions">
-          <button id="btn-fill-ask" class="btn primary" type="button" title="把网页正文作为 .txt 文件附加到 DeepSeek">文件提问</button>
-          <button id="btn-fill-summary" class="btn" type="button" title="附加网页正文文件，并填入总结指令">总结本页</button>
-          <button id="btn-fill-raw" class="btn ghost" type="button" title="把网页正文直接写进输入框">直接填入</button>
+          <button id="btn-attach-page" class="btn primary" type="button" title="把网页正文作为 .txt 文件附加到 DeepSeek，不修改输入框">附加文档</button>
+          <button id="btn-fill-raw" class="btn ghost" type="button" title="把网页正文写进输入框，不添加提示词">填入正文</button>
           <button id="btn-copy-page" class="btn ghost" type="button">复制</button>
         </div>
-        <p class="hint">文件提问/总结本页会把完整正文作为 .txt 附加到 DeepSeek，输入框只保留简短问题；直接填入仍会把正文写进输入框。</p>
+        <p class="hint">附加文档只把 .txt 放进 DeepSeek，不会替你决定或填写提示词；请自行输入问题。</p>
       </section>
     </div>
 
@@ -118,6 +117,7 @@
 
         <div class="prompt-toolbar">
           <input id="prompt-search" class="text-input" type="search" placeholder="搜索名称、内容或标签">
+          <button id="btn-paste-prompt" class="btn" type="button" title="读取剪贴板文本并新建提示词；也可以直接按 Ctrl+V">粘贴创建</button>
           <button id="btn-save-input" class="btn primary" type="button">保存当前输入</button>
         </div>
 
@@ -126,7 +126,10 @@
             <input id="prompt-name" class="text-input" type="text" placeholder="名称，例如：代码审查">
             <input id="prompt-tags" class="text-input" type="text" placeholder="标签，逗号分隔">
           </div>
-          <textarea id="prompt-text" class="prompt-textarea" placeholder="提示词内容"></textarea>
+          <div class="prompt-form-row">
+            <input id="prompt-command" class="text-input" type="text" placeholder="命令，例如 /translate（在 DeepSeek 输入框输入 / 调用）">
+          </div>
+          <textarea id="prompt-text" class="prompt-textarea" placeholder="提示词内容；可直接 Ctrl+V 粘贴"></textarea>
           <div class="prompt-form-actions">
             <button id="btn-prompt-save" class="btn primary" type="button">保存</button>
             <button id="btn-prompt-cancel" class="btn ghost" type="button">取消</button>
@@ -239,7 +242,7 @@
           </div>
 
           <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前打开的 DeepSeek 输入框。本扩展为非官方版本。</p>
-          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.8.0</p>
+          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.9.0</p>
         </div>
       </section>
     </div>

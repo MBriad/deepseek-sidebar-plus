@@ -2,11 +2,11 @@
 
 在 Microsoft Edge 侧边栏里使用 DeepSeek，并补上原版缺少的几件事：
 
-- **读取当前网页正文**：一键提取当前标签页的标题、链接和正文，预览后可以整理成 `.txt` 文件附加给 DeepSeek，或直接填入输入框。
+- **读取当前网页正文**：一键提取当前标签页的标题、链接和正文；预览后可以附加为 `.txt` 文档，或直接填入正文。**不会替你决定或填写提示词。**
 - **划词自动填入 / 取消自动撤回**：高亮选中文字就自动填入 DeepSeek 输入框，不需要右键；取消选区（点击空白处或按 Esc）会自动删掉这次自动填入的文字并恢复之前的草稿；如果你已经手动改过输入框，则不会误删。
-- **PDF 支持**：读取 PDF 时把文件附加到 DeepSeek，由 DeepSeek 自己解析；在 Edge 内置 PDF 阅读器里划词也能自动填入。
+- **PDF 支持**：读取 PDF 时只把文件附加到 DeepSeek，由 DeepSeek 自己解析；输入框不填提示词。在 Edge 内置 PDF 阅读器里划词也能自动填入。
 - **引用对话**：在 DeepSeek 回复里选中文字，点浮出的“引用”按钮（或右键“引用到 DeepSeek 输入框”），会以 `>` 引用格式插入输入框。
-- **提示词库**：保存当前输入为提示词，支持搜索、编辑、置顶、删除和 JSON 导入/导出；数据模型参考 Voyager 的 Saved Library。
+- **提示词库**：保存当前输入，或直接粘贴文本创建；支持自定义 `/命令`、搜索、编辑、置顶、删除和 JSON 导入/导出。在 DeepSeek 输入框输入 `/` 会显示命令列表和对应提示词预览。
 
 > 非官方扩展，与 DeepSeek 官方无关。基于你已安装的 **Deepseek Chat Sidebar (Unofficial) v1.0** 重写增强。  
 > GitHub: https://github.com/lllhcbjj/deepseek-sidebar-plus · 隐私政策: https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html
@@ -40,22 +40,21 @@
 - 点击侧边栏顶部的 **读本页**。
 - 自动提取当前标签页的标题、链接、站点名、作者、正文，并打开预览。
 - 预览底部提供：
-  - **文件提问**：把完整网页正文整理成 `.txt` 文件，通过 DeepSeek 的文件上传入口附加到对话，输入框只留下“请阅读我上传的网页内容文件《…》，然后回答我的问题：”。
-  - **总结本页**：同样附加 `.txt` 文件，但输入框只放总结指令。
-  - **直接填入**：保留旧行为，把“网页信息 + 正文”直接写进输入框（受字数上限限制）。
+  - **附加文档**：把完整网页正文整理成 `.txt` 文件，通过 DeepSeek 的文件上传入口附加到对话；**不修改输入框，也不替你写提示词**。
+  - **填入正文**：把正文直接写进输入框（受字数上限限制），同样不添加提示词。
   - **复制**：复制正文到剪贴板。
 - 文件附件会保留完整正文，最多提取 50,000 字；截图里的 GitHub 长页面会完整放进文件，不再把整页塞进输入框。
 - 支持两种提取方式（设置里切换）：
   - **智能正文**（默认）：优先取 `article/main` 等正文容器，去掉导航、侧栏、广告、页脚、评论区，并转成 Markdown 风格文本。参考了元宝尝鲜版 `GetPageHTML` 使用 `document.body.innerText` 的做法：如果候选正文只覆盖整页不到 45%，会自动回退到整页文本，避免“读了个开头就没了”。
   - **整页文本**：直接使用 `document.body.innerText`，与元宝/常见页面上下文的思路一致，适合正文识别不理想的页面。
-- 设置里的 6,000 / 12,000 / 20,000 / 30,000 字上限只作用于 **直接填入**；文件提问/总结本页不受该上限影响（提取上限 50,000 字）。
+- 设置里的 6,000 / 12,000 / 20,000 / 30,000 字上限只作用于 **填入正文**；附加文档不受该上限影响（提取上限 50,000 字）。
 
 
 > 页面读取参考：本机安装的 Voyager 只作用于 Gemini 页面，没有通用页面读取；元宝尝鲜版的 `GetPageHTML` 直接返回 `document.body.innerText`，Gemini 的页面上下文本质上也类似。本扩展默认用智能正文降噪，但覆盖不足时会自动回退到整页文本。
 
 ### 2. PDF 读取与划词
 
-- **读取 PDF**：在 Edge 里打开 PDF，点击侧边栏的 **读本页**。扩展会下载这个 PDF（最大 50 MB），通过 DeepSeek 自己的文件上传入口附加到对话里，并填入“请阅读我上传的 PDF…”提示词。之后由 **DeepSeek 自己解析 PDF**，不用本地硬解文本。元宝尝鲜版的页面脚本也是把 `.pdf` 排除在网页提取之外，PDF 走自己的文件解析链路；本扩展采用同样的分工。
+- **读取 PDF**：在 Edge 里打开 PDF，点击侧边栏的 **读本页**。扩展会下载这个 PDF（最大 50 MB），通过 DeepSeek 自己的文件上传入口附加到对话里；**只附加文件，不填提示词**。之后由 **DeepSeek 自己解析 PDF**，不用本地硬解文本。元宝尝鲜版的页面脚本也是把 `.pdf` 排除在网页提取之外，PDF 走自己的文件解析链路；本扩展采用同样的分工。
 - 如果 PDF 的网址不带 `.pdf` 后缀，`page-tools.js` 检测到页面里的 PDF `<embed>` 后也会走同一套“下载并附加”流程。
 - **PDF 划词**：在 Edge 内置 PDF 阅读器里选中文字，扩展通过 PDF 阅读器的 `embed.postMessage({type:'getSelectedText'})` 接口读取当前选区，自动填入 DeepSeek；取消选区后同样自动撤回。这个接口只允许页面主世界调用，所以 `pdf-main.js` 会作为 web-accessible script 注入 PDF 页面。不同 Edge 版本的 PDF 阅读器内部接口可能变化；本版在 Edge 154 验证通过。
 - **本地 `file://` PDF 的自动方案**：Edge 原标签页在 `file://` 下是不透明源（opaque origin），`getSelectedText` 回复会被浏览器丢弃，所以直接在原 PDF 标签页里选中不会自动。侧边栏检测到本地 PDF 时会显示提示条，点 **打开增强阅读器** 即可在一个新标签页里用扩展内的 Edge 原生 PDF 阅读器打开同一份 PDF；阅读器页面是 `chrome-extension://` 源，选区 API 可用，所以**选中自动填入、取消选中自动撤回**都正常。也可以从设置里的 **用增强阅读器打开当前 PDF** 进入。
@@ -92,11 +91,14 @@
 ### 5. 提示词库
 
 - 点工具栏的 **提示词库**（书签图标）打开。
+- **粘贴创建**：点“粘贴创建”读取剪贴板；也可以打开提示词库后直接 `Ctrl+V`，会自动打开新建表单并填入粘贴的文本。
 - **保存当前输入**：读取 DeepSeek 输入框当前内容，填写名称/标签后保存；也可以直接编辑提示词内容。
-- **搜索**：按名称、内容或标签过滤。
+- **自定义命令**：每条提示词有一个 `/命令`（例如 `/translate`），在表单里修改；不填时按名称自动生成，重复会自动加后缀。
+- **命令行调用**：在 DeepSeek 输入框输入 `/`，会弹出命令列表；输入 `/tra` 过滤。列表下方会显示当前命令对应的**提示词预览**，`↑↓` 选择、`Enter` 插入、`Esc` 关闭；不会自动发送。
+- **搜索**：按名称、命令、内容或标签过滤。
 - **填入**：一键把提示词写回 DeepSeek 输入框。
 - **编辑 / 置顶 / 删除**：置顶项排在最前。
-- **导入 / 导出 JSON**：参考 Voyager 的 Saved Library 数据模型（`id`、`name`、`text`、`tags`、`pinnedAt`、`createdAt`、`updatedAt`），方便备份和迁移。
+- **导入 / 导出 JSON**：参考 Voyager 的 Saved Library 数据模型（`id`、`name`、`text`、`tags`、`command`、`pinnedAt`、`createdAt`、`updatedAt`），方便备份和迁移。
 - 提示词保存在 `chrome.storage.local` 的 `promptLibrary` 键下。
 
 ### 6. 设置
@@ -121,7 +123,7 @@
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.8.0-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.9.0-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -136,13 +138,13 @@
 
 ## Edge 商店提交材料
 
-v1.8.0 已按 Microsoft Edge Add-ons 的要求做了商店候选版：
+v1.9.0 已按 Microsoft Edge Add-ons 的要求做了商店候选版：
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
 - 隐私政策：[docs/privacy.html](docs/privacy.html)、[PRIVACY.md](PRIVACY.md)
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
-- 最小商店包：`deepseek-sidebar-plus-v1.8.0-store.zip`
+- 最小商店包：`deepseek-sidebar-plus-v1.9.0-store.zip`
 
 **商店提交前还需要：**
 
@@ -221,7 +223,7 @@ deepseek-sidebar-plus/
 - 划词捕获在 `page-tools.js`，用 `pointerup` / `keyup` 触发，160ms 防抖；忽略表单控件内的选择。
 - 每个选区有唯一 `selectionId`。取消选区时发送 `DS_PAGE_SELECTION_CLEARED`，侧边栏让 `chat-bridge.js` 恢复自动填入前的值；只有当前输入仍等于自动填入结果时才撤销，用户手动改过就保留修改。页面失焦到侧边栏时不会误判为取消选区。
 - 正文提取先按 `article/main/.post-content` 等候选容器打分（文本长度、段落数、链接密度、正负类名），再递归转 Markdown；候选覆盖不足 45% 时回退整页文本。这参考了元宝尝鲜版直接把 `document.body.innerText` 交给服务端的做法，也保留了智能正文的降噪能力。
-- **网页文件提问**：侧边栏把标题、链接、站点信息和完整正文组装成 `.txt`，通过 `DS_ATTACH_FILE` 把 `ArrayBuffer` transfer 给 `chat-bridge.js`，写入 DeepSeek 文件输入框；输入框只保留一句“请阅读我上传的网页内容文件…”。`chat-bridge.js` 会按文件扩展名/MIME 选择接受该类型的 `input[type=file]`，没有输入框时退回 `drop`。
+- **网页文档附加**：侧边栏把标题、链接、站点信息和完整正文组装成 `.txt`，通过 `DS_ATTACH_FILE` 把 `ArrayBuffer` transfer 给 `chat-bridge.js`，写入 DeepSeek 文件输入框；**不修改输入框、不注入提示词**。`chat-bridge.js` 会按文件扩展名/MIME 选择接受该类型的 `input[type=file]`，没有输入框时退回 `drop`。
 - **PDF 读取**：`background.js` 识别 `.pdf` URL；如果 URL 没有后缀，`page-tools.js` 检测页面里的 `<embed type="application/pdf">` 并返回 `pdf-tab`。侧边栏用 `fetch` 下载 PDF（带 Cookie、检查 `%PDF` 魔数、限制 50 MB），把 `ArrayBuffer` 通过 `postMessage` transfer 给 `chat-bridge.js`；后者构造 `File`，写入 DeepSeek 的 `input[type=file]`，走 DeepSeek 自己的上传/解析流程。若没有文件输入框，会尝试向编辑器派发 `drop` 事件。
 - **PDF 划词**：`pdf-main.js` 在 PDF 页面主世界轮询 `embed.postMessage({type:'getSelectedText'})`，把 `getSelectedTextReply.selectedText` 通过 `window.postMessage` 转给 `page-tools.js`，再走普通划词链路。只有主世界能调用该接口。
 - **本地 PDF 增强阅读器**：`pdf-reader.js` 用扩展页面的 `fetch` 读取 `file://` PDF，创建 `blob:` URL，并把 Edge 原生 PDF `<embed>` 放进扩展页面；由于页面是 `chrome-extension://` 源，选区 API 正常工作。阅读器轮询选区并直接 `chrome.runtime.sendMessage` 给 background，复用同一套自动填入/取消撤回逻辑。
@@ -283,11 +285,11 @@ deepseek-sidebar-plus/
 **Q：页面内容读取不完整？**  
 默认的“智能正文”会刻意去掉导航、广告、评论区；如果它只覆盖整页不到 45%，会自动改用整页文本。也可以直接在设置里切换“整页文本”。文件附件最多保留 50,000 字，超出会在文件里注明截断。
 
-**Q：文件提问后输入框只有一句话，正文去哪了？**  
-正文已经作为 `.txt` 文件附加到 DeepSeek，输入框只保留简短问题。等文件解析完成后再发送，或继续修改问题。
+**Q：附加文档后输入框为什么没有变化？**  
+这是 v1.9.0 的设计：正文在 `.txt` 附件里，扩展不替你决定或填写提示词。请等文件解析完成后，自己输入问题再发送。
 
-**Q：文件提问失败？**  
-先确认侧边栏已登录、输入框正常。DeepSeek 可能拒绝该文件类型或大小；提示条里会提供 **改为直接填入** 的退路，或者用“直接填入”按钮。文件附件依赖 DeepSeek 的文件上传入口，和 PDF 附加是同一套机制。
+**Q：附加文档失败？**  
+先确认侧边栏已登录、输入框正常。DeepSeek 可能拒绝该文件类型或大小；提示条里会提供 **改为填入正文** 的退路，或者用“填入正文”按钮。文件附件依赖 DeepSeek 的文件上传入口，和 PDF 附加是同一套机制。
 
 **Q：为什么需要“读取所有网站数据”的权限？**  
 因为要在任意网页上划词和读取正文。扩展没有远程服务，代码里只有 `chrome.*` 调用和侧边栏 iframe 的 `postMessage`；可以自行审查本目录源码。
@@ -306,6 +308,7 @@ deepseek-sidebar-plus/
 
 ## 版本
 
+- **v1.9.0**：读页/PDF 只附加文档，不再自动填写提示词；提示词库支持粘贴创建、自定义 `/命令`；DeepSeek 输入框支持 `/` 命令列表和对应提示词预览，Enter 插入。
 - **v1.8.0**：Edge Add-ons 商店候选准备：名称加“非官方”、en/zh 本地化、隐私政策、权限说明、商店文案、Logo 和宣传图；商店包不包含开发文档。
 - **v1.7.0**：移动端/窄屏适配：320–430px 响应式布局、触摸目标、安全区、移动端 PDF 阅读器顶栏；新增“在标签页打开侧边栏（移动/分屏）”。
 - **v1.6.0**：新增 DeepSeek 对话内容引用（浮动“引用”按钮 + 右键菜单）和提示词库（保存当前输入、搜索、编辑、置顶、删除、JSON 导入/导出）。

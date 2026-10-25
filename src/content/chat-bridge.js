@@ -26,11 +26,19 @@
   let quoteHost = null;
   let quoteText = '';
   let quoteTimer = null;
+  let commandHost = null;
+  let commandItems = [];
+  let commandIndex = 0;
+  let commandMatch = null;
+  let commandTimer = null;
+  let promptCommands = [];
   let rootsCache = null;
   let rootsCacheAt = 0;
 
   window.addEventListener('message', onMessage);
   installQuoteSelection();
+  installCommandPalette();
+  loadPromptCommands();
   announceReady();
   setTimeout(announceReady, 900);
 
@@ -487,6 +495,396 @@
         error: error?.message || '引用失败'
       });
     }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Slash-command palette for saved prompts                          */
+  /* ---------------------------------------------------------------- */
+
+  function installCommandPalette() {
+    document.addEventListener('input', scheduleCommandPalette, true);
+    document.addEventListener('keydown', handleCommandKeyDown, true);
+
+    document.addEventListener('mousedown', (event) => {
+      if (commandHost && event.composedPath().includes(commandHost)) return;
+      hideCommandPalette();
+    }, true);
+
+    window.addEventListener('scroll', () => hideCommandPalette(), true);
+    window.addEventListener('resize', () => hideCommandPalette());
+
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.promptLibrary) loadPromptCommands();
+      });
+    } catch {
+      // Ignore storage access failures.
+    }
+  }
+
+  async function loadPromptCommands() {
+    try {
+      const stored = await chrome.storage.local.get('promptLibrary');
+      const raw = stored?.promptLibrary;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.prompts)
+          ? raw.prompts
+          : Array.isArray(raw?.items)
+            ? raw.items
+            : [];
+
+      const used = new Set();
+      const commands = [];
+      for (const item of list) {
+        const prompt = normalizeCommandPrompt(item);
+        if (!prompt) continue;
+        prompt.command = makeUniqueCommand(prompt.command, used);
+        used.add(prompt.command);
+        commands.push(prompt);
+      }
+      promptCommands = commands;
+      if (commandMatch) renderCommandPalette();
+    } catch {
+      promptCommands = [];
+    }
+  }
+
+  function normalizeCommandPrompt(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const text = String(raw.text ?? raw.content ?? '').trim();
+    if (!text) return null;
+
+    const name = String(raw.name ?? raw.title ?? '').trim() || text.slice(0, 40).replace(/\s+/g, ' ');
+    let command = String(raw.command || '').trim();
+    if (!command) command = `/${name.replace(/\s+/g, '-')}`;
+    if (!command.startsWith('/')) command = `/${command}`;
+    command = command.replace(/\s+/g, '-').replace(/[^\w\u4e00-\u9fa5\-/]/g, '');
+    command = `/${command.slice(1).replace(/\//g, '-')}`.slice(0, 40);
+    if (command === '/' || command === '/-') return null;
+
+    return {
+      name: name.slice(0, 80),
+      command,
+      text
+    };
+  }
+
+  function makeUniqueCommand(base, used) {
+    const command = base || '/prompt';
+    let candidate = command;
+    let index = 2;
+    while (used.has(candidate)) {
+      candidate = `${command}-${index}`;
+      index += 1;
+    }
+    return candidate;
+  }
+
+  function scheduleCommandPalette() {
+    clearTimeout(commandTimer);
+    commandTimer = setTimeout(updateCommandPalette, 90);
+  }
+
+  function updateCommandPalette() {
+    const input = findInput();
+    if (!input) {
+      hideCommandPalette();
+      return;
+    }
+
+    const match = getCommandMatch(input);
+    if (!match) {
+      hideCommandPalette();
+      return;
+    }
+
+    commandMatch = match;
+    commandIndex = 0;
+    renderCommandPalette();
+  }
+
+  function getCommandMatch(input) {
+    const kind = isValueInput(input) ? 'value' : 'editable';
+    const text = readValue(input, kind);
+    let before = '';
+    let caret = 0;
+
+    if (kind === 'value') {
+      if (input.selectionStart !== input.selectionEnd) return null;
+      caret = input.selectionStart ?? text.length;
+      before = text.slice(0, caret);
+    } else {
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount || !selection.isCollapsed) return null;
+      const range = selection.getRangeAt(0);
+      if (!input.contains(range.startContainer)) return null;
+      const beforeRange = document.createRange();
+      beforeRange.selectNodeContents(input);
+      try {
+        beforeRange.setEnd(range.startContainer, range.startOffset);
+      } catch {
+        return null;
+      }
+      before = beforeRange.toString();
+      caret = before.length;
+    }
+
+    const match = before.match(/(^|[\s\n])\/([^\s/]*)$/);
+    if (!match) return null;
+
+    const query = match[2];
+    const start = caret - query.length - 1;
+    if (start < 0) return null;
+
+    return {
+      input,
+      kind,
+      text,
+      caret,
+      start,
+      end: caret,
+      query
+    };
+  }
+
+  function createCommandHost() {
+    if (commandHost) return;
+
+    commandHost = document.createElement('div');
+    commandHost.id = 'ds-command-host';
+    commandHost.style.cssText = 'all:initial;position:fixed;z-index:2147483645;display:none;pointer-events:none;';
+
+    const root = commandHost.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        * { box-sizing: border-box; }
+        .panel {
+          overflow: hidden;
+          border: 1px solid #d8dde7;
+          border-radius: 10px;
+          background: #fff;
+          color: #1b1f2a;
+          box-shadow: 0 12px 32px rgba(15, 23, 42, .25);
+          font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+          pointer-events: auto;
+        }
+        .head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 7px 10px 6px;
+          border-bottom: 1px solid #eef1f5;
+        }
+        .title { color: #3d63dd; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+        .hint { color: #8a96a8; font-size: 10px; white-space: nowrap; }
+        .list { max-height: 132px; overflow: auto; padding: 4px; }
+        .item {
+          display: block;
+          width: 100%;
+          padding: 6px 7px;
+          border: 0;
+          border-radius: 7px;
+          background: transparent;
+          color: #1b1f2a;
+          text-align: left;
+          cursor: pointer;
+        }
+        .item.active { background: #eef2ff; }
+        .cmd { color: #3d63dd; font: 11px/1.4 Consolas, "Cascadia Code", monospace; }
+        .name { margin-left: 6px; font-size: 12px; font-weight: 600; }
+        .preview { border-top: 1px solid #eef1f5; background: #f8faff; padding: 7px 10px; }
+        .preview-title { margin-bottom: 3px; color: #3d63dd; font: 10.5px/1.4 Consolas, monospace; }
+        .preview-text {
+          max-height: 118px;
+          overflow: auto;
+          color: #445066;
+          font-size: 11.5px;
+          line-height: 1.55;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+      </style>
+      <div class="panel">
+        <div class="head"><span class="title">提示词命令</span><span class="hint">↑↓ 选择 · Enter 插入 · Esc 关闭</span></div>
+        <div class="list"></div>
+        <div class="preview"><div class="preview-title"></div><div class="preview-text"></div></div>
+      </div>`;
+
+    document.documentElement.appendChild(commandHost);
+  }
+
+  function renderCommandPalette() {
+    if (!commandMatch) {
+      hideCommandPalette();
+      return;
+    }
+
+    const query = commandMatch.query.toLowerCase();
+    const matches = promptCommands
+      .filter((prompt) => {
+        if (!query) return true;
+        return prompt.command.toLowerCase().includes(query)
+          || prompt.name.toLowerCase().includes(query)
+          || prompt.text.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        const aStarts = a.command.toLowerCase().startsWith(`/${query}`) ? 0 : 1;
+        const bStarts = b.command.toLowerCase().startsWith(`/${query}`) ? 0 : 1;
+        return aStarts - bStarts || a.command.localeCompare(b.command);
+      })
+      .slice(0, 8);
+
+    if (!matches.length) {
+      hideCommandPalette();
+      return;
+    }
+
+    createCommandHost();
+    commandItems = matches;
+    if (commandIndex >= matches.length) commandIndex = 0;
+
+    const root = commandHost.shadowRoot;
+    const list = root.querySelector('.list');
+    list.textContent = '';
+
+    matches.forEach((prompt, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `item${index === commandIndex ? ' active' : ''}`;
+      button.title = prompt.text;
+
+      const command = document.createElement('span');
+      command.className = 'cmd';
+      command.textContent = prompt.command;
+
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = prompt.name;
+
+      button.appendChild(command);
+      button.appendChild(name);
+      button.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        chooseCommand(index);
+      });
+      button.addEventListener('mouseenter', () => {
+        commandIndex = index;
+        updateCommandPreview();
+      });
+      list.appendChild(button);
+    });
+
+    updateCommandPreview();
+    positionCommandHost();
+    commandHost.style.display = 'block';
+  }
+
+  function updateCommandPreview() {
+    if (!commandHost) return;
+    const root = commandHost.shadowRoot;
+    const prompt = commandItems[commandIndex];
+    if (!prompt) return;
+
+    const title = root.querySelector('.preview-title');
+    const text = root.querySelector('.preview-text');
+    if (title) title.textContent = `${prompt.command} · ${prompt.name}`;
+    if (text) text.textContent = prompt.text;
+
+    root.querySelectorAll('.item').forEach((item, index) => {
+      item.classList.toggle('active', index === commandIndex);
+    });
+  }
+
+  function positionCommandHost() {
+    if (!commandHost || !commandMatch) return;
+    const input = commandMatch.input;
+    const rect = input.getBoundingClientRect();
+    const width = Math.min(420, Math.max(280, rect.width));
+    const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left));
+
+    commandHost.style.width = `${width}px`;
+    commandHost.style.left = `${left}px`;
+
+    if (rect.top > 320) {
+      commandHost.style.top = 'auto';
+      commandHost.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 8)}px`;
+    } else {
+      commandHost.style.top = `${Math.min(window.innerHeight - 300, rect.bottom + 8)}px`;
+      commandHost.style.bottom = 'auto';
+    }
+  }
+
+  function handleCommandKeyDown(event) {
+    if (!commandHost || commandHost.style.display === 'none') return;
+    if (event.isComposing || event.keyCode === 229) return;
+
+    const input = findInput();
+    if (!input) return;
+    if (!(event.target === input || input.contains(event.target))) return;
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      commandIndex = (commandIndex + direction + commandItems.length) % commandItems.length;
+      renderCommandPalette();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      event.stopPropagation();
+      chooseCommand(commandIndex);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      hideCommandPalette();
+    }
+  }
+
+  function chooseCommand(index) {
+    const prompt = commandItems[index];
+    if (!prompt || !commandMatch) return;
+
+    const { input, kind, text, start, end } = commandMatch;
+    if (!text.slice(start, end).startsWith('/')) {
+      hideCommandPalette();
+      return;
+    }
+
+    const next = `${text.slice(0, start)}${prompt.text}${text.slice(end)}`;
+    if (kind === 'value') {
+      setValueInput(input, next);
+      const caret = start + prompt.text.length;
+      try {
+        input.setSelectionRange(caret, caret);
+      } catch {
+        // Ignore.
+      }
+    } else {
+      setEditableInput(input, next);
+    }
+
+    autoSelection = null;
+    hideCommandPalette();
+    showToast(`已插入 ${prompt.command}`);
+  }
+
+  function hideCommandPalette() {
+    if (commandHost) commandHost.style.display = 'none';
+    commandMatch = null;
+    commandItems = [];
+    commandIndex = 0;
   }
 
   function composeValue(current, incoming, mode) {

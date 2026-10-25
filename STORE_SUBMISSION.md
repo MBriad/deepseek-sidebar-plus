@@ -1,4 +1,4 @@
-# Edge Add-ons Submission Pack — v1.8.0
+# Edge Add-ons Submission Pack — v1.9.0
 
 This is the submission worksheet for **DeepSeek Sidebar Enhanced (Unofficial)**.  
 It is not a guarantee of approval; it prepares the package and the answers reviewers will look for.
@@ -13,15 +13,15 @@ It is not a guarantee of approval; it prepares the package and the answers revie
 | --- | --- |
 | Extension name (en) | `DeepSeek Sidebar Enhanced (Unofficial)` |
 | Extension name (zh-CN) | `DeepSeek 侧边栏增强版（非官方）` |
-| Version | `1.8.0` |
+| Version | `1.9.0` |
 | Category | Productivity |
 | Languages | en-US, zh-CN (from `_locales`) |
 | Publisher display name | `lllhcbjj` |
 | Support contact | `https://github.com/lllhcbjj/deepseek-sidebar-plus/issues` |
 | Website (optional) | `https://github.com/lllhcbjj/deepseek-sidebar-plus` |
 | Privacy policy URL | `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html` |
-| Short description (en) | Unofficial DeepSeek sidebar: page reader, selection autofill, chat quotes, prompt library, and PDF support. |
-| Short description (zh) | 非官方 DeepSeek 侧边栏：读取网页、划词自动填入、引用对话、提示词库、PDF 支持。 |
+| Short description (en) | Unofficial DeepSeek sidebar: page documents, selection autofill, chat quotes, prompt commands, and PDF support. |
+| Short description (zh) | 非官方 DeepSeek 侧边栏：网页文档、划词填入、对话引用、提示词命令、PDF 支持。 |
 
 The manifest uses `__MSG_extName__` / `__MSG_extDescription__`; Partner Center reads the localized values from `_locales/`.
 
@@ -33,11 +33,11 @@ DeepSeek 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩�
 
 主要功能：
 
-- **读取当前网页**：一键提取当前标签页的标题、链接和正文。预览后可以把完整正文整理成 `.txt` 文件附加到 DeepSeek，输入框只保留一句简短问题；也可以选择“直接填入”，把正文写进输入框。
+- **读取当前网页**：一键提取当前标签页的标题、链接和正文。预览后可以把完整正文整理成 `.txt` 文件附加到 DeepSeek，**不修改输入框、不自动填写提示词**；也可以选择“填入正文”，把正文直接写进输入框。
 - **划词自动填入 / 取消撤回**：在普通网页中高亮选中文字后自动填入 DeepSeek；点击空白处或取消选区时自动恢复之前的草稿。如果已经手动改过输入框，则不会误删。
 - **引用 DeepSeek 对话**：在 DeepSeek 回复里选中文字，点浮出的“引用”按钮或右键菜单，把选中内容以 Markdown `>` 引用格式插入输入框。
-- **提示词库**：保存当前输入为提示词，支持搜索、编辑、置顶、删除，以及 JSON 导入/导出。提示词保存在浏览器本地存储中。
-- **PDF 支持**：识别 PDF 并交给 DeepSeek 自己的解析能力；本地 PDF 可以通过增强阅读器打开，恢复划词和引用。
+- **提示词库**：保存当前输入，或从剪贴板粘贴创建提示词；支持自定义 `/命令`、搜索、编辑、置顶、删除和 JSON 导入/导出。在 DeepSeek 输入框输入 `/` 会显示命令列表和对应提示词预览，Enter 插入。提示词保存在浏览器本地存储中。
+- **PDF 支持**：识别 PDF 并只把文件附加给 DeepSeek，不自动填写提示词；本地 PDF 可以通过增强阅读器打开，恢复划词和引用。
 - **其他工具**：从剪贴板填入、复制正文、在标签页打开 DeepSeek、重新加载侧边栏。
 
 隐私与数据：
@@ -61,11 +61,11 @@ DeepSeek Sidebar Enhanced (Unofficial) is an independent third-party Edge extens
 
 Features:
 
-- **Read the current page**: extract the active tab's title, URL, and body text. Preview it, then attach the full text as a `.txt` file to DeepSeek with a short prompt, or fill the text directly into the input box.
+- **Read the current page**: extract the active tab's title, URL, and body text. Preview it, then attach the full text as a `.txt` document to DeepSeek **without changing the input or injecting a prompt**, or fill the text directly into the input box.
 - **Selection autofill and undo**: highlight text on a web page to fill it into DeepSeek automatically. Clearing the selection restores the previous draft; if you manually edited the input, your edit is preserved.
 - **Quote DeepSeek replies**: select text in a DeepSeek response and use the floating “Quote” button or the right-click menu to insert it as a Markdown block quote.
-- **Prompt library**: save the current input as a prompt, then search, edit, pin, delete, import, or export JSON. Prompts are stored locally.
-- **PDF support**: detect PDFs and let DeepSeek parse them; local PDFs can be opened in the enhanced reader for selection and quoting.
+- **Prompt library**: save the current input or paste text to create a prompt; supports custom `/commands`, search, edit, pin, delete, and JSON import/export. Type `/` in the DeepSeek input to see matching commands with a prompt preview; press Enter to insert. Prompts are stored locally.
+- **PDF support**: detect PDFs and attach them without injecting a prompt; local PDFs can be opened in the enhanced reader for selection and quoting.
 - **Extra tools**: paste from clipboard, copy page text, open DeepSeek in a tab, and reload the sidebar.
 
 Privacy:
@@ -162,11 +162,11 @@ This is an unofficial DeepSeek sidebar extension. DeepSeek login is required for
 
 1. Load the extension and click the toolbar icon. The DeepSeek side panel opens (or a full-page sidebar tab on browsers without sidePanel).
 2. Log in to DeepSeek with a normal free account. No test account is bundled because the extension uses the reviewer's own DeepSeek session; login is handled by chat.deepseek.com.
-3. Open any article in another tab, click the extension's "读本页 / Read this page" button, then try "文件提问" (attach page as .txt) or "直接填入" (direct fill).
+3. Open any article in another tab, click the extension's "读本页 / Read this page" button, then try "附加文档" (attach page as .txt, input must remain unchanged) or "填入正文" (fill raw text, no prompt).
 4. Select text on a page with selection autofill enabled, then clear the selection to verify the previous draft is restored.
 5. In the DeepSeek sidebar, select text in a reply and click the floating "引用 / Quote" button.
-6. Open the prompt library, save the current input, then test fill/edit/search/delete.
-7. Open a PDF URL and use the PDF attach flow.
+6. Open the prompt library, paste-create a prompt, set a custom command, then type `/` in the DeepSeek input and verify the command preview and Enter insertion.
+7. Open a PDF URL and use the PDF attach flow; the input should remain unchanged.
 8. The declarativeNetRequest rule only targets chat.deepseek.com and exists to allow the DeepSeek page to render in the side panel. It does not modify other sites.
 9. The extension never clicks DeepSeek's Send button automatically.
 
@@ -190,10 +190,11 @@ Required / recommended:
 
 Screenshots to capture from a real logged-in Edge session (do not use test-page text):
 
-1. **Page context** — side panel with the page preview sheet and the “文件提问 / 直接填入” buttons visible.
-2. **Prompt library** — a saved prompt with name/tags and the import/export footer.
-3. **PDF reader** — the enhanced reader with a real PDF and the “选中文字会自动填入” status.
-4. Optional: quote button visible over a real DeepSeek reply.
+1. **Page context** — side panel with the page preview sheet and the “附加文档 / 填入正文” buttons visible.
+2. **Prompt library** — a saved prompt with command, plus the paste-create and import/export controls.
+3. **Command preview** — typing `/` in the DeepSeek input with the command list and prompt preview visible.
+4. **PDF reader** — the enhanced reader with a real PDF and the “选中文字会自动填入” status.
+5. Optional: quote button visible over a real DeepSeek reply.
 
 Capture at 1280×800 (browser window) or 640×480; keep text readable and do not stretch. If you only have a narrow side panel capture, place it on a clean 1280×800 canvas without fake chat text.
 
@@ -205,21 +206,21 @@ Build the minimal store package (no dev docs, no README, no privacy page inside)
 
 ```powershell
 $root = "C:\path\to\deepseek-sidebar-plus"
-$dist = Join-Path $env:TEMP "deepseek-sidebar-store\v1.8.0"
+$dist = Join-Path $env:TEMP "deepseek-sidebar-store\v1.9.0"
 Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 Copy-Item "$root\manifest.json","$root\background.js","$root\rules.json" $dist
 Copy-Item "$root\icons" $dist -Recurse
 Copy-Item "$root\src" $dist -Recurse
 Copy-Item "$root\_locales" $dist -Recurse
-Compress-Archive -Path "$dist\*" -DestinationPath (Join-Path $env:TEMP "deepseek-sidebar-plus-v1.8.0-store.zip") -Force
+Compress-Archive -Path "$dist\*" -DestinationPath (Join-Path $env:TEMP "deepseek-sidebar-plus-v1.9.0-store.zip") -Force
 ```
 
 The ZIP must have `manifest.json` at its root. Do not add `key` or `update_url`; Partner Center assigns those for store packages.
 
 Validate before uploading:
 
-- `manifest.json` parses and version is `1.8.0`.
+- `manifest.json` parses and version is `1.9.0`.
 - `_locales/en` and `_locales/zh_CN` exist and `default_locale` is `en`.
 - No `key` / `update_url` in the store manifest.
 - The extension loads unpacked and the side panel opens.
@@ -234,7 +235,7 @@ Validate before uploading:
 - [ ] Capture real screenshots at 1280×800 or 640×480.
 - [x] Logo 300×300 and optional tiles generated in `docs/store/`.
 - [ ] Create/verify Partner Center individual account (free).
-- [ ] Create extension; upload `deepseek-sidebar-plus-v1.8.0-store.zip`.
+- [ ] Create extension; upload `deepseek-sidebar-plus-v1.9.0-store.zip`.
 - [ ] Properties: Productivity; support contact; optional website.
 - [ ] Privacy: single purpose; permission justifications; remote code = No; data usage; privacy URL.
 - [ ] Store listing: en-US and zh-CN descriptions, logo, screenshots.
