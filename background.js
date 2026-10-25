@@ -50,19 +50,24 @@ function createContextMenus() {
       }
       chrome.contextMenus.create({
         id: MENU_SELECTION,
-        title: '发送选中文字到 DeepSeek 侧边栏',
+        title: '发送选中文字到聊天侧边栏',
         contexts: ['selection']
       });
       chrome.contextMenus.create({
         id: MENU_PAGE,
-        title: '读取本页正文到 DeepSeek',
+        title: '读取本页正文到聊天侧边栏',
         contexts: ['page', 'frame']
       });
       chrome.contextMenus.create({
         id: MENU_QUOTE,
-        title: '引用到 DeepSeek 输入框',
+        title: '引用到聊天输入框',
         contexts: ['selection'],
-        documentUrlPatterns: ['*://chat.deepseek.com/*']
+        documentUrlPatterns: [
+          '*://chat.deepseek.com/*',
+          '*://chatgpt.com/*',
+          '*://*.chatgpt.com/*',
+          '*://chat.openai.com/*'
+        ]
       });
     });
   } catch (error) {

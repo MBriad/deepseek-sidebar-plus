@@ -104,6 +104,50 @@ input:focus-visible + .slider {
   z-index: 3;
 }
 
+.provider-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  min-height: 29px;
+  padding: 3px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.provider-label {
+  margin-right: 3px;
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.provider-tab {
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 10.5px/1.4 var(--font);
+  cursor: pointer;
+}
+
+.provider-tab:hover {
+  color: var(--text);
+}
+
+.provider-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.provider-unofficial {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -1583,6 +1627,11 @@ input:focus-visible + .slider {
 
   .brand-name {
     font-size: 12px;
+  }
+
+  .provider-label,
+  .provider-unofficial {
+    display: none;
   }
 }
 

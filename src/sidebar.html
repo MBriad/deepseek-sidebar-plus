@@ -70,6 +70,13 @@
       </button>
     </header>
 
+    <div id="provider-bar" class="provider-bar" role="tablist" aria-label="聊天服务">
+      <span class="provider-label">聊天服务</span>
+      <button class="provider-tab active" type="button" role="tab" aria-selected="true" data-provider="deepseek">DeepSeek</button>
+      <button class="provider-tab" type="button" role="tab" aria-selected="false" data-provider="chatgpt">ChatGPT</button>
+      <span class="provider-unofficial">非官方</span>
+    </div>
+
     <div id="banner" class="banner hidden" role="status" aria-live="polite">
       <span id="banner-text"></span>
       <button id="banner-action" class="link-btn hidden" type="button"></button>
@@ -102,11 +109,11 @@
         <div id="page-warning" class="page-warning hidden"></div>
         <pre id="page-preview" class="page-preview"></pre>
         <div class="sheet-actions">
-          <button id="btn-attach-page" class="btn primary" type="button" title="把网页正文作为 .txt 文件附加到 DeepSeek，不修改输入框">附加文档</button>
+          <button id="btn-attach-page" class="btn primary" type="button" title="把网页正文作为 .txt 文件附加到当前聊天，不修改输入框">附加文档</button>
           <button id="btn-fill-raw" class="btn ghost" type="button" title="把网页正文写进输入框，不添加提示词">填入正文</button>
           <button id="btn-copy-page" class="btn ghost" type="button">复制</button>
         </div>
-        <p class="hint">附加文档只把 .txt 放进 DeepSeek，不会替你决定或填写提示词；请自行输入问题。</p>
+        <p class="hint">附加文档只把 .txt 放进当前聊天，不会替你决定或填写提示词；请自行输入问题。</p>
       </section>
     </div>
 
@@ -134,7 +141,7 @@
             <input id="prompt-tags" class="text-input" type="text" placeholder="标签，逗号分隔">
           </div>
           <div class="prompt-form-row">
-            <input id="prompt-command" class="text-input" type="text" placeholder="命令，例如 /translate（在 DeepSeek 输入框输入 / 调用）">
+            <input id="prompt-command" class="text-input" type="text" placeholder="命令，例如 /translate（在聊天输入框输入 / 调用）">
           </div>
           <textarea id="prompt-text" class="prompt-textarea" placeholder="提示词内容；可直接 Ctrl+V 粘贴"></textarea>
           <div class="prompt-form-actions">
@@ -228,7 +235,7 @@
       <section class="sheet-card">
         <div class="sheet-head">
           <div class="sheet-heading">
-            <div class="eyebrow">DeepSeek+</div>
+            <div class="eyebrow">DEEPSEEK+ / CHATGPT</div>
             <h2 id="settings-title">设置</h2>
           </div>
           <button class="icon-btn" type="button" data-close="settings" title="关闭" aria-label="关闭">×</button>
@@ -238,7 +245,7 @@
           <label class="setting-row">
             <span class="setting-copy">
               <span class="setting-title">划词自动填入</span>
-              <span class="setting-desc">在网页中高亮选中文字后，自动填入 DeepSeek 输入框</span>
+              <span class="setting-desc">在网页中高亮选中文字后，自动填入当前聊天输入框</span>
             </span>
             <span class="switch">
               <input id="setting-autofill" type="checkbox">
@@ -317,15 +324,15 @@
 
           <div class="settings-actions">
             <button id="btn-grab-selection" class="btn" type="button">填入当前选中文字</button>
-            <button id="btn-open-tab" class="btn ghost" type="button">在标签页打开 chat.deepseek.com</button>
+            <button id="btn-open-tab" class="btn ghost" type="button">在标签页打开当前聊天</button>
             <button id="btn-open-reader" class="btn ghost" type="button">用增强阅读器打开当前 PDF</button>
             <button id="btn-open-sidebar-tab" class="btn ghost" type="button">在标签页打开侧边栏（移动/分屏）</button>
-            <button id="btn-reload-frame" class="btn ghost" type="button">重新加载 DeepSeek</button>
+            <button id="btn-reload-frame" class="btn ghost" type="button">重新加载聊天页面</button>
             <button id="btn-reset-settings" class="btn ghost danger" type="button">恢复默认设置</button>
           </div>
 
-          <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前打开的 DeepSeek 输入框。本扩展为非官方版本。</p>
-          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.10.2</p>
+          <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前选择的聊天输入框。本扩展为非官方版本。</p>
+          <p class="settings-version">DeepSeek 侧边栏增强版（非官方） v1.11.0</p>
         </div>
       </section>
     </div>

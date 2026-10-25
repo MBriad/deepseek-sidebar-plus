@@ -19,6 +19,9 @@
 
   const SOURCE = 'ds-chat';
   const PARENT_SOURCE = 'ds-sidebar';
+  const CHAT_NAME = /(^|\.)chatgpt\.com$|(^|\.)openai\.com$/i.test(location.hostname)
+    ? 'ChatGPT'
+    : 'DeepSeek';
   let lastInserted = '';
   let autoSelection = null;
   let toastHost = null;
@@ -170,7 +173,7 @@
         requestId,
         ok: false,
         code: 'no-input',
-        error: '请先在侧边栏中登录 DeepSeek，然后再试一次。'
+        error: `请先在侧边栏中登录 ${CHAT_NAME}，然后再试一次。`
       });
       return;
     }
@@ -182,7 +185,7 @@
           requestId,
           ok: false,
           code: 'no-input',
-          error: '没有找到 DeepSeek 输入框，请确认已经登录并等待页面加载完成。'
+          error: `没有找到 ${CHAT_NAME} 输入框，请确认已经登录并等待页面加载完成。`
         });
         return;
       }
@@ -224,13 +227,18 @@
           };
         }
         showToast(`已填入 ${formatChars(incoming.length)}`);
+        focusInputEnd(input, kind);
+        setTimeout(() => {
+          const latest = findInput();
+          if (latest) focusInputEnd(latest, isValueInput(latest) ? 'value' : 'editable');
+        }, 60);
       }
 
       post('FILL_RESULT', {
         requestId,
         ok: success,
         code: success ? 'ok' : 'not-applied',
-        error: success ? '' : '文字已写入，但 DeepSeek 输入框没有接收，请手动粘贴。',
+        error: success ? '' : `文字已写入，但 ${CHAT_NAME} 输入框没有接收，请手动粘贴。`,
         inputKind: kind,
         mode,
         chars: incoming.length,
@@ -383,7 +391,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = '❝ 引用';
-    button.title = '引用到 DeepSeek 输入框';
+    button.title = `引用到 ${CHAT_NAME} 输入框`;
     button.style.cssText = [
       'pointer-events:auto',
       'display:inline-flex',
@@ -451,7 +459,7 @@
 
     const input = findInput();
     if (!input) {
-      showToast('没有找到 DeepSeek 输入框');
+      showToast(`没有找到 ${CHAT_NAME} 输入框`);
       return false;
     }
 
@@ -469,6 +477,7 @@
     autoSelection = null;
     quoteText = '';
     hideQuoteButton();
+    focusInputEnd(input, kind);
     showToast('已引用到输入框');
     return true;
   }
@@ -479,7 +488,7 @@
       post('INPUT_RESULT', {
         requestId: data.requestId,
         ok: false,
-        error: '没有找到 DeepSeek 输入框'
+        error: `没有找到 ${CHAT_NAME} 输入框`
       });
       return;
     }
@@ -1348,6 +1357,26 @@
     }
   }
 
+  function focusInputEnd(element, kind) {
+    try {
+      element.focus({ preventScroll: true });
+      if (kind === 'value') {
+        const length = String(element.value || '').length;
+        if (typeof element.setSelectionRange === 'function') element.setSelectionRange(length, length);
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch {
+      // Focus is best-effort; the input may have been re-rendered.
+    }
+  }
+
   function dispatchInputEvents(element, value) {
     try {
       element.dispatchEvent(new InputEvent('input', {
@@ -1432,7 +1461,7 @@
         method = 'input';
       } else {
         const target = findDropTarget();
-        if (!target) throw new Error('没有找到 DeepSeek 的文件上传入口。');
+        if (!target) throw new Error(`没有找到 ${CHAT_NAME} 的文件上传入口。`);
 
         const transfer = new DataTransfer();
         transfer.items.add(file);
@@ -1464,7 +1493,7 @@
       post('ATTACH_RESULT', {
         requestId,
         ok: false,
-        error: error?.message || '无法把文件添加到 DeepSeek。'
+        error: error?.message || `无法把文件添加到 ${CHAT_NAME}。`
       });
     }
   }
@@ -1578,21 +1607,19 @@
       }
     }
 
-    if (!candidates.length) {
-      for (const root of collectRoots()) {
-        let editables = [];
-        try {
-          editables = Array.from(root.querySelectorAll(
-            '[contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], [role="textbox"]'
-          ));
-        } catch {
-          continue;
-        }
-        for (const element of editables) {
-          if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') continue;
-          if (!isUsable(element)) continue;
-          candidates.push({ element, score: scoreInput(element, 'editable') });
-        }
+    for (const root of collectRoots()) {
+      let editables = [];
+      try {
+        editables = Array.from(root.querySelectorAll(
+          '[contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], [role="textbox"]'
+        ));
+      } catch {
+        continue;
+      }
+      for (const element of editables) {
+        if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') continue;
+        if (!isUsable(element)) continue;
+        candidates.push({ element, score: scoreInput(element, 'editable') });
       }
     }
 
@@ -1624,6 +1651,14 @@
 
     if (kind === 'textarea') score += 500;
     if (kind === 'editable') score += 100;
+
+    if (
+      element.id === 'prompt-textarea'
+      || element.getAttribute('data-testid') === 'prompt-textarea'
+      || element.getAttribute('data-testid') === 'composer-input'
+    ) {
+      score += 1200;
+    }
 
     const placeholder = String(element.getAttribute('placeholder') || '').toLowerCase();
     if (placeholder.includes('deepseek') || placeholder.includes('发送') || placeholder.includes('消息') || placeholder.includes('message')) {

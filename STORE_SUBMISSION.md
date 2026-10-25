@@ -3,7 +3,7 @@
 This is the submission worksheet for **DeepSeek Sidebar Enhanced (Unofficial)**.  
 It is not a guarantee of approval; it prepares the package and the answers reviewers will look for.
 
-> **v1.9.3 is the version currently in Microsoft certification.** v1.10.2 adds webpage tags and is a local/GitHub update only; do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.10.2 is ready for resubmission.
+> **v1.9.3 is the version currently in Microsoft certification.** v1.11.0 adds webpage tags and a DeepSeek / ChatGPT provider switch; it is a local/GitHub update only. Do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.11.0 is ready for resubmission.
 
 **Screenshots are ready in `docs/store/screenshots/`. Remaining before submitting: decide how to handle DeepSeek login for reviewers (test account or a clear note) and complete the Partner Center upload. Privacy URL, publisher, and support contact are filled for `lllhcbjj`.**
 
@@ -189,17 +189,18 @@ Required / recommended:
 | Asset | Spec | File |
 | --- | --- | --- |
 | Logo | 300×300 recommended, minimum 128×128, 1:1 | `docs/store/logo-300.png` |
-| Screenshots | 1280×800, max 6 | `docs/store/screenshots/store-01-page.png` … `store-05-page-tags.png` |
+| Screenshots | 1280×800, max 6 | `docs/store/screenshots/store-01-page.png` … `store-06-chatgpt.png` |
 | Small promotional tile | 440×280, optional | `docs/store/small-promo-440x280.png` |
 | Large promotional tile | 1400×560, optional | `docs/store/large-promo-1400x560.png` |
 
-Ready screenshots (actual UI, 1280×800, demo article/prompt/PDF/tagged-page content; no DeepSeek login required). The v1.9.3 upload used the first four; v1.10.2 adds the fifth:
+Ready screenshots (actual UI, 1280×800, demo article/prompt/PDF/tagged-page content; no chat account required). The v1.9.3 upload used the first four; v1.11.0 adds the fifth and sixth:
 
 1. `store-01-page.png` — page preview with “附加文档 / 填入正文 / 复制”
 2. `store-02-prompts.png` — prompt library with paste-create, command chips, tags
 3. `store-03-pdf.png` — local PDF enhanced reader with selection hint
 4. `store-04-settings.png` — settings including “本地 PDF 自动打开阅读器”
-5. `store-05-page-tags.png` — webpage tags, tag filters, and local semantic search (v1.10.2)
+5. `store-05-page-tags.png` — webpage tags, tag filters, and local semantic search (v1.11.0)
+6. `store-06-chatgpt.png` — DeepSeek / ChatGPT switch with prompt commands in ChatGPT (v1.11.0)
 
 Capture at 1280×800 (browser window) or 640×480; keep text readable and do not stretch. If you only have a narrow side panel capture, place it on a clean 1280×800 canvas without fake chat text.
 

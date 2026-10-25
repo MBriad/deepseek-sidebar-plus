@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.10.2",
+  "version": "1.11.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "116",
@@ -43,7 +43,10 @@
   "content_scripts": [
     {
       "matches": [
-        "*://chat.deepseek.com/*"
+        "*://chat.deepseek.com/*",
+        "*://chatgpt.com/*",
+        "*://*.chatgpt.com/*",
+        "*://chat.openai.com/*"
       ],
       "js": [
         "src/content/chat-bridge.js"
@@ -56,7 +59,10 @@
         "<all_urls>"
       ],
       "exclude_matches": [
-        "*://chat.deepseek.com/*"
+        "*://chat.deepseek.com/*",
+        "*://chatgpt.com/*",
+        "*://*.chatgpt.com/*",
+        "*://chat.openai.com/*"
       ],
       "js": [
         "src/content/page-tools.js"
@@ -74,7 +80,7 @@
     ]
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' https://*.deepseek.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' https://*.deepseek.com https://chatgpt.com https://*.chatgpt.com https://chat.openai.com"
   },
   "web_accessible_resources": [
     {

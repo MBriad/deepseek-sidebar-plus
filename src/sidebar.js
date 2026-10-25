@@ -2,8 +2,24 @@
 
 'use strict';
 
-const CHAT_URL = 'https://chat.deepseek.com/';
-const CHAT_ORIGIN = 'https://chat.deepseek.com';
+const CHAT_PROVIDERS = {
+  deepseek: {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    url: 'https://chat.deepseek.com/',
+    origin: 'https://chat.deepseek.com'
+  },
+  chatgpt: {
+    id: 'chatgpt',
+    name: 'ChatGPT',
+    url: 'https://chatgpt.com/',
+    origin: 'https://chatgpt.com'
+  }
+};
+const PROVIDER_KEY = 'chatProvider';
+let chatProvider = 'deepseek';
+let CHAT_URL = CHAT_PROVIDERS.deepseek.url;
+let CHAT_ORIGIN = CHAT_PROVIDERS.deepseek.origin;
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
 const PAGE_EXTRACT_MAX = 50000;
 const PROMPT_STORAGE_KEY = 'promptLibrary';
@@ -77,18 +93,19 @@ async function init() {
   bindFrame();
   bindUI();
 
+  await loadChatProvider();
   await loadSettings();
   applySettingsToUI();
   updateAutofillButton();
 
   setConnection('connecting');
-  showFrameLoading('正在加载 DeepSeek…');
+  showFrameLoading(`正在加载 ${currentProvider().name}…`);
 
   try {
     frame.src = CHAT_URL;
     startFrameWatchdog();
   } catch (error) {
-    showBanner(`无法加载 DeepSeek：${error.message}`, '重试', reloadFrame, { type: 'error' });
+    showBanner(`无法加载 ${currentProvider().name}：${error.message}`, '重试', reloadFrame, { type: 'error' });
   }
 
   // Pending selections/pages are fetched once the DeepSeek frame has actually
@@ -110,6 +127,64 @@ async function init() {
   });
 
   console.info('[DS+] side panel ready');
+}
+
+/* ------------------------------------------------------------------ */
+/* Chat providers                                                     */
+/* ------------------------------------------------------------------ */
+
+function currentProvider() {
+  return CHAT_PROVIDERS[chatProvider] || CHAT_PROVIDERS.deepseek;
+}
+
+function providerName() {
+  return currentProvider().name;
+}
+
+async function loadChatProvider() {
+  try {
+    const stored = await chrome.storage.local.get(PROVIDER_KEY);
+    const id = CHAT_PROVIDERS[stored?.[PROVIDER_KEY]] ? stored[PROVIDER_KEY] : 'deepseek';
+    applyChatProvider(id, { persist: false, reload: false });
+  } catch {
+    applyChatProvider('deepseek', { persist: false, reload: false });
+  }
+}
+
+function applyChatProvider(id, { persist = true, reload = true } = {}) {
+  const provider = CHAT_PROVIDERS[id] || CHAT_PROVIDERS.deepseek;
+  const changed = chatProvider !== provider.id;
+  chatProvider = provider.id;
+  CHAT_URL = provider.url;
+  CHAT_ORIGIN = provider.origin;
+
+  $$('.provider-tab').forEach((button) => {
+    const active = button.getAttribute('data-provider') === provider.id;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
+  frame.title = provider.name;
+  const openTab = $('#btn-open-tab');
+  if (openTab) openTab.textContent = `在标签页打开 ${provider.name}`;
+
+  if (persist) {
+    chrome.storage.local.set({ [PROVIDER_KEY]: provider.id }).catch(() => {});
+  }
+  if (!reload || !changed) return;
+
+  bridgeReady = false;
+  frameLoaded = false;
+  pingToken += 1;
+  clearTimeout(connectHintTimer);
+  clearTimeout(frameLoadWatchdog);
+  setConnection('connecting');
+  showFrameLoading(`正在加载 ${provider.name}…`);
+  try {
+    frame.src = `${provider.url}?dsplus=${Date.now()}`;
+    startFrameWatchdog();
+  } catch (error) {
+    showBanner(`无法加载 ${provider.name}：${error.message}`, '重试', reloadFrame, { type: 'error' });
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -138,7 +213,7 @@ function onFrameLoad() {
   connectHintTimer = setTimeout(() => {
     if (bridgeReady) return;
     showBanner(
-      'DeepSeek 页面已加载，但还没有连接到输入框。请确认已经登录；如果页面要求验证，请先在浏览器标签页打开 chat.deepseek.com 完成登录。',
+      `${providerName()} 页面已加载，但还没有连接到输入框。请确认已经登录；如果页面要求验证，请先在浏览器标签页打开 ${CHAT_URL} 完成登录。`,
       '重新加载',
       reloadFrame,
       { type: 'error', kind: 'connection' }
@@ -217,7 +292,7 @@ function sendToFrame(type, payload = {}, timeout = 8000, transfer = []) {
       if (settled) return;
       settled = true;
       pendingRequests.delete(requestId);
-      resolve({ ok: false, code: 'timeout', error: '连接 DeepSeek 超时' });
+      resolve({ ok: false, code: 'timeout', error: `连接 ${providerName()} 超时` });
     }, timeout);
 
     pendingRequests.set(requestId, (response) => {
@@ -229,10 +304,10 @@ function sendToFrame(type, payload = {}, timeout = 8000, transfer = []) {
 
     try {
       const target = frame.contentWindow;
-      if (!target) throw new Error('侧边栏尚未加载 DeepSeek 页面');
+      if (!target) throw new Error(`侧边栏尚未加载 ${providerName()} 页面`);
 
       // Before navigation the iframe is still same-origin (about:blank / the
-      // extension page), so posting with targetOrigin chat.deepseek.com throws.
+      // extension page), so posting with the chat origin throws.
       // Skip those attempts instead of generating a console warning.
       try {
         const href = target.location.href;
@@ -241,7 +316,7 @@ function sendToFrame(type, payload = {}, timeout = 8000, transfer = []) {
           settled = true;
           clearTimeout(timer);
           pendingRequests.delete(requestId);
-          resolve({ ok: false, code: 'not-ready', error: 'DeepSeek 页面尚未加载' });
+          resolve({ ok: false, code: 'not-ready', error: `${providerName()} 页面尚未加载` });
           return;
         }
       } catch {
@@ -341,6 +416,14 @@ document.addEventListener('visibilitychange', () => {
 /* Fill                                                               */
 /* ------------------------------------------------------------------ */
 
+function focusChatFrame() {
+  try {
+    frame.focus();
+  } catch {
+    // Cross-origin focus is best-effort; the bridge also focuses the input.
+  }
+}
+
 function fillChat(text, mode = 'smart', options = {}) {
   const task = fillChain.then(
     () => fillChatInternal(text, mode, options),
@@ -362,7 +445,7 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     const ready = await waitForBridge(9000);
     if (!ready) {
       setConnection('offline');
-      showBanner('还没有连接到 DeepSeek。请检查侧边栏里的页面是否已经登录并加载完成。', '重新加载', reloadFrame, { type: 'error', kind: 'connection' });
+      showBanner(`还没有连接到 ${providerName()}。请检查侧边栏里的页面是否已经登录并加载完成。`, '重新加载', reloadFrame, { type: 'error', kind: 'connection' });
       return false;
     }
   }
@@ -373,19 +456,20 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     setConnection('ready');
     activeSelectionId = selectionId;
     hideBanner();
+    focusChatFrame();
     return true;
   }
 
   if (response?.code === 'no-input') {
     setConnection('offline');
-    showBanner(response.error || '没有找到 DeepSeek 输入框。请确认已经登录，或点击重新加载。', '重新加载', reloadFrame, { type: 'error', kind: 'connection' });
+    showBanner(response.error || `没有找到 ${providerName()} 输入框。请确认已经登录，或点击重新加载。`, '重新加载', reloadFrame, { type: 'error', kind: 'connection' });
     return false;
   }
 
   if (response?.code === 'timeout') {
     bridgeReady = false;
     setConnection('offline');
-    showBanner('连接 DeepSeek 超时，请重新加载侧边栏。', '重新加载', reloadFrame, { type: 'error', kind: 'connection' });
+    showBanner(`连接 ${providerName()} 超时，请重新加载侧边栏。`, '重新加载', reloadFrame, { type: 'error', kind: 'connection' });
     return false;
   }
 
@@ -532,7 +616,7 @@ async function openSidebarInTab() {
 async function openChatInTab() {
   try {
     await chrome.tabs.create({ url: CHAT_URL });
-    showToast('已在新标签页打开 DeepSeek');
+    showToast(`已在新标签页打开 ${providerName()}`);
   } catch (error) {
     showToast(`打开失败：${error.message}`, 'error', 4000);
   }
@@ -704,10 +788,10 @@ async function attachPdfToChat(info) {
 
     if (!bridgeReady) {
       const ready = await waitForBridge(10000);
-      if (!ready) throw new Error('还没有连接到 DeepSeek，请先登录并等待页面加载完成。');
+      if (!ready) throw new Error(`还没有连接到 ${providerName()}，请先登录并等待页面加载完成。`);
     }
 
-    showBanner(`正在把 PDF 添加到 DeepSeek：${file.name}…`, '', null, { kind: 'pdf' });
+    showBanner(`正在把 PDF 添加到 ${providerName()}：${file.name}…`, '', null, { kind: 'pdf' });
     const buffer = await file.arrayBuffer();
     const result = await sendToFrame('DS_ATTACH_FILE', {
       name: file.name,
@@ -716,7 +800,7 @@ async function attachPdfToChat(info) {
       buffer
     }, 45000, [buffer]);
 
-    if (!result?.ok) throw new Error(result?.error || '无法把 PDF 添加到 DeepSeek。');
+    if (!result?.ok) throw new Error(result?.error || `无法把 PDF 添加到 ${providerName()}。`);
 
     const isLocalFile = /^file:/i.test(info.pdfUrl);
     let readerOpened = false;
@@ -733,15 +817,15 @@ async function attachPdfToChat(info) {
     if (isLocalFile) {
       showBanner(
         readerOpened
-          ? 'PDF 已附加到 DeepSeek；增强阅读器已打开，选中文字会自动填入。'
-          : 'PDF 已附加到 DeepSeek。输入框没有改动；可以打开增强阅读器划词。',
+          ? `PDF 已附加到 ${providerName()}；增强阅读器已打开，选中文字会自动填入。`
+          : `PDF 已附加到 ${providerName()}。输入框没有改动；可以打开增强阅读器划词。`,
         readerOpened ? '知道了' : '打开增强阅读器',
         readerOpened ? hideBanner : () => openPdfReader(info.pdfUrl, title),
         { type: 'success' }
       );
     } else {
       showBanner(
-        'PDF 已附加到 DeepSeek。输入框没有改动，请自行输入问题。',
+        `PDF 已附加到 ${providerName()}。输入框没有改动，请自行输入问题。`,
         '知道了',
         hideBanner,
         { type: 'success' }
@@ -945,12 +1029,12 @@ async function attachPageFile(page) {
   try {
     if (!bridgeReady) {
       const ready = await waitForBridge(10000);
-      if (!ready) throw new Error('还没有连接到 DeepSeek，请先登录并等待页面加载完成。');
+      if (!ready) throw new Error(`还没有连接到 ${providerName()}，请先登录并等待页面加载完成。`);
     }
 
     const file = buildPageFile(page);
     closeSheet('#page-sheet');
-    showBanner(`正在把网页文档附加到 DeepSeek：${file.name}…`, '', null, { kind: 'page-file' });
+    showBanner(`正在把网页文档附加到 ${providerName()}：${file.name}…`, '', null, { kind: 'page-file' });
 
     const buffer = await file.arrayBuffer();
     const result = await sendToFrame('DS_ATTACH_FILE', {
@@ -960,10 +1044,10 @@ async function attachPageFile(page) {
       buffer
     }, 45000, [buffer]);
 
-    if (!result?.ok) throw new Error(result?.error || '无法把网页文档附加到 DeepSeek。');
+    if (!result?.ok) throw new Error(result?.error || `无法把网页文档附加到 ${providerName()}。`);
 
     showBanner(
-      `网页文档《${file.name}》已附加到 DeepSeek。输入框没有改动，请自行输入问题。`,
+      `网页文档《${file.name}》已附加到 ${providerName()}。输入框没有改动，请自行输入问题。`,
       '知道了',
       hideBanner,
       { type: 'success' }
@@ -2263,7 +2347,7 @@ function createPromptElement(prompt) {
   const command = document.createElement('div');
   command.className = 'prompt-command';
   command.textContent = prompt.command;
-  command.title = '在 DeepSeek 输入框输入 / 调用此提示词';
+  command.title = `在 ${providerName()} 输入框输入 / 调用此提示词`;
 
   const text = document.createElement('div');
   text.className = 'prompt-text';
@@ -2368,10 +2452,10 @@ async function startSaveCurrentPrompt() {
   try {
     const text = String(await getChatInputText() || '').trim();
     if (!text) {
-      showToast('DeepSeek 输入框为空');
+      showToast(`${providerName()} 输入框为空`);
       return;
     }
-    startNewPrompt(text, '保存当前 DeepSeek 输入框内容');
+    startNewPrompt(text, `保存当前 ${providerName()} 输入框内容`);
     $('#prompt-name').focus();
     $('#prompt-name').select();
   } catch (error) {
@@ -2452,7 +2536,7 @@ function parsePromptTags(value) {
 async function getChatInputText() {
   if (!bridgeReady) {
     const ready = await waitForBridge(5000);
-    if (!ready) throw new Error('还没有连接到 DeepSeek');
+    if (!ready) throw new Error(`还没有连接到 ${providerName()}`);
   }
   const response = await sendToFrame('DS_GET_INPUT', {}, 5000);
   if (!response?.ok) throw new Error(response?.error || '没有找到输入框');
@@ -2720,6 +2804,12 @@ function restoreDefaults() {
 /* ------------------------------------------------------------------ */
 
 function bindUI() {
+  $$('.provider-tab').forEach((button) => {
+    button.addEventListener('click', () => {
+      applyChatProvider(button.getAttribute('data-provider'));
+    });
+  });
+
   $('#btn-read').addEventListener('click', readPage);
   $('#btn-autofill').addEventListener('click', toggleAutofill);
   $('#btn-settings').addEventListener('click', () => {
@@ -2856,7 +2946,7 @@ function bindUI() {
 
   $('#conn').addEventListener('click', () => {
     if (bridgeReady) {
-      showToast('DeepSeek 已连接');
+      showToast(`${providerName()} 已连接`);
     } else {
       reloadFrame();
     }
@@ -2902,17 +2992,17 @@ function setConnection(state) {
   connection.classList.remove('ready', 'connecting', 'offline');
   connection.classList.add(state);
   connection.title = state === 'ready'
-    ? '已连接 DeepSeek'
+    ? `已连接 ${providerName()}`
     : state === 'connecting'
-      ? '正在连接 DeepSeek…'
-      : 'DeepSeek 连接断开，点击重新加载';
+      ? `正在连接 ${providerName()}…`
+      : `${providerName()} 连接断开，点击重新加载`;
 }
 
 function reloadFrame() {
   bridgeReady = false;
   frameLoaded = false;
   setConnection('connecting');
-  showFrameLoading('正在重新加载 DeepSeek…');
+  showFrameLoading(`正在重新加载 ${providerName()}…`);
   hideBanner();
   clearTimeout(connectHintTimer);
 
@@ -2929,7 +3019,7 @@ function startFrameWatchdog() {
   frameLoadWatchdog = setTimeout(() => {
     if (frameLoaded) return;
     const text = $('#frame-loading-text');
-    if (text) text.textContent = 'DeepSeek 加载较慢，请检查网络后重试。';
+    if (text) text.textContent = `${providerName()} 加载较慢，请检查网络后重试。`;
     $('#frame-retry')?.classList.remove('hidden');
   }, 20000);
 }

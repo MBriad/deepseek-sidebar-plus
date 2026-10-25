@@ -5,10 +5,10 @@
   },
   "extDescription": {
     "description": "商店短描述",
-    "message": "非官方 DeepSeek 侧边栏：网页文档、@ 标签页、划词填入、提示词命令、网页标签与语义搜索、PDF 支持。"
+    "message": "非官方 DeepSeek / ChatGPT 侧边栏：网页文档、@ 标签页、划词填入、提示词命令、网页标签与语义搜索、PDF 支持。"
   },
   "actionTitle": {
     "description": "工具栏按钮提示",
-    "message": "打开 DeepSeek 侧边栏"
+    "message": "打开 AI 聊天侧边栏"
   }
 }
