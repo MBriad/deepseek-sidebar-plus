@@ -47,6 +47,7 @@ async function setup() {
   context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     channel: process.env.PW_CHANNEL || undefined,
+    timeout: 60000,
     viewport: { width: 1200, height: 900 },
     args: [
       `--disable-extensions-except=${extensionPath}`,
@@ -55,6 +56,8 @@ async function setup() {
       '--disable-dev-shm-usage'
     ]
   });
+  context.setDefaultTimeout(20000);
+  context.setDefaultNavigationTimeout(30000);
 
   await context.route('https://chat.deepseek.com/**', async (route) => {
     await route.fulfill({
@@ -260,6 +263,11 @@ async function testPdfFollowAndSend() {
   console.log('PASS PDF.js follow selection + Enter send');
 }
 
+const watchdog = setTimeout(() => {
+  console.error('FUNCTIONAL TEST WATCHDOG TIMEOUT');
+  process.exit(1);
+}, 8 * 60 * 1000);
+
 (async () => {
   try {
     await setup();
@@ -281,7 +289,15 @@ async function testPdfFollowAndSend() {
     }
     process.exitCode = 1;
   } finally {
+    clearTimeout(watchdog);
+    const exitCode = process.exitCode || 0;
     if (server) await new Promise((resolve) => server.close(resolve));
-    if (context) await context.close();
+    if (context) {
+      await Promise.race([
+        context.close().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 15000))
+      ]);
+    }
+    process.exit(exitCode);
   }
 })();

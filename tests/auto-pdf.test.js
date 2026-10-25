@@ -11,6 +11,11 @@ const pdfFixture = path.join(__dirname, 'fixtures', 'text.pdf');
 let context;
 let server;
 
+const watchdog = setTimeout(() => {
+  console.error('AUTO PDF TEST WATCHDOG TIMEOUT');
+  process.exit(1);
+}, 3 * 60 * 1000);
+
 async function waitFor(check, timeout = 20000) {
   const start = Date.now();
   while (Date.now() - start < timeout) {
@@ -36,6 +41,7 @@ async function waitFor(check, timeout = 20000) {
     context = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'ds-auto-pdf-')), {
       headless: false,
       channel: process.env.PW_CHANNEL || undefined,
+      timeout: 60000,
       args: [
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
@@ -43,6 +49,8 @@ async function waitFor(check, timeout = 20000) {
         '--disable-dev-shm-usage'
       ]
     });
+    context.setDefaultTimeout(20000);
+    context.setDefaultNavigationTimeout(30000);
     await context.route('https://chat.deepseek.com/**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>chat</title><textarea id="chat-input"></textarea>' });
     });
@@ -64,10 +72,18 @@ async function waitFor(check, timeout = 20000) {
     await waitFor(() => reader.frames().some((frame) => frame.url().includes('pdfjs-viewer.html')));
     console.log('AUTO PDF REDIRECT PASSED');
   } finally {
+    clearTimeout(watchdog);
+    const exitCode = process.exitCode || 0;
     if (server) await new Promise((resolve) => server.close(resolve));
-    if (context) await context.close();
+    if (context) {
+      await Promise.race([
+        context.close().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 15000))
+      ]);
+    }
+    process.exit(exitCode);
   }
 })().catch((error) => {
   console.error(error.stack || error.message);
-  process.exitCode = 1;
+  process.exit(1);
 });
