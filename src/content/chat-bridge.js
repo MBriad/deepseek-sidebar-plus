@@ -135,6 +135,12 @@
         handleGetInputRequest(data);
         break;
 
+      case 'DS_FOCUS_INPUT': {
+        const input = findInput();
+        if (input) focusInputEnd(input, isValueInput(input) ? 'value' : 'editable');
+        break;
+      }
+
       case 'TABS_RESULT':
         handleTabsResult(data);
         break;
@@ -898,6 +904,20 @@
     const match = getCommandMatch(input);
     if (!match) {
       if (visible && (wantsEnter || wantsArrow)) hideCommandPalette();
+      return;
+    }
+
+    const query = match.query.toLowerCase();
+    const hasPromptMatch = promptCommands.some((prompt) =>
+      !query
+      || prompt.command.toLowerCase().includes(query)
+      || prompt.name.toLowerCase().includes(query)
+      || prompt.text.toLowerCase().includes(query)
+    );
+    if (!hasPromptMatch) {
+      // Let ChatGPT's own slash commands through when the user is not
+      // invoking one of our saved prompts.
+      if (visible) hideCommandPalette();
       return;
     }
 

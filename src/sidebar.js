@@ -417,11 +417,22 @@ document.addEventListener('visibilitychange', () => {
 /* ------------------------------------------------------------------ */
 
 function focusChatFrame() {
-  try {
-    frame.focus();
-  } catch {
-    // Cross-origin focus is best-effort; the bridge also focuses the input.
-  }
+  const apply = () => {
+    try { window.focus(); } catch { /* Ignore. */ }
+    try { frame.focus(); } catch { /* Ignore. */ }
+    try {
+      frame.contentWindow?.postMessage({
+        source: 'ds-sidebar',
+        type: 'DS_FOCUS_INPUT'
+      }, CHAT_ORIGIN);
+    } catch {
+      // The frame may still be navigating.
+    }
+  };
+
+  apply();
+  setTimeout(apply, 80);
+  setTimeout(apply, 260);
 }
 
 function fillChat(text, mode = 'smart', options = {}) {
