@@ -496,6 +496,14 @@
 
       captureSelectionRect();
       sendSelection(raw, document.title || '', location.href);
+      // Clear the DOM selection immediately after capturing its rect. Edge's
+      // native copy/search mini toolbar is driven by the selection and would
+      // otherwise stay above the floating input and swallow Enter.
+      try {
+        selection.removeAllRanges();
+      } catch {
+        // Ignore.
+      }
     } catch {
       // The extension was reloaded, or this page has an unusual selection.
     }

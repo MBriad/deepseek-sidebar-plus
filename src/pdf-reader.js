@@ -249,6 +249,11 @@
         }
       }
     }, 60);
+    try {
+      pdfJsFrame.contentWindow?.getSelection()?.removeAllRanges();
+    } catch {
+      // The PDF.js frame may still be navigating.
+    }
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
   }
 
