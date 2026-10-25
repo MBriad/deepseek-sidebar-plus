@@ -25,6 +25,10 @@
   let selectionSeq = 0;
   let selectionClearTimer = null;
   let toastTimer = null;
+  let typeRelay = null;
+  let typeRelayActive = false;
+  let typeRelayComposing = false;
+  let typeRelayShortcut = 'Ctrl+Z';
 
   document.title = `${fileName} - DeepSeek PDF`;
   document.getElementById('file-name').textContent = fileName;
@@ -37,7 +41,150 @@
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   });
 
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'DS_START_TYPE_RELAY' && message?.type !== 'DS_STOP_TYPE_RELAY') return;
+
+    const handle = () => {
+      if (message.type === 'DS_START_TYPE_RELAY') {
+        startTypeRelay(String(message.shortcut || 'Ctrl+Z'));
+        sendResponse({ ok: typeRelayActive });
+      } else {
+        stopTypeRelay(Boolean(message.cancel));
+        sendResponse({ ok: true });
+      }
+    };
+
+    const target = Number(message.targetTabId || 0);
+    if (!target) {
+      handle();
+      return;
+    }
+    chrome.tabs.getCurrent((tab) => {
+      if (tab?.id && tab.id !== target) {
+        sendResponse({ ok: false });
+        return;
+      }
+      handle();
+    });
+    return true;
+  });
+
   loadPdf();
+
+  function shortcutMatches(event, shortcut) {
+    const parts = String(shortcut || 'Ctrl+Z').split('+').map((part) => part.trim()).filter(Boolean);
+    const key = parts.pop() || 'Z';
+    const ctrl = parts.some((part) => /^(ctrl|control|cmd|command|meta)$/i.test(part));
+    const alt = parts.some((part) => /^alt$/i.test(part));
+    const shift = parts.some((part) => /^shift$/i.test(part));
+    const hasCtrl = event.ctrlKey || event.metaKey;
+    return hasCtrl === ctrl
+      && event.altKey === alt
+      && event.shiftKey === shift
+      && String(event.key || '').toLowerCase() === key.toLowerCase();
+  }
+
+  function relaySend(type, payload = {}) {
+    try {
+      chrome.storage.local.set({
+        dsTypeRelay: {
+          type,
+          ...payload,
+          seq: Date.now()
+        }
+      }).catch(() => {});
+    } catch {
+      // Extension context invalidated.
+    }
+  }
+
+  function ensureTypeRelay() {
+    if (typeRelay) return typeRelay;
+    typeRelay = document.createElement('textarea');
+    typeRelay.id = 'ds-type-relay';
+    typeRelay.setAttribute('aria-hidden', 'true');
+    typeRelay.autocomplete = 'off';
+    typeRelay.spellcheck = false;
+    typeRelay.style.cssText = [
+      'position:fixed',
+      'left:0',
+      'bottom:0',
+      'width:2px',
+      'height:2px',
+      'padding:0',
+      'border:0',
+      'opacity:0.01',
+      'z-index:2147483646',
+      'font-size:16px',
+      'background:transparent',
+      'color:transparent',
+      'caret-color:transparent',
+      'pointer-events:none'
+    ].join(';');
+    document.documentElement.appendChild(typeRelay);
+
+    typeRelay.addEventListener('compositionstart', () => {
+      typeRelayComposing = true;
+    });
+    typeRelay.addEventListener('compositionend', () => {
+      typeRelayComposing = false;
+      if (typeRelayActive) relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    });
+    typeRelay.addEventListener('input', () => {
+      if (!typeRelayActive || typeRelayComposing) return;
+      relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    });
+    typeRelay.addEventListener('keydown', (event) => {
+      if (!typeRelayActive) return;
+      if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        stopTypeRelay(true);
+      }
+    }, true);
+    typeRelay.addEventListener('blur', () => {
+      if (!typeRelayActive) return;
+      setTimeout(() => {
+        if (typeRelayActive && document.activeElement !== typeRelay) stopTypeRelay(false);
+      }, 0);
+    });
+    return typeRelay;
+  }
+
+  function startTypeRelay(shortcut) {
+    if (!lastSelectionId) return;
+    typeRelayShortcut = shortcut || 'Ctrl+Z';
+    const relay = ensureTypeRelay();
+    relay.value = '';
+    typeRelayActive = true;
+    typeRelayComposing = false;
+    try {
+      relay.focus({ preventScroll: true });
+    } catch {
+      // Ignore.
+    }
+    if (document.activeElement !== relay) {
+      typeRelayActive = false;
+      return;
+    }
+    showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
+  }
+
+  function stopTypeRelay(cancel) {
+    if (!typeRelayActive) return;
+    typeRelayActive = false;
+    typeRelayComposing = false;
+    lastSelectionId = '';
+    try {
+      typeRelay?.blur();
+      if (typeRelay) typeRelay.value = '';
+    } catch {
+      // Ignore.
+    }
+    relaySend(cancel ? 'DS_TYPE_RELAY_CANCEL' : 'DS_TYPE_RELAY_END');
+    if (cancel) showToast('已撤回自动填入');
+  }
 
   async function loadPdf() {
     if (!fileUrl) {
@@ -114,6 +261,7 @@
 
     if (!value) {
       lastText = '';
+      if (typeRelayActive) return;
       if (!lastSelectionId) return;
 
       clearTimeout(selectionClearTimer);

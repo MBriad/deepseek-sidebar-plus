@@ -462,15 +462,28 @@ async function startTypeRelay() {
   if (!tab?.id) return;
 
   await sendToFrame('DS_RELAY_START', {}, 4000);
+  let result = null;
   try {
-    const result = await chrome.tabs.sendMessage(tab.id, {
+    result = await chrome.tabs.sendMessage(tab.id, {
       type: 'DS_START_TYPE_RELAY',
-      shortcut: settings.undoShortcut || 'Ctrl+Z'
+      shortcut: settings.undoShortcut || 'Ctrl+Z',
+      targetTabId: tab.id
     });
-    typeRelayActive = Boolean(result?.ok);
   } catch {
-    typeRelayActive = false;
+    result = null;
   }
+  if (!result?.ok) {
+    try {
+      result = await chrome.runtime.sendMessage({
+        type: 'DS_START_TYPE_RELAY',
+        shortcut: settings.undoShortcut || 'Ctrl+Z',
+        targetTabId: tab.id
+      });
+    } catch {
+      result = null;
+    }
+  }
+  typeRelayActive = Boolean(result?.ok);
 
   if (typeRelayActive) {
     showToast('直接输入已开启：在网页打字，Ctrl+Z 撤回', 'success', 3500);
@@ -485,7 +498,13 @@ async function stopTypeRelayPage(cancel) {
     if (tab?.id) {
       await chrome.tabs.sendMessage(tab.id, {
         type: 'DS_STOP_TYPE_RELAY',
-        cancel: Boolean(cancel)
+        cancel: Boolean(cancel),
+        targetTabId: tab.id
+      }).catch(() => {});
+      await chrome.runtime.sendMessage({
+        type: 'DS_STOP_TYPE_RELAY',
+        cancel: Boolean(cancel),
+        targetTabId: tab.id
       }).catch(() => {});
     }
   } catch {
