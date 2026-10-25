@@ -55,6 +55,7 @@
   let selectionClearTimer = null;
   let selectionSeq = 0;
   let activeSelectionId = '';
+  let suppressClearUntil = 0;
   let pdfBridgeInstalled = false;
   let pdfBridgeTried = false;
   let pdfListenerAttached = false;
@@ -116,9 +117,24 @@
       selectionClearTimer = setTimeout(notifySelectionCleared, 260);
     });
 
+    // The side panel focuses the chat input after autofill; this can make
+    // the page selection momentarily collapse. Suppress that specific clear
+    // so the just-inserted text is not undone. Returning to the page resets
+    // the suppression and allows a real cancel/undo.
+    try {
+      chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type !== 'DS_SUPPRESS_SELECTION_CLEAR') return;
+        suppressClearUntil = Date.now() + Math.max(0, Math.min(Number(message.ms) || 700, 2000));
+        sendResponse({ ok: true });
+      });
+    } catch {
+      // Extension context can be invalidated during a reload.
+    }
+
     // Do not clear while the page has lost focus to the side panel; check
     // again when the user returns to the page.
     window.addEventListener('focus', () => {
+      suppressClearUntil = 0;
       if (!activeSelectionId) return;
       clearTimeout(selectionClearTimer);
       selectionClearTimer = setTimeout(notifySelectionCleared, 120);
@@ -127,6 +143,7 @@
 
   function notifySelectionCleared() {
     if (!activeSelectionId) return;
+    if (Date.now() < suppressClearUntil) return;
     if (!document.hasFocus()) return;
 
     const selection = window.getSelection();

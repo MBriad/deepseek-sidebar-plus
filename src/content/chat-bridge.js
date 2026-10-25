@@ -1753,7 +1753,10 @@
       || element.getAttribute('data-testid') === 'prompt-textarea'
       || element.getAttribute('data-testid') === 'composer-input'
     ) {
-      score += 1200;
+      score += 3000;
+    }
+    if (element.id === 'mobile-composer-prompt') {
+      score -= 1200;
     }
 
     const placeholder = String(element.getAttribute('placeholder') || '').toLowerCase();

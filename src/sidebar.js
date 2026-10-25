@@ -417,6 +417,20 @@ document.addEventListener('visibilitychange', () => {
 /* ------------------------------------------------------------------ */
 
 function focusChatFrame() {
+  // Focusing the sidebar can collapse the page selection; suppress that
+  // transient clear so the newly inserted selection is not immediately undone.
+  try {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (!tab?.id) return;
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'DS_SUPPRESS_SELECTION_CLEAR',
+        ms: 900
+      }).catch(() => {});
+    }).catch(() => {});
+  } catch {
+    // Ignore; focus still proceeds.
+  }
+
   const apply = () => {
     try { window.focus(); } catch { /* Ignore. */ }
     try { frame.focus(); } catch { /* Ignore. */ }
