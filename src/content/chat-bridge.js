@@ -143,6 +143,12 @@
         break;
       }
 
+      case 'DS_SEND_MESSAGE': {
+        const ok = sendCurrentMessage();
+        post('SEND_RESULT', { requestId: data.requestId, ok });
+        break;
+      }
+
       case 'DS_RELAY_START': {
         const input = findInput();
         if (input) {
@@ -1528,6 +1534,58 @@
     } catch {
       // Focus is best-effort; the input may have been re-rendered.
     }
+  }
+
+  function sendCurrentMessage() {
+    const input = findInput();
+    if (!input) return false;
+    const kind = isValueInput(input) ? 'value' : 'editable';
+    const value = readValue(input, kind).trim();
+    if (!value) return false;
+
+    focusInputEnd(input, kind);
+
+    const selectors = [
+      '[data-testid="send-button"]',
+      'button[aria-label="Send prompt"]',
+      'button[aria-label*="Send message"]',
+      'button[aria-label*="发送"]',
+      'button[aria-label*="Send"]',
+      '#send-button',
+      'button[data-testid*="send"]',
+      'button[class*="send" i]'
+    ];
+    for (const selector of selectors) {
+      for (const button of document.querySelectorAll(selector)) {
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        if (rect.width < 1 || rect.height < 1) continue;
+        if (style.visibility === 'hidden' || style.display === 'none') continue;
+        if (button.disabled || button.getAttribute('aria-disabled') === 'true') continue;
+        button.click();
+        return true;
+      }
+    }
+
+    input.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }));
+    input.dispatchEvent(new KeyboardEvent('keyup', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }));
+    return true;
   }
 
   function dispatchInputEvents(element, value) {

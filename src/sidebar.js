@@ -35,6 +35,8 @@ const DEFAULT_SETTINGS = {
   extractMode: 'readable',
   showPageToast: true,
   autoOpenLocalPdfReader: true,
+  pdfJsFollow: true,
+  enterSendsMessage: true,
   undoShortcut: 'Ctrl+Z'
 };
 
@@ -260,7 +262,8 @@ function onFrameMessage(event) {
     data.type === 'CLEAR_SELECTION_RESULT' ||
     data.type === 'QUOTE_RESULT' ||
     data.type === 'INPUT_RESULT' ||
-    data.type === 'RELAY_RESULT'
+    data.type === 'RELAY_RESULT' ||
+    data.type === 'SEND_RESULT'
   ) {
     const resolve = pendingRequests.get(data.requestId);
     if (resolve) {
@@ -518,13 +521,21 @@ async function applyTypeRelayText(text) {
   await sendToFrame('DS_RELAY_SET', { text: String(text || '') }, 4000);
 }
 
-async function finishTypeRelay(commit) {
+async function finishTypeRelay(commit, send = false) {
   if (!typeRelayActive) return;
   typeRelayActive = false;
   chrome.storage.local.remove('dsTypeRelay').catch(() => {});
   if (commit) {
     await sendToFrame('DS_RELAY_END', {}, 4000);
     activeSelectionId = '';
+    if (send && settings.enterSendsMessage !== false) {
+      try {
+        const result = await sendToFrame('DS_SEND_MESSAGE', {}, 6000);
+        if (!result?.ok) showToast('没有找到发送按钮，请手动点发送', 'error', 5000);
+      } catch {
+        showToast('发送失败，请手动点发送', 'error', 5000);
+      }
+    }
   } else {
     await sendToFrame('DS_RELAY_CANCEL', {}, 4000);
     activeSelectionId = '';
@@ -2906,6 +2917,8 @@ function normalizeSettings(value) {
     attachPageInfo: Boolean(value.attachPageInfo),
     showPageToast: value.showPageToast !== false,
     autoOpenLocalPdfReader: value.autoOpenLocalPdfReader !== false,
+    pdfJsFollow: value.pdfJsFollow !== false,
+    enterSendsMessage: value.enterSendsMessage !== false,
     undoShortcut: normalizeShortcutString(value.undoShortcut),
     extractMode: value.extractMode === 'full' ? 'full' : 'readable',
     maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000
@@ -2929,6 +2942,8 @@ function applySettingsToUI() {
   const extractMode = $('#setting-extract-mode');
   const maxChars = $('#setting-maxchars');
   const undoShortcut = $('#btn-undo-shortcut');
+  const pdfJsFollow = $('#setting-pdfjs-follow');
+  const enterSendsMessage = $('#setting-enter-sends');
 
   if (autoFill) autoFill.checked = Boolean(settings.autoFillSelection);
   if (mode) mode.value = settings.selectionMode;
@@ -2938,6 +2953,8 @@ function applySettingsToUI() {
   if (extractMode) extractMode.value = settings.extractMode;
   if (maxChars) maxChars.value = String(settings.maxPageChars);
   if (undoShortcut) undoShortcut.textContent = settings.undoShortcut;
+  if (pdfJsFollow) pdfJsFollow.checked = Boolean(settings.pdfJsFollow);
+  if (enterSendsMessage) enterSendsMessage.checked = Boolean(settings.enterSendsMessage);
 
   updateAutofillButton();
 }
@@ -3045,6 +3062,18 @@ function bindUI() {
   $('#setting-local-pdf-reader').addEventListener('change', (event) => {
     settings.autoOpenLocalPdfReader = event.target.checked;
     saveSettings();
+  });
+
+  $('#setting-pdfjs-follow').addEventListener('change', (event) => {
+    settings.pdfJsFollow = event.target.checked;
+    saveSettings();
+    showToast(settings.pdfJsFollow ? 'PDF.js 跟随已开启，重新打开 PDF 阅读器生效' : '已改回原生 PDF 阅读器', 'info', 4200);
+  });
+
+  $('#setting-enter-sends').addEventListener('change', (event) => {
+    settings.enterSendsMessage = event.target.checked;
+    saveSettings();
+    showToast(settings.enterSendsMessage ? '小窗 Enter 将直接发送' : '小窗 Enter 只完成，不发送');
   });
 
   $('#setting-extract-mode').addEventListener('change', (event) => {
@@ -3191,7 +3220,7 @@ function bindUI() {
     if (relay.type === 'DS_TYPE_RELAY_TEXT') {
       applyTypeRelayText(relay.text).catch(() => {});
     } else if (relay.type === 'DS_TYPE_RELAY_END') {
-      finishTypeRelay(true).catch(() => {});
+      finishTypeRelay(true, Boolean(relay.send)).catch(() => {});
     } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
       finishTypeRelay(false).catch(() => {});
     }

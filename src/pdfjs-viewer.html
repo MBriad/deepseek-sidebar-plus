@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF.js Viewer</title>
+  <link rel="stylesheet" href="vendor/pdfjs/web/pdf_viewer.css">
+  <style>
+    html, body { height: 100%; margin: 0; background: #525659; }
+    #pdfjs-container { position: absolute; inset: 0; overflow: auto; }
+    #pdfjs-viewer { position: relative; margin: 0 auto; padding: 24px 0; }
+    .pdfjs-page {
+      position: relative;
+      margin: 0 auto 18px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
+      overflow: hidden;
+    }
+    .pdfjs-page canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div id="pdfjs-container"><div id="pdfjs-viewer"></div></div>
+  <script type="module" src="pdfjs-viewer.js"></script>
+</body>
+</html>

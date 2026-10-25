@@ -343,7 +343,7 @@
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        stopTypeRelay(false);
+        stopTypeRelay(false, true);
         return;
       }
       if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
@@ -407,7 +407,7 @@
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
   }
 
-  function stopTypeRelay(cancel) {
+  function stopTypeRelay(cancel, send = false) {
     if (!typeRelayActive) return;
     typeRelayActive = false;
     typeRelayComposing = false;
@@ -432,7 +432,7 @@
       relaySend('DS_TYPE_RELAY_CANCEL');
       showToast('已撤回自动填入');
     } else {
-      relaySend('DS_TYPE_RELAY_END');
+      relaySend('DS_TYPE_RELAY_END', send ? { send: true } : {});
     }
   }
 

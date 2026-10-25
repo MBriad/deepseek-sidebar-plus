@@ -13,6 +13,7 @@
   const fileName = params.get('name') || deriveName(fileUrl);
 
   const viewer = document.getElementById('viewer');
+  const pdfJsFrame = document.getElementById('pdfjs-frame');
   const overlay = document.getElementById('overlay');
   const overlayText = document.getElementById('overlay-text');
   const status = document.getElementById('status');
@@ -30,6 +31,8 @@
   let typeRelayComposing = false;
   let typeRelayShortcut = 'Ctrl+Z';
   let lastPointer = null;
+  let pdfSelectionRect = null;
+  let pdfPollTimer = null;
 
   document.title = `${fileName} - DeepSeek PDF`;
   document.getElementById('file-name').textContent = fileName;
@@ -39,6 +42,7 @@
 
   window.addEventListener('message', onPdfMessage);
   window.addEventListener('pagehide', () => {
+    clearInterval(pdfPollTimer);
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   });
 
@@ -156,7 +160,7 @@
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        stopTypeRelay(false);
+        stopTypeRelay(false, true);
         return;
       }
       if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
@@ -181,7 +185,11 @@
     typeRelay.style.width = `${width}px`;
     let left = (window.innerWidth - width) / 2;
     let top = window.innerHeight - 60;
-    if (lastPointer) {
+    if (pdfSelectionRect) {
+      left = Math.min(Math.max(8, pdfSelectionRect.left), window.innerWidth - width - 8);
+      top = pdfSelectionRect.bottom + 8;
+      if (top + 42 > window.innerHeight - 8) top = Math.max(8, pdfSelectionRect.top - 52);
+    } else if (lastPointer) {
       left = Math.min(Math.max(8, lastPointer.x - 24), window.innerWidth - width - 8);
       top = lastPointer.y + 16;
       if (top + 42 > window.innerHeight - 8) top = Math.max(8, lastPointer.y - 52);
@@ -213,7 +221,7 @@
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
   }
 
-  function stopTypeRelay(cancel) {
+  function stopTypeRelay(cancel, send = false) {
     if (!typeRelayActive) return;
     typeRelayActive = false;
     typeRelayComposing = false;
@@ -227,8 +235,53 @@
     } catch {
       // Ignore.
     }
-    relaySend(cancel ? 'DS_TYPE_RELAY_CANCEL' : 'DS_TYPE_RELAY_END');
+    relaySend(cancel ? 'DS_TYPE_RELAY_CANCEL' : 'DS_TYPE_RELAY_END', send ? { send: true } : {});
     if (cancel) showToast('已撤回自动填入');
+  }
+
+  function startPdfJs(blobUrl) {
+    pdfJsFrame.hidden = false;
+    pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`;
+    overlay.classList.add('hidden');
+    status.textContent = '选中文字会自动填入';
+
+    clearInterval(pdfPollTimer);
+    const poll = () => {
+      try {
+        const frameWindow = pdfJsFrame.contentWindow;
+        if (!frameWindow) return;
+        const selection = frameWindow.getSelection();
+        const text = selection?.toString().replace(/\u00a0/g, ' ').trim() || '';
+        const frameRect = pdfJsFrame.getBoundingClientRect();
+
+        if (text) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.width || rect.height) {
+            pdfSelectionRect = {
+              left: frameRect.left + rect.left,
+              top: frameRect.top + rect.top,
+              right: frameRect.left + rect.right,
+              bottom: frameRect.top + rect.bottom,
+              width: rect.width,
+              height: rect.height
+            };
+          }
+          if (typeRelayActive) positionTypeRelay();
+        } else {
+          pdfSelectionRect = null;
+        }
+
+        if (text !== lastText) handleSelection(text);
+      } catch {
+        // The PDF.js frame may still be loading.
+      }
+    };
+    pdfJsFrame.addEventListener('load', () => {
+      poll();
+      pdfPollTimer = setInterval(poll, 320);
+    }, { once: true });
+    poll();
   }
 
   async function loadPdf() {
@@ -254,6 +307,12 @@
       }
 
       objectUrl = URL.createObjectURL(blob);
+      const stored = await chrome.storage.local.get('settings').catch(() => ({}));
+      if (stored.settings?.pdfJsFollow !== false) {
+        startPdfJs(objectUrl);
+        return;
+      }
+
       embed = document.createElement('embed');
       embed.type = 'application/pdf';
       embed.src = objectUrl;
