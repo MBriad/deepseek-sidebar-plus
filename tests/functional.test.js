@@ -45,7 +45,7 @@ async function waitFor(check, { timeout = 15000, interval = 200, message = 'cond
 async function setup() {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ds-sidebar-ext-'));
   context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    headless: process.env.PW_HEADLESS === '1',
     channel: process.env.PW_CHANNEL || undefined,
     timeout: 60000,
     viewport: { width: 1200, height: 900 },
@@ -291,7 +291,10 @@ const watchdog = setTimeout(() => {
   } finally {
     clearTimeout(watchdog);
     const exitCode = process.exitCode || 0;
-    if (server) await new Promise((resolve) => server.close(resolve));
+    if (server) {
+      server.closeAllConnections?.();
+      await new Promise((resolve) => server.close(resolve));
+    }
     if (context) {
       await Promise.race([
         context.close().catch(() => {}),

@@ -39,7 +39,7 @@ async function waitFor(check, timeout = 20000) {
     const pdfUrl = `http://127.0.0.1:${server.address().port}/text.pdf`;
 
     context = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'ds-auto-pdf-')), {
-      headless: false,
+      headless: process.env.PW_HEADLESS === '1',
       channel: process.env.PW_CHANNEL || undefined,
       timeout: 60000,
       args: [
@@ -74,7 +74,10 @@ async function waitFor(check, timeout = 20000) {
   } finally {
     clearTimeout(watchdog);
     const exitCode = process.exitCode || 0;
-    if (server) await new Promise((resolve) => server.close(resolve));
+    if (server) {
+      server.closeAllConnections?.();
+      await new Promise((resolve) => server.close(resolve));
+    }
     if (context) {
       await Promise.race([
         context.close().catch(() => {}),
