@@ -32,12 +32,22 @@
   let commandMatch = null;
   let commandTimer = null;
   let promptCommands = [];
+  let mentionHost = null;
+  let mentionItems = [];
+  let mentionIndex = 0;
+  let mentionMatch = null;
+  let mentionTimer = null;
+  let mentionSeq = 0;
+  let mentionRequestSeq = 0;
+  let mentionCache = { tabs: [], at: 0 };
+  const pendingTabRequests = new Map();
   let rootsCache = null;
   let rootsCacheAt = 0;
 
   window.addEventListener('message', onMessage);
   installQuoteSelection();
   installCommandPalette();
+  installMentionPalette();
   loadPromptCommands();
   announceReady();
   setTimeout(announceReady, 900);
@@ -120,6 +130,10 @@
 
       case 'DS_GET_INPUT':
         handleGetInputRequest(data);
+        break;
+
+      case 'TABS_RESULT':
+        handleTabsResult(data);
         break;
 
       default:
@@ -885,6 +899,326 @@
     commandMatch = null;
     commandItems = [];
     commandIndex = 0;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* @ mention palette for already-open tabs                          */
+  /* ---------------------------------------------------------------- */
+
+  function installMentionPalette() {
+    document.addEventListener('input', scheduleMentionPalette, true);
+    document.addEventListener('keydown', handleMentionKeyDown, true);
+
+    document.addEventListener('mousedown', (event) => {
+      if (mentionHost && event.composedPath().includes(mentionHost)) return;
+      hideMentionPalette();
+    }, true);
+
+    window.addEventListener('scroll', () => hideMentionPalette(), true);
+    window.addEventListener('resize', () => hideMentionPalette());
+  }
+
+  function scheduleMentionPalette() {
+    clearTimeout(mentionTimer);
+    mentionTimer = setTimeout(updateMentionPalette, 90);
+  }
+
+  async function updateMentionPalette() {
+    const input = findInput();
+    if (!input) {
+      hideMentionPalette();
+      return;
+    }
+
+    const match = getMentionMatch(input);
+    if (!match) {
+      hideMentionPalette();
+      return;
+    }
+
+    mentionMatch = match;
+    hideCommandPalette();
+    const requestSeq = ++mentionRequestSeq;
+    const tabs = await requestTabs();
+    if (requestSeq !== mentionRequestSeq || !mentionMatch) return;
+
+    const query = match.query.toLowerCase();
+    mentionItems = tabs
+      .filter((tab) => {
+        if (!query) return true;
+        return String(tab.title || '').toLowerCase().includes(query)
+          || String(tab.url || '').toLowerCase().includes(query);
+      })
+      .slice(0, 10);
+
+    mentionIndex = 0;
+    renderMentionPalette();
+  }
+
+  function requestTabs() {
+    const now = Date.now();
+    if (now - mentionCache.at < 1500) return Promise.resolve(mentionCache.tabs);
+
+    const requestId = ++mentionSeq;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingTabRequests.delete(requestId);
+        resolve([]);
+      }, 4000);
+
+      pendingTabRequests.set(requestId, { resolve, timer });
+      post('GET_TABS_REQUEST', { requestId });
+    });
+  }
+
+  function handleTabsResult(data) {
+    const pending = pendingTabRequests.get(data.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingTabRequests.delete(data.requestId);
+    const tabs = Array.isArray(data.tabs) ? data.tabs : [];
+    mentionCache = { tabs, at: Date.now() };
+    pending.resolve(tabs);
+  }
+
+  function getMentionMatch(input) {
+    const kind = isValueInput(input) ? 'value' : 'editable';
+    const text = readValue(input, kind);
+    let before = '';
+    let caret = 0;
+
+    if (kind === 'value') {
+      if (input.selectionStart !== input.selectionEnd) return null;
+      caret = input.selectionStart ?? text.length;
+      before = text.slice(0, caret);
+    } else {
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount || !selection.isCollapsed) return null;
+      const range = selection.getRangeAt(0);
+      if (!input.contains(range.startContainer)) return null;
+      const beforeRange = document.createRange();
+      beforeRange.selectNodeContents(input);
+      try {
+        beforeRange.setEnd(range.startContainer, range.startOffset);
+      } catch {
+        return null;
+      }
+      before = beforeRange.toString();
+      caret = before.length;
+    }
+
+    const match = before.match(/(^|[\s\n])@([^\s@]*)$/);
+    if (!match) return null;
+
+    const query = match[2];
+    const start = caret - query.length - 1;
+    if (start < 0) return null;
+
+    return { input, kind, text, caret, start, end: caret, query };
+  }
+
+  function createMentionHost() {
+    if (mentionHost) return;
+
+    mentionHost = document.createElement('div');
+    mentionHost.id = 'ds-mention-host';
+    mentionHost.style.cssText = 'all:initial;position:fixed;z-index:2147483645;display:none;pointer-events:none;';
+
+    const root = mentionHost.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        * { box-sizing: border-box; }
+        .panel {
+          overflow: hidden;
+          border: 1px solid #d8dde7;
+          border-radius: 10px;
+          background: #fff;
+          color: #1b1f2a;
+          box-shadow: 0 12px 32px rgba(15, 23, 42, .25);
+          font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+          pointer-events: auto;
+        }
+        .head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 7px 10px 6px;
+          border-bottom: 1px solid #eef1f5;
+        }
+        .title { color: #3d63dd; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+        .hint { color: #8a96a8; font-size: 10px; white-space: nowrap; }
+        .list { max-height: 230px; overflow: auto; padding: 4px; }
+        .item {
+          display: block;
+          width: 100%;
+          padding: 7px 8px;
+          border: 0;
+          border-radius: 7px;
+          background: transparent;
+          color: #1b1f2a;
+          text-align: left;
+          cursor: pointer;
+        }
+        .item.active { background: #eef2ff; }
+        .item-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+        .item-url { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; color: #8a96a8; font-size: 10px; }
+        .badge { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: #e8edff; color: #3d63dd; font-size: 9px; font-weight: 700; vertical-align: 1px; }
+      </style>
+      <div class="panel">
+        <div class="head"><span class="title">打开标签页</span><span class="hint">↑↓ 选择 · Enter 读取 · Esc 关闭</span></div>
+        <div class="list"></div>
+      </div>`;
+
+    document.documentElement.appendChild(mentionHost);
+  }
+
+  function renderMentionPalette() {
+    if (!mentionMatch || !mentionItems.length) {
+      hideMentionPalette();
+      return;
+    }
+
+    createMentionHost();
+    if (mentionIndex >= mentionItems.length) mentionIndex = 0;
+
+    const root = mentionHost.shadowRoot;
+    const list = root.querySelector('.list');
+    list.textContent = '';
+
+    mentionItems.forEach((tab, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `item${index === mentionIndex ? ' active' : ''}`;
+      button.title = tab.url;
+
+      const title = document.createElement('span');
+      title.className = 'item-title';
+      title.textContent = tab.title || tab.url;
+
+      if (tab.pdf) {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'PDF';
+        title.appendChild(badge);
+      }
+
+      const url = document.createElement('span');
+      url.className = 'item-url';
+      url.textContent = tab.url;
+
+      button.appendChild(title);
+      button.appendChild(url);
+      button.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        chooseMention(index);
+      });
+      button.addEventListener('mouseenter', () => {
+        mentionIndex = index;
+        updateMentionActive();
+      });
+      list.appendChild(button);
+    });
+
+    updateMentionActive();
+    positionMentionHost();
+    mentionHost.style.display = 'block';
+  }
+
+  function updateMentionActive() {
+    if (!mentionHost) return;
+    mentionHost.shadowRoot.querySelectorAll('.item').forEach((item, index) => {
+      item.classList.toggle('active', index === mentionIndex);
+    });
+  }
+
+  function positionMentionHost() {
+    if (!mentionHost || !mentionMatch) return;
+    const rect = mentionMatch.input.getBoundingClientRect();
+    const width = Math.min(460, Math.max(280, rect.width));
+    const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left));
+
+    mentionHost.style.width = `${width}px`;
+    mentionHost.style.left = `${left}px`;
+
+    if (rect.top > 330) {
+      mentionHost.style.top = 'auto';
+      mentionHost.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 8)}px`;
+    } else {
+      mentionHost.style.top = `${Math.min(window.innerHeight - 320, rect.bottom + 8)}px`;
+      mentionHost.style.bottom = 'auto';
+    }
+  }
+
+  function handleMentionKeyDown(event) {
+    if (!mentionHost || mentionHost.style.display === 'none') return;
+    if (event.isComposing || event.keyCode === 229) return;
+
+    const input = findInput();
+    if (!input) return;
+    if (!(event.target === input || input.contains(event.target))) return;
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      mentionIndex = (mentionIndex + direction + mentionItems.length) % mentionItems.length;
+      updateMentionActive();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      event.stopPropagation();
+      chooseMention(mentionIndex);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      hideMentionPalette();
+    }
+  }
+
+  function chooseMention(index) {
+    const tab = mentionItems[index];
+    if (!tab || !mentionMatch) return;
+
+    const { input, kind, text, start, end } = mentionMatch;
+    if (!text.slice(start, end).startsWith('@')) {
+      hideMentionPalette();
+      return;
+    }
+
+    const next = `${text.slice(0, start)}${text.slice(end)}`;
+    if (kind === 'value') {
+      setValueInput(input, next);
+      try {
+        input.setSelectionRange(start, start);
+      } catch {
+        // Ignore.
+      }
+    } else {
+      setEditableInput(input, next);
+    }
+
+    autoSelection = null;
+    hideMentionPalette();
+    showToast(`正在读取标签页：${tab.title || tab.url}`);
+    post('READ_TAB_REQUEST', { tabId: tab.id });
+  }
+
+  function hideMentionPalette() {
+    if (mentionHost) mentionHost.style.display = 'none';
+    mentionMatch = null;
+    mentionItems = [];
+    mentionIndex = 0;
   }
 
   function composeValue(current, incoming, mode) {

@@ -43,6 +43,7 @@ let promptEditId = '';
 let promptSearchTerm = '';
 let reading = false;
 let fileAttaching = false;
+let mentionReading = false;
 let lastPdfAttachUrl = '';
 let lastPdfAttachAt = 0;
 let fillChain = Promise.resolve();
@@ -140,6 +141,16 @@ function onFrameMessage(event) {
 
   const data = event.data;
   if (!data || typeof data !== 'object' || data.source !== 'ds-chat') return;
+
+  if (data.type === 'GET_TABS_REQUEST') {
+    respondTabsRequest(event.source, data.requestId);
+    return;
+  }
+
+  if (data.type === 'READ_TAB_REQUEST') {
+    handleMentionTab(data.tabId);
+    return;
+  }
 
   if (data.type === 'READY') {
     markBridgeReady();
@@ -526,6 +537,35 @@ async function openPdfReader(pdfUrl, title) {
   hideBanner();
 }
 
+async function openExtensionDetails() {
+  try {
+    await chrome.tabs.create({ url: `edge://extensions/?id=${chrome.runtime.id}` });
+  } catch {
+    showToast('请手动打开 edge://extensions，找到本扩展 → 详细信息 → 允许访问文件 URL', 'info', 7000);
+  }
+}
+
+async function isFileSchemeAllowed() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(Boolean(value));
+    };
+    try {
+      if (!chrome.extension?.isAllowedFileSchemeAccess) {
+        finish(true);
+        return;
+      }
+      chrome.extension.isAllowedFileSchemeAccess((allowed) => finish(allowed));
+      setTimeout(() => finish(true), 600);
+    } catch {
+      finish(true);
+    }
+  });
+}
+
 async function openCurrentPdfReader() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -678,7 +718,13 @@ async function attachPdfToChat(info) {
     lastPdfAttachAt = Date.now();
     return { pdf: true, attached: true, name: file.name };
   } catch (error) {
-    showBanner(`PDF 处理失败：${error.message}`, '重试', () => attachPdfToChat(info), { type: 'error' });
+    const isLocalFile = /^file:/i.test(info.pdfUrl || '');
+    showBanner(
+      `PDF 处理失败：${error.message}`,
+      isLocalFile ? '打开扩展详情' : '重试',
+      isLocalFile ? openExtensionDetails : () => attachPdfToChat(info),
+      { type: 'error' }
+    );
     return null;
   } finally {
     fileAttaching = false;
@@ -690,18 +736,31 @@ async function fetchPdfFile(url) {
     throw new Error('这个 PDF 地址不支持读取。');
   }
 
+  const isLocalFile = /^file:/i.test(url);
+  if (isLocalFile && !(await isFileSchemeAllowed())) {
+    throw new Error('本地 PDF 需要允许访问文件 URL。请打开 edge://extensions → 本扩展“详细信息” → 开启“允许访问文件 URL”，然后重试。');
+  }
+
   let response;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60000);
   try {
     response = await fetch(url, {
-      credentials: 'include',
+      credentials: isLocalFile ? 'omit' : 'include',
       redirect: 'follow',
       cache: 'no-cache',
       signal: controller.signal
     });
   } catch (error) {
-    throw new Error(error.name === 'AbortError' ? '下载 PDF 超时。' : `无法下载 PDF：${error.message}`);
+    if (isLocalFile && error.name !== 'AbortError') {
+      try {
+        response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      } catch (retryError) {
+        throw new Error(retryError.name === 'AbortError' ? '下载 PDF 超时。' : `无法读取本地 PDF：${retryError.message}`);
+      }
+    } else {
+      throw new Error(error.name === 'AbortError' ? '下载 PDF 超时。' : `无法下载 PDF：${error.message}`);
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -882,6 +941,67 @@ async function attachPageFile(page) {
     return false;
   } finally {
     fileAttaching = false;
+  }
+}
+
+async function listOpenTabs() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  return tabs
+    // @ is for the OTHER open tabs. The page currently behind the sidebar is
+    // handled by the normal “读本页” button and is intentionally excluded.
+    .filter((tab) => tab?.id && !tab.active && /^(https?|file):/i.test(tab.url || ''))
+    .map((tab) => ({
+      id: tab.id,
+      title: String(tab.title || tab.url || '').slice(0, 140),
+      url: tab.url || '',
+      pdf: isPdfTabUrl(tab.url)
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .slice(0, 20);
+}
+
+async function respondTabsRequest(source, requestId) {
+  try {
+    const tabs = await listOpenTabs();
+    source.postMessage({ source: 'ds-sidebar', type: 'TABS_RESULT', requestId, tabs }, CHAT_ORIGIN);
+  } catch (error) {
+    source.postMessage({
+      source: 'ds-sidebar',
+      type: 'TABS_RESULT',
+      requestId,
+      tabs: [],
+      error: error.message || '读取标签页列表失败'
+    }, CHAT_ORIGIN);
+  }
+}
+
+async function handleMentionTab(tabId) {
+  if (mentionReading) return;
+  mentionReading = true;
+
+  try {
+    const tab = await chrome.tabs.get(Number(tabId)).catch(() => null);
+    if (!tab?.id || !tab.url) throw new Error('标签页已经关闭或无法访问。');
+
+    showBanner(`正在读取标签页「${tab.title || tab.url}」…`, '', null, { kind: 'mention-tab' });
+    const response = await sendBackground({
+      type: 'DS_EXTRACT_ACTIVE_PAGE',
+      tabId: tab.id,
+      maxChars: PAGE_EXTRACT_MAX,
+      mode: settings.extractMode
+    });
+
+    if (response?.pdf) {
+      await attachPdfToChat(response);
+      return;
+    }
+    if (!response?.ok) throw new Error(response?.error || '读取标签页失败。');
+
+    await attachPageFile(response.page);
+  } catch (error) {
+    showBanner(`读取标签页失败：${error.message}`, '重试', () => handleMentionTab(tabId), { type: 'error' });
+  } finally {
+    mentionReading = false;
   }
 }
 
@@ -1799,6 +1919,8 @@ window.__DS_TEST__ = {
   fillSelection,
   attachPageFile,
   fillPageText,
+  listOpenTabs,
+  handleMentionTab,
   readPage,
   extractAndShow,
   grabCurrentSelection,

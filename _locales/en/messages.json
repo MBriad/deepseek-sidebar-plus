@@ -5,7 +5,7 @@
   },
   "extDescription": {
     "description": "Short store description (keep under 132 characters)",
-    "message": "Unofficial DeepSeek sidebar: page documents, selection autofill, chat quotes, prompt commands, and PDF support."
+    "message": "Unofficial DeepSeek sidebar: page documents, tab @ mentions, selection autofill, prompt commands, and PDF support."
   },
   "actionTitle": {
     "description": "Toolbar button tooltip",
