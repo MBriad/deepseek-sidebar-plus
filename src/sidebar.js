@@ -467,6 +467,13 @@ async function startTypeRelay() {
   if (!tab?.id) return;
 
   await sendToFrame('DS_RELAY_START', {}, 4000);
+  chrome.storage.local.set({
+    dsPdfRelayStart: {
+      tabId: tab.id,
+      shortcut: settings.undoShortcut || 'Ctrl+Z',
+      seq: Date.now()
+    }
+  }).catch(() => {});
   let result = null;
   try {
     result = await chrome.tabs.sendMessage(tab.id, {
@@ -496,6 +503,9 @@ async function stopTypeRelayPage(cancel) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
+      chrome.storage.local.set({
+        dsPdfRelayStop: { tabId: tab.id, cancel: Boolean(cancel), seq: Date.now() }
+      }).catch(() => {});
       await chrome.tabs.sendMessage(tab.id, {
         type: 'DS_STOP_TYPE_RELAY',
         cancel: Boolean(cancel),

@@ -405,6 +405,13 @@
       typeRelayHost.style.display = 'none';
       return;
     }
+    // Dismiss Edge's floating copy/paste selection toolbar. The overlay already
+    // has its own anchor rect, so it can keep following the original selection.
+    try {
+      window.getSelection()?.removeAllRanges();
+    } catch {
+      // Ignore.
+    }
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
   }
 

@@ -1,6 +1,6 @@
-# v1.11.14 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.11.15 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.11.14。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
+Edge 侧边栏增强版 v1.11.15。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
 
 ## 双聊天服务
 
@@ -17,6 +17,8 @@ Edge 侧边栏增强版 v1.11.14。非官方扩展，与 DeepSeek、OpenAI/ChatG
 - 网页小浮窗按选区坐标定位：默认紧贴高亮文字下方，空间不足放到上方，滚动/缩放时重新定位。
 - 小浮窗按 `Enter` 完成并立即消失；开启“Enter 直接发送”时会点击聊天发送按钮，关闭则只完成。
 - 中文输入法 composition 事件不再被快捷键处理拦截；网页和 PDF 小窗都能正常输入中文。
+- 划词填入后主动清除网页选区，收起 Edge 的复制/粘贴浮动工具条，避免它挡住小窗或 Enter。
+- ChatGPT 页面按 Enter 时也会收起残留选区工具条，避免卡在 Enter。
 - 网页到侧边栏的同步使用本地存储通道，避免 side panel 收不到 runtime 转发。
 - 网页里的在线 PDF 链接会由侧边栏自动切换到 PDF.js 跟随阅读器，不再停留在 Edge 原生 PDF 页面。
 - 增强 PDF 阅读器默认改用本地 PDF.js 渲染：能取得选区矩形，小浮窗贴在高亮文字下方，支持直接输入、Enter 发送和 Ctrl+Z。
@@ -60,9 +62,9 @@ Edge 侧边栏增强版 v1.11.14。非官方扩展，与 DeepSeek、OpenAI/ChatG
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.11.14-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.11.14.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.11.14-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
+- `deepseek-sidebar-plus-v1.11.15-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.11.15.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.11.15-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
 
 ## 安装
 
@@ -81,7 +83,7 @@ Edge 侧边栏增强版 v1.11.14。非官方扩展，与 DeepSeek、OpenAI/ChatG
 ## 注意
 
 - 需要 Microsoft Edge 桌面版 116+；手机 Edge 不支持这类侧边栏扩展。
-- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.14 新增网页标签，暂不覆盖审核中的商店包。
+- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.15 新增网页标签，暂不覆盖审核中的商店包。
 - 未上架商店时不会自动更新；更新请覆盖同一文件夹后点“重新加载”。
 - 未打包扩展的 ID 默认跟路径走；移动/换文件夹会丢失原设置和提示词库。
 - 隐私政策：https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html

@@ -33,6 +33,7 @@
   let lastPointer = null;
   let pdfSelectionRect = null;
   let pdfPollTimer = null;
+  let pdfTabId = 0;
 
   document.title = `${fileName} - DeepSeek PDF`;
   document.getElementById('file-name').textContent = fileName;
@@ -44,6 +45,24 @@
   window.addEventListener('pagehide', () => {
     clearInterval(pdfPollTimer);
     if (objectUrl) URL.revokeObjectURL(objectUrl);
+  });
+
+  chrome.tabs.getCurrent((tab) => {
+    pdfTabId = tab?.id || 0;
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+
+    const start = changes.dsPdfRelayStart?.newValue;
+    if (start && (!start.tabId || Number(start.tabId) === pdfTabId)) {
+      startTypeRelay(String(start.shortcut || 'Ctrl+Z'));
+    }
+
+    const stop = changes.dsPdfRelayStop?.newValue;
+    if (stop && (!stop.tabId || Number(stop.tabId) === pdfTabId)) {
+      stopTypeRelay(Boolean(stop.cancel));
+    }
   });
 
   document.addEventListener('pointerdown', (event) => {

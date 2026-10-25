@@ -634,6 +634,11 @@
   function installCommandPalette() {
     document.addEventListener('input', scheduleCommandPalette, true);
     window.addEventListener('keydown', handleCommandKeyDown, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) selection.removeAllRanges();
+    }, true);
 
     document.addEventListener('mousedown', (event) => {
       if (commandHost && event.composedPath().includes(commandHost)) return;

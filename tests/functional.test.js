@@ -135,6 +135,9 @@ async function testWebRelay() {
   await waitFor(() => article.evaluate(() => document.activeElement?.id === 'ds-type-relay'), {
     message: 'floating input focus'
   });
+  await waitFor(() => article.evaluate(() => window.getSelection()?.toString() === ''), {
+    message: 'selection toolbar dismissal'
+  });
 
   await article.evaluate(() => {
     const input = document.querySelector('#ds-type-relay').shadowRoot.querySelector('input');
