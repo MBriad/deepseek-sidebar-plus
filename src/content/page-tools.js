@@ -228,9 +228,13 @@
 
   function relaySend(type, payload = {}) {
     try {
-      chrome.runtime.sendMessage({ type, ...payload }, () => {
-        void chrome.runtime.lastError;
-      });
+      chrome.storage.local.set({
+        dsTypeRelay: {
+          type,
+          ...payload,
+          seq: Date.now()
+        }
+      }).catch(() => {});
     } catch {
       // Extension context invalidated.
     }

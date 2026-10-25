@@ -471,6 +471,12 @@ async function startTypeRelay() {
   } catch {
     typeRelayActive = false;
   }
+
+  if (typeRelayActive) {
+    showToast('直接输入已开启：在网页打字，Ctrl+Z 撤回', 'success', 3500);
+  } else {
+    showToast('直接输入未开启：请刷新网页后重试', 'error', 5000);
+  }
 }
 
 async function stopTypeRelayPage(cancel) {
@@ -495,6 +501,7 @@ async function applyTypeRelayText(text) {
 async function finishTypeRelay(commit) {
   if (!typeRelayActive) return;
   typeRelayActive = false;
+  chrome.storage.local.remove('dsTypeRelay').catch(() => {});
   if (commit) {
     await sendToFrame('DS_RELAY_END', {}, 4000);
     activeSelectionId = '';
@@ -3154,9 +3161,20 @@ function bindUI() {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.settings) return;
-    settings = normalizeSettings(changes.settings.newValue || {});
-    applySettingsToUI();
+    if (area !== 'local') return;
+    if (changes.settings) {
+      settings = normalizeSettings(changes.settings.newValue || {});
+      applySettingsToUI();
+    }
+    const relay = changes.dsTypeRelay?.newValue;
+    if (!relay) return;
+    if (relay.type === 'DS_TYPE_RELAY_TEXT') {
+      applyTypeRelayText(relay.text).catch(() => {});
+    } else if (relay.type === 'DS_TYPE_RELAY_END') {
+      finishTypeRelay(true).catch(() => {});
+    } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
+      finishTypeRelay(false).catch(() => {});
+    }
   });
 }
 
