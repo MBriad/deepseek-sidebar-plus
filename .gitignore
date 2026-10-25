@@ -9,6 +9,8 @@
 .store-*/
 .portable-*/
 node_modules/
+test-results/
+dist/
 
 # OS / editor
 .DS_Store
