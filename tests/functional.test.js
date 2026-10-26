@@ -171,6 +171,32 @@ async function testWebRelay() {
   console.log('PASS web selection relay + direct typing + Ctrl+Z');
 }
 
+async function testWebMouseSelection() {
+  const sidebar = await openSidebar();
+  const article = await context.newPage();
+  await article.goto('https://example.com/article');
+  await article.bringToFront();
+
+  const box = await article.locator('#pick').boundingBox();
+  assert.ok(box, 'article paragraph missing');
+  await article.mouse.move(box.x + 4, box.y + box.height / 2);
+  await article.mouse.down();
+  await article.mouse.move(box.x + box.width - 4, box.y + box.height / 2, { steps: 12 });
+  await article.mouse.up();
+
+  const chat = await chatFrame(sidebar);
+  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes('This highlighted sentence'), {
+    message: 'real mouse selection fill'
+  });
+  await waitFor(() => article.evaluate(() => document.activeElement?.id === 'ds-type-relay'), {
+    message: 'real mouse floating input'
+  });
+
+  await article.close();
+  await sidebar.close();
+  console.log('PASS real mouse selection + floating input');
+}
+
 async function testEnterSends() {
   const sidebar = await openSidebar();
   const article = await context.newPage();
@@ -310,6 +336,7 @@ async function testChatgptProvider() {
   try {
     await setup();
     await testWebRelay();
+    await testWebMouseSelection();
     await testEnterSends();
     await testPdfFollowAndSend();
     await testChatgptProvider();

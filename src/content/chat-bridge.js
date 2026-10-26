@@ -260,14 +260,15 @@
 
       const kind = isValueInput(input) ? 'value' : 'editable';
       const current = readValue(input, kind);
-      // If the input still contains exactly the previous auto-fill, undo
-      // should go back to the draft before that fill, not to the previous
-      // selection text.
-      const previousValue = previousAuto && current === previousAuto.nextValue
-        ? previousAuto.previousValue
-        : current;
+      // If the input still contains exactly the previous auto-fill, a new
+      // selection replaces that auto-fill instead of appending to it. Without
+      // this, slow PDF selections can accumulate several partial highlights and
+      // suddenly produce a much larger block of text.
+      const replacingAuto = Boolean(selectionId && previousAuto && current === previousAuto.nextValue);
+      const baseValue = replacingAuto ? previousAuto.previousValue : current;
+      const previousValue = baseValue;
       const mode = ['replace', 'append', 'smart'].includes(data.mode) ? data.mode : 'smart';
-      const next = composeValue(current, incoming, mode);
+      const next = composeValue(baseValue, incoming, mode);
 
       if (kind === 'value') {
         setValueInput(input, next);
