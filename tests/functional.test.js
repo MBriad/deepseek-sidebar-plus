@@ -161,6 +161,12 @@ async function testWebRelay() {
     message: 'direct typing relay'
   });
 
+  await article.keyboard.press('Backspace');
+  await waitFor(async () => {
+    const value = await chat.locator('#chat-input').inputValue();
+    return value.endsWith('DIRECT TYPIN') && !value.endsWith('DIRECT TYPING');
+  }, { message: 'Backspace relay' });
+
   await article.keyboard.press('Control+Z');
   await waitFor(async () => (await chat.locator('#chat-input').inputValue()) === '', {
     message: 'Ctrl+Z undo'

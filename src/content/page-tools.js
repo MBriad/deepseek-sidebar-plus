@@ -103,6 +103,34 @@
   /* Selection capture                                                */
   /* ---------------------------------------------------------------- */
 
+  function deleteRelayCharacter(forward = false) {
+    if (!typeRelay) return;
+    const value = typeRelay.value;
+    const start = Number.isInteger(typeRelay.selectionStart) ? typeRelay.selectionStart : value.length;
+    const end = Number.isInteger(typeRelay.selectionEnd) ? typeRelay.selectionEnd : start;
+    let next;
+    let caret;
+    if (start !== end) {
+      next = value.slice(0, start) + value.slice(end);
+      caret = start;
+    } else if (forward) {
+      if (start >= value.length) return;
+      next = value.slice(0, start) + value.slice(start + 1);
+      caret = start;
+    } else {
+      if (start <= 0) return;
+      next = value.slice(0, start - 1) + value.slice(start);
+      caret = start - 1;
+    }
+    typeRelay.value = next;
+    try {
+      typeRelay.setSelectionRange(caret, caret);
+    } catch {
+      // Ignore.
+    }
+    relaySend('DS_TYPE_RELAY_TEXT', { text: next });
+  }
+
   function handlePageRelayKey(event) {
     if (!typeRelayActive) return;
     if (event.target === typeRelay) return;
@@ -125,11 +153,10 @@
       stopTypeRelay(true);
       return;
     }
-    if (event.key === 'Backspace') {
+    if (event.key === 'Backspace' || event.key === 'Delete') {
       event.preventDefault();
       event.stopPropagation();
-      typeRelay.value = typeRelay.value.slice(0, -1);
-      relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+      deleteRelayCharacter(event.key === 'Delete');
       return;
     }
 
@@ -406,6 +433,12 @@
         event.stopPropagation();
         event.stopImmediatePropagation();
         stopTypeRelay(false, true);
+        return;
+      }
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteRelayCharacter(event.key === 'Delete');
         return;
       }
       if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
