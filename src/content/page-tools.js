@@ -56,6 +56,7 @@
   let selectionSeq = 0;
   let activeSelectionId = '';
   let suppressClearUntil = 0;
+  let ignoreSyntheticClear = false;
   let typeRelay = null;
   let typeRelayHost = null;
   let typeRelayAnchor = null;
@@ -102,10 +103,52 @@
   /* Selection capture                                                */
   /* ---------------------------------------------------------------- */
 
+  function handlePageRelayKey(event) {
+    if (!typeRelayActive) return;
+    if (event.target === typeRelay) return;
+    if (event.isComposing || event.keyCode === 229) return;
+
+    const target = event.target;
+    if (target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]')) {
+      return;
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      stopTypeRelay(false, true);
+      return;
+    }
+    if (event.key === 'Escape' || shortcutMatches(event, typeRelayShortcut)) {
+      event.preventDefault();
+      event.stopPropagation();
+      stopTypeRelay(true);
+      return;
+    }
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      event.stopPropagation();
+      typeRelay.value = typeRelay.value.slice(0, -1);
+      relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+      return;
+    }
+
+    let character = event.key.length === 1 ? event.key : '';
+    if (!character && event.code === 'Space') character = ' ';
+    if (!character && /^Key[A-Z]$/.test(event.code || '')) character = event.code.slice(3).toLowerCase();
+    if (!character && /^Digit[0-9]$/.test(event.code || '')) character = event.code.slice(5);
+    if (character && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      typeRelay.value += character;
+      relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
+    }
+  }
+
   function installSelectionCapture() {
     const schedule = () => {
       clearTimeout(selectionTimer);
-      selectionTimer = setTimeout(captureSelection, 160);
+      selectionTimer = setTimeout(captureSelection, 40);
     };
 
     document.addEventListener('pointerup', (event) => {
@@ -120,8 +163,10 @@
 
     // A real click on the page is an explicit cancel/return: end any focus
     // suppression immediately and re-check the selection.
-    document.addEventListener('pointerdown', () => {
+    document.addEventListener('pointerdown', (event) => {
       if (!activeSelectionId) return;
+      if (typeRelayHost && event.composedPath().includes(typeRelayHost)) return;
+      ignoreSyntheticClear = false;
       suppressClearUntil = 0;
       clearTimeout(selectionClearTimer);
       selectionClearTimer = setTimeout(notifySelectionCleared, 180);
@@ -130,6 +175,7 @@
       if (event.key === 'Shift' || event.shiftKey) schedule();
     }, true);
 
+    document.addEventListener('keydown', handlePageRelayKey, true);
     document.addEventListener('selectionchange', () => {
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
@@ -179,6 +225,7 @@
   function notifySelectionCleared() {
     if (!activeSelectionId) return;
     if (typeRelayActive) return;
+    if (ignoreSyntheticClear) return;
     if (Date.now() < suppressClearUntil) return;
     // We clear the DOM selection ourselves immediately after capturing it so
     // Edge's copy/search mini toolbar goes away. Do not report that synthetic
@@ -210,6 +257,7 @@
 
   function sendSelectionCleared(selectionId) {
     if (!selectionId) return;
+    if (ignoreSyntheticClear) return;
     if (Date.now() - lastSelectionAt < 6000) return;
     if (activeSelectionId && activeSelectionId !== selectionId) return;
 
@@ -401,15 +449,20 @@
     positionTypeRelay();
     typeRelayActive = true;
     typeRelayComposing = false;
-    try {
-      relay.focus({ preventScroll: true });
-    } catch {
-      // Focus is best-effort.
-    }
+    const focusRelay = () => {
+      try {
+        relay.focus({ preventScroll: true });
+      } catch {
+        // Focus is best-effort.
+      }
+    };
+    focusRelay();
     if (typeRelayHost.shadowRoot?.activeElement !== relay) {
-      typeRelayActive = false;
-      typeRelayHost.style.display = 'none';
-      return;
+      // Edge may keep focus in the browser selection toolbar. Keep the relay
+      // alive and retry; the document-level key handler is a second path.
+      setTimeout(() => {
+        if (typeRelayActive) focusRelay();
+      }, 80);
     }
     // Dismiss Edge's floating copy/paste selection toolbar. The overlay already
     // has its own anchor rect, so it can keep following the original selection.
@@ -425,6 +478,7 @@
     if (!typeRelayActive) return;
     typeRelayActive = false;
     typeRelayComposing = false;
+    ignoreSyntheticClear = false;
     activeSelectionId = '';
     lastSelectionText = '';
     lastSelectionAt = 0;
@@ -527,6 +581,7 @@
       const selectionId = externalSelectionId ||
         `${now}-${++selectionSeq}-${Math.random().toString(36).slice(2, 6)}`;
       activeSelectionId = selectionId;
+      ignoreSyntheticClear = true;
       clearTimeout(selectionClearTimer);
       lastSelectionText = text;
       lastSelectionAt = now;
