@@ -89,7 +89,6 @@ async function resolvePageNumber(pdfDocument, destination) {
 
 async function renderOutline(pdfDocument) {
   const outline = await pdfDocument.getOutline().catch(() => null);
-  if (!outline?.length) return;
 
   const toggle = document.getElementById('pdfjs-outline-toggle');
   const panel = document.getElementById('pdfjs-outline');
@@ -97,27 +96,40 @@ async function renderOutline(pdfDocument) {
   toggle.hidden = false;
   toggle.addEventListener('click', () => panel.classList.toggle('open'));
 
+  function pageButton(pageNumber, label, depth = 1) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.className = `pdfjs-outline-depth-${Math.min(depth, 4)}`;
+    if (pageNumber) {
+      button.dataset.pageNumber = String(pageNumber);
+      button.addEventListener('click', () => {
+        const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
+        page?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    } else {
+      button.disabled = true;
+    }
+    list.appendChild(button);
+  }
+
   async function renderItems(items, depth) {
     for (const item of items) {
       if (!item?.title) continue;
       const pageNumber = item.dest ? await resolvePageNumber(pdfDocument, item.dest) : null;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = String(item.title).trim();
-      button.className = `pdfjs-outline-depth-${Math.min(depth, 4)}`;
-      if (pageNumber) {
-        button.dataset.pageNumber = String(pageNumber);
-        button.addEventListener('click', () => {
-          const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
-          page?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        });
-      } else {
-        button.disabled = true;
-      }
-      list.appendChild(button);
+      pageButton(pageNumber, String(item.title).trim(), depth);
       if (item.items?.length) await renderItems(item.items, depth + 1);
     }
   }
 
-  await renderItems(outline, 1);
+  if (outline?.length) {
+    await renderItems(outline, 1);
+    return;
+  }
+
+  // Some PDFs have no bookmarks. Keep a page list so the enhanced reader
+  // still has a usable directory instead of silently hiding the panel.
+  for (let page = 1; page <= pdfDocument.numPages; page += 1) {
+    pageButton(page, `第 ${page} 页`, 1);
+  }
 }

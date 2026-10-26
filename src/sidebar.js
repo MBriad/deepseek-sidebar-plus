@@ -899,6 +899,21 @@ async function grabCurrentSelection() {
 /* ------------------------------------------------------------------ */
 
 async function readPage() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.url?.startsWith(chrome.runtime.getURL('src/pdf-reader.html'))) {
+      const readerUrl = new URL(tab.url);
+      const pdfUrl = readerUrl.searchParams.get('file');
+      if (pdfUrl) {
+        return attachPdfToChat({
+          pdfUrl,
+          title: readerUrl.searchParams.get('name') || tab.title || 'PDF 文档'
+        });
+      }
+    }
+  } catch {
+    // Fall through to normal page extraction.
+  }
   return extractAndShow({});
 }
 
