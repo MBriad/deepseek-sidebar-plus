@@ -11,6 +11,7 @@
   const params = new URLSearchParams(location.search);
   const fileUrl = params.get('file') || '';
   const fileName = params.get('name') || deriveName(fileUrl);
+  const initialPage = Math.max(1, Number(params.get('page')) || 1);
 
   const viewer = document.getElementById('viewer');
   const pdfJsFrame = document.getElementById('pdfjs-frame');
@@ -229,6 +230,13 @@
   function startTypeRelay(shortcut) {
     if (!lastSelectionId) return;
     typeRelayShortcut = shortcut || 'Ctrl+Z';
+    let pdfScrollTop = 0;
+    try {
+      pdfScrollTop = pdfJsFrame.contentWindow?.document
+        ?.getElementById('pdfjs-container')?.scrollTop || 0;
+    } catch {
+      // PDF.js may still be loading.
+    }
     const relay = ensureTypeRelay();
     relay.value = '';
     relay.style.display = 'block';
@@ -250,7 +258,10 @@
       }
     }, 60);
     try {
-      pdfJsFrame.contentWindow?.getSelection()?.removeAllRanges();
+      const frameWindow = pdfJsFrame.contentWindow;
+      frameWindow?.getSelection()?.removeAllRanges();
+      const frameContainer = frameWindow?.document?.getElementById('pdfjs-container');
+      if (frameContainer) frameContainer.scrollTop = pdfScrollTop;
     } catch {
       // The PDF.js frame may still be navigating.
     }
@@ -319,7 +330,7 @@
 
   function startPdfJs(blobUrl) {
     pdfJsFrame.hidden = false;
-    pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`;
+    pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}&page=${initialPage}`;
     overlay.classList.add('hidden');
     status.textContent = '选中文字会自动填入';
 
@@ -401,7 +412,7 @@
 
       embed = document.createElement('embed');
       embed.type = 'application/pdf';
-      embed.src = objectUrl;
+      embed.src = `${objectUrl}#page=${initialPage}`;
       embed.title = fileName;
       viewer.appendChild(embed);
 

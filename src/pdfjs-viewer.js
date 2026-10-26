@@ -3,6 +3,7 @@ import * as pdfjsLib from './vendor/pdfjs/build/pdf.mjs';
 const params = new URLSearchParams(location.search);
 const fileUrl = params.get('file') || '';
 const scale = Number(params.get('scale')) || 1.4;
+const initialPage = Math.max(1, Number(params.get('page')) || 1);
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('src/vendor/pdfjs/build/pdf.worker.mjs');
 
@@ -55,6 +56,11 @@ try {
       viewport
     });
     await textLayer.render();
+  }
+
+  if (initialPage > 1) {
+    const initialPageElement = viewer.querySelector(`.pdfjs-page[data-page-number="${initialPage}"]`);
+    initialPageElement?.scrollIntoView({ block: 'start' });
   }
 
   await renderOutline(pdfDocument);

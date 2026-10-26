@@ -793,8 +793,11 @@ function isPdfTabUrl(url) {
 }
 
 async function openPdfReader(pdfUrl, title) {
+  const pageMatch = String(pdfUrl).match(/[#&?]page=(\d+)/i);
+  const page = pageMatch ? Number(pageMatch[1]) : 1;
+  const pageQuery = page > 1 ? `&page=${page}` : '';
   const readerUrl = chrome.runtime.getURL(
-    `src/pdf-reader.html?file=${encodeURIComponent(pdfUrl)}&name=${encodeURIComponent(title || 'PDF 文档')}`
+    `src/pdf-reader.html?file=${encodeURIComponent(pdfUrl)}&name=${encodeURIComponent(title || 'PDF 文档')}${pageQuery}`
   );
   await chrome.tabs.create({ url: readerUrl });
   hideBanner();
