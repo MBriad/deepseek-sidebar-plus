@@ -97,7 +97,6 @@ function reportSelectionToParent() {
 
   const range = selection.getRangeAt(0);
   const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);
-  paintSelectionHighlight(rects);
   const rect = rects[rects.length - 1] || range.getBoundingClientRect();
   if (rect && (rect.width || rect.height)) {
     window.parent.postMessage({
@@ -117,9 +116,9 @@ function reportSelectionToParent() {
     window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'selection', text }, '*');
   }
 
-  // Clear immediately after reporting so Edge's native copy/search mini menu
-  // does not stay on top of the floating input and swallow Enter.
-  selection.removeAllRanges();
+  // Keep the browser/PDF.js native selection visible. It is the most accurate
+  // highlight (including spaces and justified text), and custom fixed/absolute
+  // overlays looked broken on some pages. Clear it only when relay stops.
 }
 
 document.addEventListener('pointerdown', clearSelectionHighlight, true);

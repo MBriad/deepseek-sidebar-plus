@@ -271,7 +271,7 @@
     }, 60);
     try {
       const frameWindow = pdfJsFrame.contentWindow;
-      frameWindow?.getSelection()?.removeAllRanges();
+      // Keep the PDF.js native selection visible; it is the accurate highlight.
       const frameContainer = frameWindow?.document?.getElementById('pdfjs-container');
       if (frameContainer) frameContainer.scrollTop = pdfScrollTop;
     } catch {
@@ -337,6 +337,7 @@
       // Ignore.
     }
     try {
+      pdfJsFrame.contentWindow?.getSelection()?.removeAllRanges();
       pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'clear-highlight' }, '*');
     } catch {
       // The frame may be navigating.
