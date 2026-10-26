@@ -236,9 +236,18 @@ async function testPdfFollowAndSend() {
   await frame.waitForSelector('.textLayer span', { state: 'attached', timeout: 25000 });
   await reader.waitForSelector('#btn-outline:not([hidden])', { timeout: 10000 });
   await frame.waitForSelector('#pdfjs-outline-toggle:not([hidden])', { timeout: 10000 });
-  await frame.waitForTimeout(500);
-  const selected = await frame.evaluate(() => {
-    const span = document.querySelectorAll('.textLayer span')[1] || document.querySelector('.textLayer span');
+
+  await reader.click('#btn-outline');
+  await waitFor(() => frame.evaluate(() =>
+    document.getElementById('pdfjs-outline')?.classList.contains('open')
+    && document.querySelectorAll('#pdfjs-outline-list button').length > 0
+  ), { message: 'PDF directory entries' });
+  await reader.click('#btn-outline');
+  await frame.waitForTimeout(200);
+
+  const selectSpan = (index) => frame.evaluate((spanIndex) => {
+    const span = document.querySelectorAll('.textLayer span')[spanIndex]
+      || document.querySelector('.textLayer span');
     const range = document.createRange();
     range.selectNodeContents(span);
     const selection = window.getSelection();
@@ -247,12 +256,19 @@ async function testPdfFollowAndSend() {
     span.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     const rect = range.getBoundingClientRect();
     return { text: span.textContent, bottom: rect.bottom };
+  }, index);
+
+  const first = await selectSpan(0);
+  const chat = await chatFrame(sidebar);
+  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes(first.text.slice(0, 20)), {
+    message: 'PDF first selection fill'
   });
 
-  const chat = await chatFrame(sidebar);
-  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes(selected.text.slice(0, 20)), {
-    message: 'PDF selection fill'
-  });
+  const selected = await selectSpan(1);
+  await waitFor(async () => {
+    const value = await chat.locator('#chat-input').inputValue();
+    return value.includes(selected.text.slice(0, 20)) && !value.includes(first.text);
+  }, { message: 'PDF second selection replaces first' });
 
   const layout = await reader.evaluate(() => {
     const frameElement = document.querySelector('#pdfjs-frame').getBoundingClientRect();
