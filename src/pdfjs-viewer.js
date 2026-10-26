@@ -9,6 +9,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('src/vendor/pdfjs
 
 const viewer = document.getElementById('pdfjs-viewer');
 let selectionReportTimer = null;
+let pendingOutlinePage = 0;
+
+function scrollToPdfPage(pageNumber) {
+  const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
+  if (!page) {
+    pendingOutlinePage = pageNumber;
+    return;
+  }
+  page.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
 
 function reportSelectionToParent() {
   const selection = window.getSelection();
@@ -62,6 +72,11 @@ try {
   });
   const pdfDocument = await task.promise;
 
+  // Build the directory immediately, in parallel with page rendering. Large
+  // PDFs can take a long time to render every canvas/text layer; the outline
+  // and page list should not wait for that.
+  const outlineReady = renderOutline(pdfDocument);
+
   for (let number = 1; number <= pdfDocument.numPages; number += 1) {
     const page = await pdfDocument.getPage(number);
     const viewport = page.getViewport({ scale });
@@ -90,6 +105,10 @@ try {
     pageElement.appendChild(textLayerElement);
 
     viewer.appendChild(pageElement);
+    if (pendingOutlinePage === number) {
+      pendingOutlinePage = 0;
+      pageElement.scrollIntoView({ block: 'start' });
+    }
 
     await page.render({ canvasContext: context, viewport }).promise;
 
@@ -106,7 +125,7 @@ try {
     initialPageElement?.scrollIntoView({ block: 'start' });
   }
 
-  await renderOutline(pdfDocument);
+  await outlineReady;
   document.documentElement.dataset.pdfjsReady = '1';
 } catch (error) {
   document.documentElement.dataset.pdfjsError = String(error?.message || error);
@@ -146,10 +165,7 @@ async function renderOutline(pdfDocument) {
     button.className = `pdfjs-outline-depth-${Math.min(depth, 4)}`;
     if (pageNumber) {
       button.dataset.pageNumber = String(pageNumber);
-      button.addEventListener('click', () => {
-        const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
-        page?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      });
+      button.addEventListener('click', () => scrollToPdfPage(pageNumber));
     } else {
       button.disabled = true;
     }
@@ -157,9 +173,12 @@ async function renderOutline(pdfDocument) {
   }
 
   async function renderItems(items, depth) {
-    for (const item of items) {
-      if (!item?.title) continue;
-      const pageNumber = item.dest ? await resolvePageNumber(pdfDocument, item.dest) : null;
+    const valid = items.filter((item) => item?.title);
+    const resolved = await Promise.all(valid.map(async (item) => ({
+      item,
+      pageNumber: item.dest ? await resolvePageNumber(pdfDocument, item.dest) : null
+    })));
+    for (const { item, pageNumber } of resolved) {
       pageButton(pageNumber, String(item.title).trim(), depth);
       if (item.items?.length) await renderItems(item.items, depth + 1);
     }
