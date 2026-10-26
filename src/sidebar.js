@@ -464,6 +464,17 @@ async function startTypeRelay() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
 
+  const isEnhancedReader = String(tab.url || '').startsWith(chrome.runtime.getURL('src/pdf-reader.html'));
+  if (isPdfTabUrl(tab.url) && !isEnhancedReader) {
+    showBanner(
+      '原生 Edge PDF 不支持小窗直接输入；已填入文字。需要跟随选区和 Enter 发送，请用增强阅读器打开。',
+      '打开增强阅读器',
+      () => openPdfReader(tab.url, tab.title),
+      { type: 'info', kind: 'native-pdf' }
+    );
+    return;
+  }
+
   await sendToFrame('DS_RELAY_START', {}, 4000);
   chrome.storage.local.set({
     dsPdfRelayStart: {
