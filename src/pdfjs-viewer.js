@@ -8,6 +8,49 @@ const initialPage = Math.max(1, Number(params.get('page')) || 1);
 pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('src/vendor/pdfjs/build/pdf.worker.mjs');
 
 const viewer = document.getElementById('pdfjs-viewer');
+let selectionReportTimer = null;
+
+function reportSelectionToParent() {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+  const text = selection.toString().replace(/\u00a0/g, ' ').trim();
+  if (!text) return;
+
+  const range = selection.getRangeAt(0);
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);
+  const rect = rects[rects.length - 1] || range.getBoundingClientRect();
+  if (rect && (rect.width || rect.height)) {
+    window.parent.postMessage({
+      source: 'ds-pdf-viewer',
+      type: 'selection',
+      text,
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height
+      }
+    }, '*');
+  } else {
+    window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'selection', text }, '*');
+  }
+
+  // Clear immediately after reporting so Edge's native copy/search mini menu
+  // does not stay on top of the floating input and swallow Enter.
+  selection.removeAllRanges();
+}
+
+document.addEventListener('pointerup', () => {
+  clearTimeout(selectionReportTimer);
+  selectionReportTimer = setTimeout(reportSelectionToParent, 20);
+}, true);
+
+window.addEventListener('message', (event) => {
+  if (event.data?.source !== 'ds-pdf-host' || event.data?.type !== 'toggle-outline') return;
+  document.getElementById('pdfjs-outline')?.classList.toggle('open');
+});
 
 try {
   const task = pdfjsLib.getDocument({

@@ -19,11 +19,14 @@
   const overlayText = document.getElementById('overlay-text');
   const status = document.getElementById('status');
   const toast = document.getElementById('toast');
+  const outlineButton = document.getElementById('btn-outline');
+  const versionLabel = document.getElementById('reader-version');
 
   let embed = null;
   let objectUrl = '';
   let lastText = '';
   let lastSelectionId = '';
+  let lastSelectionAt = 0;
   let selectionSeq = 0;
   let selectionClearTimer = null;
   let toastTimer = null;
@@ -38,11 +41,20 @@
 
   document.title = `${fileName} - DeepSeek PDF`;
   document.getElementById('file-name').textContent = fileName;
+  if (versionLabel) versionLabel.textContent = `v${chrome.runtime.getManifest().version}`;
 
   document.getElementById('btn-open-side').addEventListener('click', openSidePanel);
   document.getElementById('btn-reload').addEventListener('click', () => location.reload());
+  outlineButton.addEventListener('click', () => {
+    try {
+      pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'toggle-outline' }, '*');
+    } catch {
+      // The PDF.js frame may not be ready.
+    }
+  });
 
   window.addEventListener('message', onPdfMessage);
+  window.addEventListener('message', onPdfJsMessage);
   window.addEventListener('pagehide', () => {
     clearInterval(pdfPollTimer);
     if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -330,6 +342,7 @@
 
   function startPdfJs(blobUrl) {
     pdfJsFrame.hidden = false;
+    outlineButton.hidden = false;
     pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}&page=${initialPage}`;
     overlay.classList.add('hidden');
     status.textContent = '选中文字会自动填入';
@@ -457,6 +470,30 @@
     handleSelection(String(data.selectedText || ''));
   }
 
+  function onPdfJsMessage(event) {
+    if (event.source !== pdfJsFrame.contentWindow) return;
+    const data = event.data;
+    if (!data || data.source !== 'ds-pdf-viewer' || data.type !== 'selection') return;
+
+    const text = String(data.text || '').replace(/\u00a0/g, ' ').trim();
+    if (!text) return;
+
+    const rect = data.rect;
+    if (rect) {
+      const frameRect = pdfJsFrame.getBoundingClientRect();
+      pdfSelectionRect = {
+        left: frameRect.left + rect.left,
+        top: frameRect.top + rect.top,
+        right: frameRect.left + rect.right,
+        bottom: frameRect.top + rect.bottom,
+        width: rect.width,
+        height: rect.height
+      };
+      if (typeRelayActive) positionTypeRelay();
+    }
+    handleSelection(text);
+  }
+
   function handleSelection(raw) {
     const value = raw.replace(/\u00a0/g, ' ').trim();
 
@@ -467,7 +504,11 @@
 
       clearTimeout(selectionClearTimer);
       selectionClearTimer = setTimeout(() => {
-        if (lastText) return;
+        if (lastText || typeRelayActive) return;
+        // A programmatic selection clear happens immediately after reporting;
+        // do not turn that into a page-selection-clear while the sidebar is
+        // still filling the input and starting the relay.
+        if (Date.now() - lastSelectionAt < 2500) return;
         if (!document.hasFocus()) return;
 
         const selectionId = lastSelectionId;
@@ -487,6 +528,7 @@
     if (value === lastText) return;
 
     lastText = value;
+    lastSelectionAt = Date.now();
     lastSelectionId = `${Date.now()}-${++selectionSeq}-${Math.random().toString(36).slice(2, 6)}`;
     clearTimeout(selectionClearTimer);
 

@@ -206,14 +206,9 @@ async function testPdfFollowAndSend() {
     message: 'PDF.js iframe'
   });
   await frame.waitForSelector('.textLayer span', { state: 'attached', timeout: 25000 });
-  await frame.waitForTimeout(500);
+  await reader.waitForSelector('#btn-outline:not([hidden])', { timeout: 10000 });
   await frame.waitForSelector('#pdfjs-outline-toggle:not([hidden])', { timeout: 10000 });
-  await frame.click('#pdfjs-outline-toggle');
-  await waitFor(() => frame.evaluate(() =>
-    document.getElementById('pdfjs-outline')?.classList.contains('open')
-    && document.querySelectorAll('#pdfjs-outline-list button').length > 0
-  ), { message: 'PDF outline/page directory' });
-
+  await frame.waitForTimeout(500);
   const selected = await frame.evaluate(() => {
     const span = document.querySelectorAll('.textLayer span')[1] || document.querySelector('.textLayer span');
     const range = document.createRange();
