@@ -347,51 +347,17 @@
     overlay.classList.add('hidden');
     status.textContent = '选中文字会自动填入';
 
-    clearInterval(pdfPollTimer);
-    const poll = () => {
-      try {
-        const frameWindow = pdfJsFrame.contentWindow;
-        if (!frameWindow) return;
-        const selection = frameWindow.getSelection();
-        const text = selection?.toString().replace(/\u00a0/g, ' ').trim() || '';
-        const frameRect = pdfJsFrame.getBoundingClientRect();
-
-        if (text) {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          if (rect.width || rect.height) {
-            pdfSelectionRect = {
-              left: frameRect.left + rect.left,
-              top: frameRect.top + rect.top,
-              right: frameRect.left + rect.right,
-              bottom: frameRect.top + rect.bottom,
-              width: rect.width,
-              height: rect.height
-            };
-          }
-          if (typeRelayActive) positionTypeRelay();
-        } else {
-          pdfSelectionRect = null;
-        }
-
-        if (typeRelayActive && document.activeElement !== typeRelay) {
-          typeRelay?.focus({ preventScroll: true });
-        }
-        if (text !== lastText) handleSelection(text);
-      } catch {
-        // The PDF.js frame may still be loading.
-      }
-    };
+    // Do not poll the selection while the user is still dragging. Polling saw
+    // partial selections, filled the sidebar and cleared the PDF.js selection
+    // mid-drag, which broke multi-line highlighting. The PDF.js frame reports
+    // the final text and rect on pointerup instead.
     pdfJsFrame.addEventListener('load', () => {
       try {
         pdfJsFrame.contentWindow.addEventListener('keydown', handlePdfRelayKey, true);
       } catch {
         // The frame may not be ready yet.
       }
-      poll();
-      pdfPollTimer = setInterval(poll, 320);
     }, { once: true });
-    poll();
   }
 
   async function loadPdf() {
@@ -473,7 +439,13 @@
   function onPdfJsMessage(event) {
     if (event.source !== pdfJsFrame.contentWindow) return;
     const data = event.data;
-    if (!data || data.source !== 'ds-pdf-viewer' || data.type !== 'selection') return;
+    if (!data || data.source !== 'ds-pdf-viewer') return;
+    if (data.type === 'selection-clear') {
+      pdfSelectionRect = null;
+      handleSelection('');
+      return;
+    }
+    if (data.type !== 'selection') return;
 
     const text = String(data.text || '').replace(/\u00a0/g, ' ').trim();
     if (!text) return;

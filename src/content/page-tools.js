@@ -469,12 +469,15 @@
         if (typeRelayActive) focusRelay();
       }, 80);
     }
-    // Dismiss Edge's floating copy/paste selection toolbar. The overlay already
-    // has its own anchor rect, so it can keep following the original selection.
-    try {
-      window.getSelection()?.removeAllRanges();
-    } catch {
-      // Ignore.
+    // Dismiss Edge's floating copy/paste selection toolbar. Do not do this on
+    // the native PDF viewer: clearing its selection mid-drag interrupts the
+    // user's highlight. The PDF bridge reports the final text itself.
+    if (!isPdfViewer()) {
+      try {
+        window.getSelection()?.removeAllRanges();
+      } catch {
+        // Ignore.
+      }
     }
     showToast(`可直接输入 · ${typeRelayShortcut} 撤回`);
   }
@@ -563,11 +566,14 @@
       sendSelection(raw, document.title || '', location.href);
       // Clear the DOM selection immediately after capturing its rect. Edge's
       // native copy/search mini toolbar is driven by the selection and would
-      // otherwise stay above the floating input and swallow Enter.
-      try {
-        selection.removeAllRanges();
-      } catch {
-        // Ignore.
+      // otherwise stay above the floating input and swallow Enter. The native
+      // PDF bridge owns its own selection; clearing it here interrupts drag.
+      if (!isPdfViewer()) {
+        try {
+          selection.removeAllRanges();
+        } catch {
+          // Ignore.
+        }
       }
     } catch {
       // The extension was reloaded, or this page has an unusual selection.

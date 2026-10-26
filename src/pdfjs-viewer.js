@@ -24,7 +24,10 @@ function reportSelectionToParent() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) return;
   const text = selection.toString().replace(/\u00a0/g, ' ').trim();
-  if (!text) return;
+  if (!text) {
+    window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'selection-clear' }, '*');
+    return;
+  }
 
   const range = selection.getRangeAt(0);
   const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);

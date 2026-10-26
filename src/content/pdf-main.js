@@ -32,6 +32,8 @@
   let selectionSeq = 0;
   let selectionClearTimer = null;
   let selectionRequest = null;
+  let pendingText = '';
+  let settleTimer = null;
 
   function post(type, payload = {}) {
     try {
@@ -96,6 +98,8 @@
 
     if (!value) {
       lastText = '';
+      pendingText = '';
+      clearTimeout(settleTimer);
       if (lastSelectionId) {
         clearTimeout(selectionClearTimer);
         selectionClearTimer = setTimeout(() => {
@@ -111,15 +115,25 @@
 
     if (value === lastText) return;
 
-    lastText = value;
-    lastSelectionId = `${Date.now()}-${++selectionSeq}-${Math.random().toString(36).slice(2, 6)}`;
-    clearTimeout(selectionClearTimer);
-    post('selection', {
-      text: value.slice(0, 20000),
-      selectionId: lastSelectionId,
-      title: title(),
-      url: location.href
-    });
+    // Wait for the selection to stop changing before reporting. Polling a
+    // native PDF during a drag returns partial lines; filling the sidebar then
+    // clearing the selection would interrupt the user's highlight mid-drag.
+    if (value !== pendingText) {
+      pendingText = value;
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        if (pendingText !== value) return;
+        lastText = value;
+        lastSelectionId = `${Date.now()}-${++selectionSeq}-${Math.random().toString(36).slice(2, 6)}`;
+        clearTimeout(selectionClearTimer);
+        post('selection', {
+          text: value.slice(0, 20000),
+          selectionId: lastSelectionId,
+          title: title(),
+          url: location.href
+        });
+      }, 450);
+    }
   }
 
   function requestSelection(id) {
