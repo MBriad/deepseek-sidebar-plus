@@ -17,10 +17,69 @@
       overflow: hidden;
     }
     .pdfjs-page canvas { display: block; }
+    #pdfjs-outline-toggle {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 20;
+      padding: 7px 12px;
+      border: 1px solid #4d6bfe;
+      border-radius: 8px;
+      background: #fff;
+      color: #1b1f2a;
+      font: 12px/1.4 "Microsoft YaHei", "Segoe UI", sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+    }
+    #pdfjs-outline {
+      position: fixed;
+      top: 48px;
+      left: 10px;
+      bottom: 12px;
+      width: min(300px, calc(100vw - 20px));
+      z-index: 19;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #d8deea;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, .25);
+    }
+    #pdfjs-outline.open { display: flex; }
+    #pdfjs-outline-title {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e6eaf2;
+      color: #1b1f2a;
+      font: 600 12px/1.4 "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+    #pdfjs-outline-list { overflow: auto; padding: 6px; }
+    #pdfjs-outline-list button {
+      display: block;
+      width: 100%;
+      padding: 5px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #303748;
+      font: 12px/1.5 "Microsoft YaHei", "Segoe UI", sans-serif;
+      text-align: left;
+      cursor: pointer;
+    }
+    #pdfjs-outline-list button:hover { background: #eef2ff; color: #2443c4; }
+    .pdfjs-outline-depth-1 { padding-left: 8px !important; }
+    .pdfjs-outline-depth-2 { padding-left: 24px !important; }
+    .pdfjs-outline-depth-3 { padding-left: 40px !important; }
+    .pdfjs-outline-depth-4 { padding-left: 56px !important; }
   </style>
 </head>
 <body>
   <div id="pdfjs-container"><div id="pdfjs-viewer"></div></div>
+  <button id="pdfjs-outline-toggle" type="button" hidden>目录</button>
+  <aside id="pdfjs-outline" aria-label="PDF 目录">
+    <div id="pdfjs-outline-title">目录</div>
+    <nav id="pdfjs-outline-list"></nav>
+  </aside>
   <script type="module" src="pdfjs-viewer.js"></script>
 </body>
 </html>

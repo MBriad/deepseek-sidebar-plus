@@ -61,7 +61,6 @@ let pendingSelection = null;
 let activeSelectionId = '';
 let typeRelayActive = false;
 let lastClearedSelectionId = '';
-const autoPdfSeen = new Set();
 let prompts = [];
 let taggedPages = [];
 let pageTags = [];
@@ -102,7 +101,6 @@ async function init() {
   await loadSettings();
   applySettingsToUI();
   updateAutofillButton();
-  bindPdfAutoOpen();
 
   setConnection('connecting');
   showFrameLoading(`正在加载 ${currentProvider().name}…`);
@@ -800,45 +798,6 @@ async function openPdfReader(pdfUrl, title) {
   );
   await chrome.tabs.create({ url: readerUrl });
   hideBanner();
-}
-
-async function maybeAutoOpenPdfTab(tab) {
-  if (!settings.pdfJsFollow || !tab?.id || !isPdfTabUrl(tab.url)) return;
-  if (String(tab.url).startsWith(chrome.runtime.getURL(''))) return;
-
-  const key = `${tab.id}|${tab.url}`;
-  if (autoPdfSeen.has(key)) return;
-  autoPdfSeen.add(key);
-
-  const readerUrl = chrome.runtime.getURL(
-    `src/pdf-reader.html?file=${encodeURIComponent(tab.url)}&name=${encodeURIComponent(tab.title || 'PDF 文档')}`
-  );
-  try {
-    await chrome.tabs.update(tab.id, { url: readerUrl });
-    showToast('已切换到 PDF.js 跟随阅读器', 'success', 3500);
-  } catch {
-    // The tab may have closed during navigation.
-  }
-}
-
-function bindPdfAutoOpen() {
-  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-    if (changeInfo.url || changeInfo.status === 'complete') {
-      maybeAutoOpenPdfTab(tab).catch(() => {});
-    }
-  });
-
-  chrome.tabs.onActivated.addListener(({ tabId }) => {
-    chrome.tabs.get(tabId)
-      .then((tab) => maybeAutoOpenPdfTab(tab))
-      .catch(() => {});
-  });
-
-  chrome.tabs.query({ active: true, currentWindow: true })
-    .then(([tab]) => {
-      if (tab) maybeAutoOpenPdfTab(tab);
-    })
-    .catch(() => {});
 }
 
 async function openExtensionDetails() {

@@ -57,8 +57,61 @@ try {
     await textLayer.render();
   }
 
+  await renderOutline(pdfDocument);
   document.documentElement.dataset.pdfjsReady = '1';
 } catch (error) {
   document.documentElement.dataset.pdfjsError = String(error?.message || error);
   throw error;
+}
+
+async function resolvePageNumber(pdfDocument, destination) {
+  try {
+    const explicit = typeof destination === 'string'
+      ? await pdfDocument.getDestination(destination)
+      : destination;
+    if (!Array.isArray(explicit) || !explicit.length) return null;
+    const reference = explicit[0];
+    if (typeof reference === 'number') return reference + 1;
+    if (reference && typeof reference === 'object') {
+      return (await pdfDocument.getPageIndex(reference)) + 1;
+    }
+  } catch {
+    // Some named destinations cannot be resolved.
+  }
+  return null;
+}
+
+async function renderOutline(pdfDocument) {
+  const outline = await pdfDocument.getOutline().catch(() => null);
+  if (!outline?.length) return;
+
+  const toggle = document.getElementById('pdfjs-outline-toggle');
+  const panel = document.getElementById('pdfjs-outline');
+  const list = document.getElementById('pdfjs-outline-list');
+  toggle.hidden = false;
+  toggle.addEventListener('click', () => panel.classList.toggle('open'));
+
+  async function renderItems(items, depth) {
+    for (const item of items) {
+      if (!item?.title) continue;
+      const pageNumber = item.dest ? await resolvePageNumber(pdfDocument, item.dest) : null;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = String(item.title).trim();
+      button.className = `pdfjs-outline-depth-${Math.min(depth, 4)}`;
+      if (pageNumber) {
+        button.dataset.pageNumber = String(pageNumber);
+        button.addEventListener('click', () => {
+          const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
+          page?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        });
+      } else {
+        button.disabled = true;
+      }
+      list.appendChild(button);
+      if (item.items?.length) await renderItems(item.items, depth + 1);
+    }
+  }
+
+  await renderItems(outline, 1);
 }
