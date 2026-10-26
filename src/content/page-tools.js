@@ -153,12 +153,17 @@
 
     document.addEventListener('pointerup', (event) => {
       lastPointer = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
-      schedule();
+      // Capture and clear synchronously on mouseup. Waiting 160ms lets Edge
+      // open its copy/search mini toolbar first, which then takes longer to
+      // retract and can steal focus from the floating input.
+      clearTimeout(selectionTimer);
+      captureSelection();
     }, true);
     document.addEventListener('touchend', (event) => {
       const touch = event.changedTouches?.[0];
       if (touch) lastPointer = { x: touch.clientX, y: touch.clientY };
-      schedule();
+      clearTimeout(selectionTimer);
+      selectionTimer = setTimeout(captureSelection, 0);
     }, true);
 
     // A real click on the page is an explicit cancel/return: end any focus
