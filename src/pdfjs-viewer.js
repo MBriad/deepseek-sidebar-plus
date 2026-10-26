@@ -35,9 +35,10 @@ function mergeSelectionRects(rects) {
   for (const rect of list) {
     const target = merged.find((item) => {
       const overlap = Math.min(item.bottom, rect.bottom) - Math.max(item.top, rect.top);
-      return overlap >= Math.min(item.height, rect.height) * 0.6
-        && rect.left <= item.right + 12
-        && rect.right >= item.left - 12;
+      // Merge every fragment on the same visual line, including large gaps
+      // introduced by justified text / PDF.js span positioning. A native
+      // selection paints the whole line; the custom overlay should too.
+      return overlap >= Math.min(item.height, rect.height) * 0.6;
     });
     if (!target) {
       merged.push(rect);
@@ -55,13 +56,14 @@ function mergeSelectionRects(rects) {
 
 function paintSelectionHighlight(rects) {
   clearSelectionHighlight();
+  const viewerRect = viewer.getBoundingClientRect();
   for (const rect of mergeSelectionRects(rects)) {
     const element = document.createElement('div');
     element.className = 'ds-pdf-selection-highlight';
     element.style.cssText = [
-      'position:fixed',
-      `left:${rect.left}px`,
-      `top:${rect.top}px`,
+      'position:absolute',
+      `left:${rect.left - viewerRect.left}px`,
+      `top:${rect.top - viewerRect.top}px`,
       `width:${rect.width}px`,
       `height:${rect.height}px`,
       'background:rgba(77,107,254,.22)',
@@ -69,7 +71,7 @@ function paintSelectionHighlight(rects) {
       'pointer-events:none',
       'z-index:2147483000'
     ].join(';');
-    document.body.appendChild(element);
+    viewer.appendChild(element);
     highlightElements.push(element);
   }
 }
@@ -125,7 +127,7 @@ document.addEventListener('pointerup', () => {
   clearTimeout(selectionReportTimer);
   selectionReportTimer = setTimeout(reportSelectionToParent, 20);
 }, true);
-scrollContainer.addEventListener('scroll', clearSelectionHighlight, { passive: true });
+
 
 window.addEventListener('message', (event) => {
   if (event.data?.source !== 'ds-pdf-host') return;
