@@ -162,6 +162,7 @@ try {
     pageElement.style.width = `${Math.floor(defaultViewport.width)}px`;
     pageElement.style.height = `${Math.floor(defaultViewport.height)}px`;
     pageElement.style.setProperty('--scale-factor', String(defaultViewport.scale));
+    pageElement.style.setProperty('--total-scale-factor', String(defaultViewport.scale));
     pageElement.style.setProperty('--user-unit', '1');
     viewer.appendChild(pageElement);
     pageElements.set(number, pageElement);
@@ -179,6 +180,7 @@ try {
       pageElement.style.width = `${Math.floor(viewport.width)}px`;
       pageElement.style.height = `${Math.floor(viewport.height)}px`;
       pageElement.style.setProperty('--scale-factor', String(viewport.scale));
+      pageElement.style.setProperty('--total-scale-factor', String(viewport.scale));
 
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { alpha: false });
@@ -193,6 +195,7 @@ try {
       textLayerElement.style.width = `${Math.floor(viewport.width)}px`;
       textLayerElement.style.height = `${Math.floor(viewport.height)}px`;
       textLayerElement.style.setProperty('--scale-factor', String(viewport.scale));
+      textLayerElement.style.setProperty('--total-scale-factor', String(viewport.scale));
       textLayerElement.style.setProperty('--user-unit', '1');
       pageElement.appendChild(textLayerElement);
 

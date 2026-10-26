@@ -1,6 +1,6 @@
-# v1.11.34 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.11.35 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.11.34。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
+Edge 侧边栏增强版 v1.11.35。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
 
 ## 双聊天服务
 
@@ -34,6 +34,7 @@ Edge 侧边栏增强版 v1.11.34。非官方扩展，与 DeepSeek、OpenAI/ChatG
 - 网页鼠标松开后增加 40ms 重试，兼容浏览器在 pointerup 之后才最终确定选区的情况，避免网页划词直接失效。
 - 新的划词会替换上一段自动填入，而不是继续追加；避免 PDF 部分选区反复填入后突然变成一大段。
 - 大 PDF 改为惰性渲染：先建好全部页面占位和目录，只渲染当前视口附近页面。实测 1137 页教材目录约 0.34s 出现，阅读器约 2.3s 就绪。
+- 修复 PDF.js 6 文本层缺少 `--total-scale-factor` 导致 span 宽度/字号偏小的问题；选区文字完整但高亮只覆盖到行中间，现在高亮覆盖整行到行尾。
 - 增强阅读器保留 PDF.js/浏览器原生选区高亮，不再用自绘覆盖；高亮与 Edge 原生一致、完整且跟随滚动，只有结束直接输入时才清除。
 - 原生 Edge PDF 不再启动浮窗/抢焦点，只提示用增强阅读器；避免扩展介入后原生 PDF 高亮被取消或跳段。
 - 增强阅读器标题栏显示当前版本号，方便确认是否加载了最新包。
@@ -78,9 +79,9 @@ Edge 侧边栏增强版 v1.11.34。非官方扩展，与 DeepSeek、OpenAI/ChatG
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.11.34-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.11.34.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.11.34-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
+- `deepseek-sidebar-plus-v1.11.35-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.11.35.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.11.35-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
 
 ## 安装
 
@@ -99,7 +100,7 @@ Edge 侧边栏增强版 v1.11.34。非官方扩展，与 DeepSeek、OpenAI/ChatG
 ## 注意
 
 - 需要 Microsoft Edge 桌面版 116+；手机 Edge 不支持这类侧边栏扩展。
-- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.34 新增网页标签，暂不覆盖审核中的商店包。
+- v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.35 新增网页标签，暂不覆盖审核中的商店包。
 - 未上架商店时不会自动更新；更新请覆盖同一文件夹后点“重新加载”。
 - 未打包扩展的 ID 默认跟路径走；移动/换文件夹会丢失原设置和提示词库。
 - 隐私政策：https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html
