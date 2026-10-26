@@ -18,10 +18,44 @@ function clearSelectionHighlight() {
   highlightElements = [];
 }
 
+function mergeSelectionRects(rects) {
+  const list = rects
+    .filter((rect) => rect && rect.width > 1 && rect.height > 1)
+    .map((rect) => ({
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height
+    }))
+    .sort((a, b) => a.top - b.top || a.left - b.left);
+
+  const merged = [];
+  for (const rect of list) {
+    const target = merged.find((item) => {
+      const overlap = Math.min(item.bottom, rect.bottom) - Math.max(item.top, rect.top);
+      return overlap >= Math.min(item.height, rect.height) * 0.6
+        && rect.left <= item.right + 12
+        && rect.right >= item.left - 12;
+    });
+    if (!target) {
+      merged.push(rect);
+      continue;
+    }
+    target.left = Math.min(target.left, rect.left);
+    target.top = Math.min(target.top, rect.top);
+    target.right = Math.max(target.right, rect.right);
+    target.bottom = Math.max(target.bottom, rect.bottom);
+    target.width = target.right - target.left;
+    target.height = target.bottom - target.top;
+  }
+  return merged;
+}
+
 function paintSelectionHighlight(rects) {
   clearSelectionHighlight();
-  for (const rect of rects) {
-    if (!rect || rect.width < 1 || rect.height < 1) continue;
+  for (const rect of mergeSelectionRects(rects)) {
     const element = document.createElement('div');
     element.className = 'ds-pdf-selection-highlight';
     element.style.cssText = [
