@@ -336,6 +336,11 @@
     } catch {
       // Ignore.
     }
+    try {
+      pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'clear-highlight' }, '*');
+    } catch {
+      // The frame may be navigating.
+    }
     relaySend(cancel ? 'DS_TYPE_RELAY_CANCEL' : 'DS_TYPE_RELAY_END', send ? { send: true } : {});
     if (cancel) showToast('已撤回自动填入');
   }

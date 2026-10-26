@@ -8,16 +8,45 @@ const initialPage = Math.max(1, Number(params.get('page')) || 1);
 pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('src/vendor/pdfjs/build/pdf.worker.mjs');
 
 const viewer = document.getElementById('pdfjs-viewer');
+const scrollContainer = document.getElementById('pdfjs-container');
 let selectionReportTimer = null;
-let pendingOutlinePage = 0;
+let requestPageRender = () => {};
+let highlightElements = [];
+
+function clearSelectionHighlight() {
+  for (const element of highlightElements) element.remove();
+  highlightElements = [];
+}
+
+function paintSelectionHighlight(rects) {
+  clearSelectionHighlight();
+  for (const rect of rects) {
+    if (!rect || rect.width < 1 || rect.height < 1) continue;
+    const element = document.createElement('div');
+    element.className = 'ds-pdf-selection-highlight';
+    element.style.cssText = [
+      'position:fixed',
+      `left:${rect.left}px`,
+      `top:${rect.top}px`,
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      'background:rgba(77,107,254,.22)',
+      'border-radius:2px',
+      'pointer-events:none',
+      'z-index:2147483000'
+    ].join(';');
+    document.body.appendChild(element);
+    highlightElements.push(element);
+  }
+}
 
 function scrollToPdfPage(pageNumber) {
   const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
-  if (!page) {
-    pendingOutlinePage = pageNumber;
-    return;
-  }
+  if (!page) return;
   page.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  requestPageRender(pageNumber);
+  setTimeout(() => requestPageRender(pageNumber), 250);
+  setTimeout(() => requestPageRender(pageNumber), 800);
 }
 
 function reportSelectionToParent() {
@@ -25,12 +54,14 @@ function reportSelectionToParent() {
   if (!selection || selection.isCollapsed || !selection.rangeCount) return;
   const text = selection.toString().replace(/\u00a0/g, ' ').trim();
   if (!text) {
+    clearSelectionHighlight();
     window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'selection-clear' }, '*');
     return;
   }
 
   const range = selection.getRangeAt(0);
   const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);
+  paintSelectionHighlight(rects);
   const rect = rects[rects.length - 1] || range.getBoundingClientRect();
   if (rect && (rect.width || rect.height)) {
     window.parent.postMessage({
@@ -55,14 +86,20 @@ function reportSelectionToParent() {
   selection.removeAllRanges();
 }
 
+document.addEventListener('pointerdown', clearSelectionHighlight, true);
 document.addEventListener('pointerup', () => {
   clearTimeout(selectionReportTimer);
   selectionReportTimer = setTimeout(reportSelectionToParent, 20);
 }, true);
+scrollContainer.addEventListener('scroll', clearSelectionHighlight, { passive: true });
 
 window.addEventListener('message', (event) => {
-  if (event.data?.source !== 'ds-pdf-host' || event.data?.type !== 'toggle-outline') return;
-  document.getElementById('pdfjs-outline')?.classList.toggle('open');
+  if (event.data?.source !== 'ds-pdf-host') return;
+  if (event.data?.type === 'toggle-outline') {
+    document.getElementById('pdfjs-outline')?.classList.toggle('open');
+  } else if (event.data?.type === 'clear-highlight') {
+    clearSelectionHighlight();
+  }
 });
 
 try {
@@ -75,57 +112,93 @@ try {
   });
   const pdfDocument = await task.promise;
 
-  // Build the directory immediately, in parallel with page rendering. Large
-  // PDFs can take a long time to render every canvas/text layer; the outline
-  // and page list should not wait for that.
-  const outlineReady = renderOutline(pdfDocument);
+  const firstPage = await pdfDocument.getPage(1);
+  const defaultViewport = firstPage.getViewport({ scale });
+  const pageElements = new Map();
+  const renderedPages = new Set();
+  const renderingPages = new Set();
 
+  // Create page placeholders immediately. Large PDFs (hundreds of pages) were
+  // previously blocked until every canvas and text layer finished rendering.
   for (let number = 1; number <= pdfDocument.numPages; number += 1) {
-    const page = await pdfDocument.getPage(number);
-    const viewport = page.getViewport({ scale });
     const pageElement = document.createElement('div');
     pageElement.className = 'pdfjs-page';
     pageElement.dataset.pageNumber = String(number);
-    pageElement.style.width = `${Math.floor(viewport.width)}px`;
-    pageElement.style.height = `${Math.floor(viewport.height)}px`;
-    pageElement.style.setProperty('--scale-factor', String(viewport.scale));
+    pageElement.style.width = `${Math.floor(defaultViewport.width)}px`;
+    pageElement.style.height = `${Math.floor(defaultViewport.height)}px`;
+    pageElement.style.setProperty('--scale-factor', String(defaultViewport.scale));
     pageElement.style.setProperty('--user-unit', '1');
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d', { alpha: false });
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    canvas.style.width = `${Math.floor(viewport.width)}px`;
-    canvas.style.height = `${Math.floor(viewport.height)}px`;
-    pageElement.appendChild(canvas);
-
-    const textLayerElement = document.createElement('div');
-    textLayerElement.className = 'textLayer';
-    textLayerElement.style.width = `${Math.floor(viewport.width)}px`;
-    textLayerElement.style.height = `${Math.floor(viewport.height)}px`;
-    textLayerElement.style.setProperty('--scale-factor', String(viewport.scale));
-    textLayerElement.style.setProperty('--user-unit', '1');
-    pageElement.appendChild(textLayerElement);
-
     viewer.appendChild(pageElement);
-    if (pendingOutlinePage === number) {
-      pendingOutlinePage = 0;
-      pageElement.scrollIntoView({ block: 'start' });
-    }
-
-    await page.render({ canvasContext: context, viewport }).promise;
-
-    const textLayer = new pdfjsLib.TextLayer({
-      textContentSource: page.streamTextContent(),
-      container: textLayerElement,
-      viewport
-    });
-    await textLayer.render();
+    pageElements.set(number, pageElement);
   }
 
+  async function renderPage(number) {
+    if (renderedPages.has(number) || renderingPages.has(number)) return;
+    renderingPages.add(number);
+    const pageElement = pageElements.get(number);
+    if (!pageElement) return;
+
+    try {
+      const page = number === 1 ? firstPage : await pdfDocument.getPage(number);
+      const viewport = page.getViewport({ scale });
+      pageElement.style.width = `${Math.floor(viewport.width)}px`;
+      pageElement.style.height = `${Math.floor(viewport.height)}px`;
+      pageElement.style.setProperty('--scale-factor', String(viewport.scale));
+
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d', { alpha: false });
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      pageElement.appendChild(canvas);
+
+      const textLayerElement = document.createElement('div');
+      textLayerElement.className = 'textLayer';
+      textLayerElement.style.width = `${Math.floor(viewport.width)}px`;
+      textLayerElement.style.height = `${Math.floor(viewport.height)}px`;
+      textLayerElement.style.setProperty('--scale-factor', String(viewport.scale));
+      textLayerElement.style.setProperty('--user-unit', '1');
+      pageElement.appendChild(textLayerElement);
+
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      const textLayer = new pdfjsLib.TextLayer({
+        textContentSource: page.streamTextContent(),
+        container: textLayerElement,
+        viewport
+      });
+      await textLayer.render();
+      renderedPages.add(number);
+    } finally {
+      renderingPages.delete(number);
+    }
+  }
+
+  requestPageRender = (number) => {
+    renderPage(number).catch(() => {});
+  };
+  window.__dsPdfRenderPage = requestPageRender;
+
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const number = Number(entry.target.dataset.pageNumber);
+      if (number) renderPage(number).catch(() => {});
+    }
+  }, {
+    root: scrollContainer,
+    rootMargin: '1400px 0px'
+  });
+
+  for (const pageElement of pageElements.values()) observer.observe(pageElement);
+
+  // Build the directory before canvases/text layers; it is independent of page
+  // rendering and should be available almost immediately.
+  const outlineReady = renderOutline(pdfDocument);
+
   if (initialPage > 1) {
-    const initialPageElement = viewer.querySelector(`.pdfjs-page[data-page-number="${initialPage}"]`);
-    initialPageElement?.scrollIntoView({ block: 'start' });
+    requestAnimationFrame(() => scrollToPdfPage(initialPage));
   }
 
   await outlineReady;
