@@ -59,13 +59,15 @@ async function setup() {
   context.setDefaultTimeout(20000);
   context.setDefaultNavigationTimeout(30000);
 
-  await context.route('https://chat.deepseek.com/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/html; charset=utf-8',
-      body: route.request().resourceType() === 'document' ? chatHtml : ''
+  for (const pattern of ['https://chat.deepseek.com/**', 'https://chatgpt.com/**']) {
+    await context.route(pattern, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        body: route.request().resourceType() === 'document' ? chatHtml : ''
+      });
     });
-  });
+  }
   await context.route('https://example.com/article', async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: articleHtml });
   });
@@ -105,8 +107,8 @@ async function openSidebar() {
   return page;
 }
 
-async function chatFrame(sidebar) {
-  const frame = await waitFor(() => sidebar.frames().find((item) => item.url().includes('chat.deepseek.com')), {
+async function chatFrame(sidebar, host = 'chat.deepseek.com') {
+  const frame = await waitFor(() => sidebar.frames().find((item) => item.url().includes(host)), {
     message: 'chat iframe'
   });
   return frame;
@@ -269,12 +271,48 @@ const watchdog = setTimeout(() => {
   process.exit(1);
 }, 8 * 60 * 1000);
 
+async function testChatgptProvider() {
+  const sidebar = await openSidebar();
+  await sidebar.click('.provider-tab[data-provider="chatgpt"]');
+  await waitFor(() => sidebar.frames().some((item) => item.url().includes('chatgpt.com')), {
+    timeout: 20000,
+    message: 'ChatGPT frame'
+  });
+  await waitFor(() => sidebar.evaluate(() => window.__DS_TEST__?.bridgeReady === true), {
+    timeout: 20000,
+    message: 'ChatGPT bridge'
+  });
+
+  const article = await context.newPage();
+  await article.goto('https://example.com/article');
+  await article.bringToFront();
+  await selectArticleText(article);
+
+  const chat = await chatFrame(sidebar, 'chatgpt.com');
+  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes('This highlighted sentence'), {
+    message: 'ChatGPT selection fill'
+  });
+  await waitFor(() => article.evaluate(() => document.activeElement?.id === 'ds-type-relay'), {
+    message: 'ChatGPT floating input'
+  });
+
+  await article.keyboard.type(' CHATGPT TYPING');
+  await waitFor(async () => (await chat.locator('#chat-input').inputValue()).includes('CHATGPT TYPING'), {
+    message: 'ChatGPT direct typing'
+  });
+
+  await article.close();
+  await sidebar.close();
+  console.log('PASS ChatGPT provider selection, floating input and typing');
+}
+
 (async () => {
   try {
     await setup();
     await testWebRelay();
     await testEnterSends();
     await testPdfFollowAndSend();
+    await testChatgptProvider();
     console.log('ALL FUNCTIONAL TESTS PASSED');
   } catch (error) {
     console.error('FUNCTIONAL TEST FAILED');

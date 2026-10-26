@@ -180,6 +180,11 @@
     if (!activeSelectionId) return;
     if (typeRelayActive) return;
     if (Date.now() < suppressClearUntil) return;
+    // We clear the DOM selection ourselves immediately after capturing it so
+    // Edge's copy/search mini toolbar goes away. Do not report that synthetic
+    // clear as a user cancel while the sidebar is still filling/starting the
+    // relay, otherwise no floating input is created.
+    if (Date.now() - lastSelectionAt < 6000) return;
     if (!document.hasFocus()) return;
 
     const selection = window.getSelection();
@@ -205,6 +210,7 @@
 
   function sendSelectionCleared(selectionId) {
     if (!selectionId) return;
+    if (Date.now() - lastSelectionAt < 6000) return;
     if (activeSelectionId && activeSelectionId !== selectionId) return;
 
     activeSelectionId = '';
