@@ -63,6 +63,14 @@ function run(cmd, args) {
   return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
+// 直接在 fetch 之后调用 process.exit() 时,undici 的 keep-alive 连接可能还没释放,
+// 在 Windows 上会撞 "Assertion failed ... uv_handle" 并 abort(退出码 0xC0000409)。
+// 先让事件循环空转一拍再退出。
+async function quit(code = 0) {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  process.exit(code);
+}
+
 function changedFiles(range) {
   const out = run('git', ['diff', '--name-only', range]);
   return out.split('\n').map((s) => s.trim()).filter(Boolean);
@@ -101,7 +109,7 @@ function summarizeSpecs(files) {
   });
 }
 
-function buildPrompt(files, specs, diff, truncated) {
+function buildPrompt(files, specs, diff, truncated, history) {
   const specBlock = specs.length
     ? specs
         .map(({ spec, text, filled }) => {
@@ -117,9 +125,15 @@ function buildPrompt(files, specs, diff, truncated) {
     ? `\n> ⚠️ diff 已截断至前 ${MAX_DIFF_CHARS} 字符,末尾不完整。不要据此判断语法完整性(缺大括号、文件被切断等),只评你确实看到的完整片段。\n`
     : '';
 
+  const prevBlock = history.previous.length
+    ? `\n## 上一轮已经提出的发现\n\n这是第 ${history.round} 轮。下面是上一轮报过的内容,**不要重复报**。你只需要:\n` +
+      `(a) 确认它们是否已被这次 diff 解决;(b) 找出这次新 diff 引入的新问题。\n\n` +
+      history.previous.map((p, i) => `### 上轮 ${i + 1}\n\n${p.slice(0, 1500)}`).join('\n\n') + '\n'
+    : `\n这是第 ${history.round} 轮评审。\n`;
+
   return `改动涉及的文件:\n${files.map((f) => `- ${f}`).join('\n')}\n\n` +
     `---\n\n以下是仓库所有者为这些模块撰写的评审口径(REVIEW.md),请遵守:\n\n${specBlock}\n\n` +
-    `---\n${truncNote}\n以下是 diff:\n\n\`\`\`diff\n${diff}\n\`\`\``;
+    `---\n${prevBlock}${truncNote}\n以下是 diff:\n\n\`\`\`diff\n${diff}\n\`\`\``;
 }
 
 async function callModel(system, user) {
@@ -179,7 +193,7 @@ const { BASE_SHA, HEAD_SHA, PR_NUMBER } = process.env;
 
 if (!process.env.DEEPSEEK_API_KEY) {
   console.log('DEEPSEEK_API_KEY 未配置(通常是 fork PR 拿不到 secret),跳过评审。');
-  process.exit(0);
+  await quit();
 }
 
 // 首轮审全量;后续 push 只审新增的那一段,避免同一条发现被反复报。
@@ -202,7 +216,7 @@ try {
 
   if (files.length === 0) {
     console.log(`改动的 ${all.length} 个文件全部在跳过清单里,不发评论。`);
-    process.exit(0);
+    await quit();
   }
 
   specs = summarizeSpecs(files);
@@ -211,16 +225,58 @@ try {
 } catch (error) {
   console.log(`读取 diff 失败:${error.message}`);
   stepSummary(`## Agent review 未执行\n\n读取 diff 失败(评审是建议性的,不阻塞 PR):\n\n\`\`\`\n${error.message}\n\`\`\`\n`);
-  process.exit(0);
+  await quit();
+}
+
+// --- 轮次与历史(D-7:三轮封顶、首轮后只审新 diff、不重复报)---------------
+// reviewer 每次都是新上下文,记不住上一轮。所以由这里数出轮次、把上一轮的发现
+// 原文取出来一起喂给它,否则"不重复报"和"三轮封顶"都无从执行。
+const MAX_ROUNDS = 3;
+
+async function fetchPriorRounds(repo, number) {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token || !repo || !number) return { round: 1, previous: [] };
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/issues/${number}/comments?per_page=100`, {
+      headers: {
+        accept: 'application/vnd.github+json',
+        authorization: `Bearer ${token}`,
+        'user-agent': 'dsh-reviewer',
+      },
+    });
+    if (!res.ok) throw new Error(`comments ${res.status}`);
+    const all = await res.json();
+    const mine = all
+      .filter((c) => typeof c.body === 'string' && c.body.startsWith('## Agent review'))
+      .map((c) => c.body.replace(/^## Agent review\s*/, '').trim());
+    return { round: mine.length + 1, previous: mine.slice(-2) };
+  } catch (error) {
+    console.log(`读取历史评论失败,按第 1 轮处理:${error.message}`);
+    return { round: 1, previous: [] };
+  }
+}
+
+const forcedRound = Number(process.env.REVIEW_ROUND_OVERRIDE || 0);
+const history = forcedRound
+  ? { round: forcedRound, previous: [] }
+  : await fetchPriorRounds(process.env.GITHUB_REPOSITORY, PR_NUMBER);
+
+if (history.round > MAX_ROUNDS) {
+  console.log(`第 ${history.round} 轮:已超过 ${MAX_ROUNDS} 轮上限,不再产出新发现。`);
+  stepSummary(
+    `## Agent review 已到轮次上限\n\n这是第 ${history.round} 轮,D-7 规定 ${MAX_ROUNDS} 轮后不再新增发现。\n` +
+    `作者应该停下来重新考虑方案,而不是继续修。若确有需要,关闭并重开 PR 可重置轮次。\n`
+  );
+  await quit();
 }
 
 let result;
 try {
-  result = await callModel(BRIEF, buildPrompt(files, specs, diff, truncated));
+  result = await callModel(BRIEF, buildPrompt(files, specs, diff, truncated, history));
 } catch (error) {
   console.log(`评审调用失败:${error.message}`);
   stepSummary(`## Agent review 未完成\n\n调用模型失败:\n\n\`\`\`\n${error.message}\n\`\`\`\n`);
-  process.exit(0);
+  await quit();
 }
 
 if (!result.content) {
@@ -230,7 +286,7 @@ if (!result.content) {
     `reasoning_tokens=${result.usage.completion_tokens_details?.reasoning_tokens ?? '?'}`;
   console.log(`模型返回空正文,不发评论。${detail}`);
   stepSummary(`## Agent review 未产出内容\n\n模型没有返回正文,通常是被 max_tokens 截断在思考阶段。\n\n\`\`\`\n${detail}\n\`\`\`\n`);
-  process.exit(0);
+  await quit();
 }
 
 const findings = result.content;
@@ -247,7 +303,7 @@ const body = [
   findings,
   '',
   '---',
-  `<sub>diff ${files.length} 个文件${isIncremental ? '（增量:仅本次 push）' : '（全量:与 base 比对）'}${truncated ? `（已截断至 ${MAX_DIFF_CHARS} 字符）` : ''} · 口径:${coverage} · 模型:${MODEL}${result.finishReason === 'length' ? ' · ⚠️ 回答被 max_tokens 截断' : ''}</sub>`,
+  `<sub>第 ${history.round} 轮 · diff ${files.length} 个文件${isIncremental ? '（增量:仅本次 push）' : '（全量:与 base 比对）'}${truncated ? `（已截断至 ${MAX_DIFF_CHARS} 字符）` : ''} · 口径:${coverage} · 模型:${MODEL}${result.finishReason === 'length' ? ' · ⚠️ 回答被 max_tokens 截断' : ''}</sub>`,
   `<sub>用量:${result.usage.completion_tokens ?? '?'} 输出 token(其中思考 ${result.usage.completion_tokens_details?.reasoning_tokens ?? '?'})</sub>`,
   '<sub>这是自动评审,**不构成批准**。每条发现仍需作者裁决,合并由所有者决定。</sub>',
 ].join('\n');
@@ -255,7 +311,7 @@ const body = [
 if (process.env.REVIEW_DRY_RUN) {
   console.log('=== DRY RUN,以下为将发布的评论 ===');
   console.log(body);
-  process.exit(0);
+  await quit();
 }
 
 try {
