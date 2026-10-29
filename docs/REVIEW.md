@@ -1,111 +1,16 @@
-# REVIEW.md
+# REVIEW.md — documentation and store material
 
-> **本文档的正文必须由仓库所有者撰写。** 依据:文章里 REVIEW.md 是 "written by code owners"——评审口径由所有者定,否则作者会不自觉地把标准调到自己够得着的地方。
->
-> 下面内容是 **agent 起草的草稿,不构成评审口径**,所有者改写或整份替换后删掉本段。
->
-> 起草时 agent 编造的部分(必须由所有者确认或删除):第 1 节的失败症状、第 3 节的 nit 上限数字、第 5 节的三轮封顶。这些是判断,不是事实。
+<!-- Owner-authored. The reviewer loads this file when a diff touches this module.
+     The reviewer must not edit this file. -->
 
-**给"只读 diff 找问题"的 reviewer 用。** 这个文件规定报什么、怎么报、什么时候停。
+Covers: `docs/`, and root-level markdown — `README.md`, `STORE_SUBMISSION.md`,
+`PRIVACY.md`, `NOTICE`, `RELEASE_NOTES.md`, `INSTALL.md`, `AGENTS.md`,
+`docs/DECISIONS.md`
 
-reviewer 只许读,不许改代码。它的输出是**候选问题**,由作者逐条裁决。
+## What failure looks like here
 
----
+## Paths to skip
 
-## 1. 这个仓库的"失败"长什么样
+## Evidence format
 
-审之前先问:**这次改动碰到了下面哪一项?**
-
-| 症状 | 通常的原因 | 相关文件 |
-|---|---|---|
-| 侧边栏**空白/白屏** | 帧头规则失效,iframe 被站点拦住 | `rules.json` |
-| 划词了但**文字没进输入框** | 输入框定位选择器失效 | `src/content/chat-bridge.js` |
-| 文字进了但**发不出去** | 发送按钮选择器失效 | `src/content/chat-bridge.js` |
-| **`/` 或 `@` 没反应** | 命令面板 / 标签页面板的触发或定位失效 | `src/content/chat-bridge.js` |
-| PDF 打开**空白**,或选区**不跟随滚动** | blob 链路,或文本层 CSS 变量 | `src/pdf-reader.js`、`src/pdfjs-viewer.js` |
-| 划词自动填入**填错位置**或覆盖了草稿 | 填入模式(智能追加 / 覆盖 / 追加)的判断 | `src/sidebar.js` |
-| 设置改了**不生效**,或重启后丢失 | 存储键名或默认值不匹配 | `src/sidebar.js`、`background.js` |
-| **测试全绿但真站点坏了** | 测试用 mock,真实站点改版不触发 CI | `tests/functional.test.js` |
-
-最后一行是**最危险的**:CI 绿在这里不构成任何证据。任何碰 `src/content/` 的改动,必须明确说"需要真机验证"。
-
-## 2. 证据格式(硬要求)
-
-- 每条发现必须给 **`文件:行号`** + **引一句关键代码或文本**。
-- **不接受**:"看名字觉得""按惯例应该是""可能会""建议考虑"。
-- 定位不到具体行的,标为 `猜测` 或**直接不报**。
-
-## 3. 报什么、不报什么
-
-**只报四类:**
-
-1. 会崩(白屏、报错、功能完全不工作)
-2. 行为错(和用户预期不符,或与原逻辑不一致)
-3. 安全 / 隐私风险(权限扩大、数据外泄、写入不该写的地方)
-4. **文档与代码不符 / 文档自相矛盾** —— 适用于**所有文档类交付物**:`docs/**`(含 `REVIEW.md`、`DECISIONS.md`、`architecture.html`)、根目录 `*.md`(`README`、`STORE_SUBMISSION`、`PRIVACY`、`NOTICE`、`RELEASE_NOTES`)。包括:引用的路径或文件名不存在、行数写错、两条规则互相打架、一条规则依赖一个没人会传的输入、以及"文档描述的代码行为与代码实际不符"。
-
-第 4 类是必要的:`npm run check` 校验 manifest/package 版本号一致、`manifest_version === 3`、一份固定文件清单是否存在,并对全部 `.js/.mjs` 跑 `node --check`——**它不校验任何文档内容**。文档类错误只能靠评审拦。
-
-**默认不报**(除非作者点名要):
-- nit、命名、风格、格式、注释措辞
-- "这里可以抽成函数""建议加个 try-catch"
-- 测试覆盖率、"应该补个测试"
-- 纯文档的措辞偏好
-
-**上限:每次最多 5 条。没有就明说「没有要改的」,不要凑数。**
-
-理由:agent 作者的 nit 成本远高于人。人一秒钟挥掉一个 nit,agent 会去改,于是多一个 commit、多一轮 review。
-
-## 4. 标签(每条必带一个)
-
-| 标签 | 含义 | 处置 |
-|---|---|---|
-| **严重** | 命中第 1 节"失败"清单中的某一项,或安全/隐私问题 | **必须修**,否则不许合并 |
-| **一般** | 真实缺陷,不致命 | 修,或写明理由不修 |
-| **既存** | 这个 bug 在本次改动**之前**就存在 | **不算在本次头上**;只记一条,由作者另行排期 |
-
-`既存` 这个标签是必须的:不标的话,老 bug 看起来像是这次改坏的,会误导判断。
-
-## 5. 收敛规则
-
-- **轮次与历史由作者传入。** 起 reviewer 时必须一并给出:**轮次编号**、**上一轮的发现清单及各自处置**。新上下文不记得上一轮发生过什么,没有这份输入,"不重复报"和"三轮封顶"都无法执行。
-- **第一轮**看全量 diff;**第二轮起只看新增 diff**。
-- **同一类问题第 3 次出现** → 停止报同类,改为提议"该改规则文件"(`AGENTS.md` / 本文件 / `ci.yml`)。
-- **已报过的发现不重复报**;只确认上一轮的是否已解决。
-- **三轮之后**不再新增发现。
-
-> 依据:原文里有 PR 一夜跑了 50 多轮 review;查 git blame 发现被反复指出的代码里约 59% 在 reviewer 第一轮之前就存在——不是在找新 bug,是每轮多挖出几个老 bug。
-
-## 6. 跳过这些路径
-
-- `src/vendor/pdfjs/**` — 上游整包 vendored,不审
-- `docs/store/**` — 图片与素材
-- `node_modules/**`、`package-lock.json`
-
-## 7. 汇总格式
-
-**先给数字,再列条目。没有就一句话结束。**
-
-```
-发现:严重 1 / 一般 2 / 既存 1
-
-[严重] src/content/chat-bridge.js:1817 — 输入框查找只用 textarea,
-        ChatGPT 换成 contenteditable 后会失败。
-       → 建议:保留 contenteditable 兜底分支。
-
-[一般] src/sidebar.js:2770 — 存储键 'promptLibrary' 读写不一致。
-[既存] background.js:334 — PDF 判定没考虑大写 .PDF。
-```
-
-## 8. 什么必须由人决定(reviewer 不碰)
-
-- **要不要做这件事**(方向、范围、取舍)。agent 可以提,人不点头不做。
-- 权限、`rules.json`、存储格式这类高风险改动。
-- 会成为别人模仿对象的架构决定。
-- **看证据**:测试输出、截图、执行过的命令。说不出"这些检查会漏什么",就该要求补验证而不是批。
-
-## 9. 这个文件自己也要演进
-
-同一类问题第二次被指出 → 先改代码。
-**第三次** → 改这个文件(或者 `AGENTS.md`),把这类问题变成明文规则。
-reviewer 反复报同样的东西,是规则文件没写清的信号,不是代码的问题。
+## Nit budget
