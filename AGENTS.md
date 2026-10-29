@@ -27,7 +27,7 @@
 | 阶段 | 必须发生 | 卡住的条件 |
 |---|---|---|
 | **0 前置** | 读 [`docs/DECISIONS.md`](docs/DECISIONS.md)(决策 + 前提);回复第一行报出条数与相关条目 | 没读 = 不开工 |
-| **1 提交 PR 前** | 真跑 `npm run check` + `npm test`;**diff 交给独立上下文的 reviewer,按 [`docs/REVIEW.md`](docs/REVIEW.md) 的口径审** | 有未裁决的发现 = 不提交 |
+| **1 提交 PR 前** | 真跑 `npm run check` + `npm test`;**diff 交给独立上下文的 reviewer,按 [`docs/REVIEW.md`](docs/REVIEW.md) 的口径审;起 reviewer 时必须附上轮次编号与上一轮发现清单及处置** | 有未裁决的发现 = 不提交 |
 | **2 PR 检查** | CI 绿;按风险分级决定要不要我人工确认;过安全检查清单 | CI 红 或 高风险未确认 = 不合并 |
 | **3 合并** | 先基于**最新 main** 重跑一次 CI | 没重跑 = 不合 |
 | **4 合并后** | 打 tag + Release;写下观察点与回退方案 | — |

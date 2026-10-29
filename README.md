@@ -133,7 +133,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 | --- | --- |
 | `manifest.json` | MV3 清单，声明 `tabs`、`sidePanel`、`declarativeNetRequestWithHostAccess` |
 | `background.js` | 点击图标时打开侧边栏 |
-| `rules.json` | 删除 `chat.deepseek.com` 的 `X-Frame-Options` / CSP，使其可被 iframe 嵌入 |
+| `rules.json` | 删除三个嵌入聊天域（`chat.deepseek.com`、`chatgpt.com`、`chat.openai.com`）的 `X-Frame-Options` / CSP，仅 `sub_frame`，使其可被 iframe 嵌入 |
 | `sidebarIframe.html` | 一个占满侧边栏的 `<iframe src="https://chat.deepseek.com">` |
 
 原版里还有一个 `sidebar.js`，但它引用的是不存在的 DOM，属于早期“自建聊天界面/API 客户端”的遗留文件，实际没有被任何页面加载。
@@ -326,7 +326,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 | `contextMenus` | 右键菜单。 |
 | `clipboardRead` | 工具栏“从剪贴板填入”，用于 Edge 无法读取选区的本地 PDF。 |
 | `clipboardWrite` | 复制网页正文。 |
-| `declarativeNetRequestWithHostAccess` | 移除 `chat.deepseek.com` 的 `X-Frame-Options` / CSP，让 DeepSeek 能嵌入侧边栏（与原版一致）。 |
+| `declarativeNetRequestWithHostAccess` | 移除三个嵌入聊天域（`chat.deepseek.com`、`chatgpt.com`、`chat.openai.com`）的 `X-Frame-Options` / CSP（仅 `sub_frame`），让它们能嵌入侧边栏（与原版一致）。 |
 | `web_accessible_resources`（`pdf-main.js`） | 在 PDF 页面主世界读取 Edge 阅读器当前选区；只监听 PDF 选区，不读取页面其他内容。 |
 
 扩展自身代码没有独立的远程上报；网页正文只在你主动读取/划词时进入扩展，填入输入框，只有你在 DeepSeek 里点击发送时才会发给 DeepSeek。PDF 是例外：你点击“读本页”时，PDF 文件会被下载并附加到 DeepSeek，由 DeepSeek 解析；扩展不会在后台扫描你的 PDF。侧边栏内嵌的 `chat.deepseek.com` 是 DeepSeek 的网页，它仍会按 DeepSeek 自己的隐私政策联网。
@@ -337,7 +337,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 deepseek-sidebar-plus/
 ├─ manifest.json                 MV3 清单
 ├─ background.js                 侧边栏、右键菜单、待填入状态、页面提取调度
-├─ rules.json                    仅作用于 chat.deepseek.com 的响应头规则
+├─ rules.json                    三个嵌入聊天域的响应头规则（X-Frame-Options / CSP，仅 sub_frame）
 ├─ src/
 │  ├─ sidebar.html               侧边栏页面（工具栏 + iframe + 预览/设置面板）
 │  ├─ sidebar.css                侧边栏 UI

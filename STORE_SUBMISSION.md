@@ -114,7 +114,7 @@ Paste these into **Privacy → Permission justification**:
 
 ### Important transparency note for reviewers
 
-The extension embeds `https://chat.deepseek.com` in its side panel. To make that possible, `rules.json` removes `X-Frame-Options` and `Content-Security-Policy` from `sub_frame` responses for `chat.deepseek.com`. It does not set a CORS wildcard and does not modify other domains. Do not hide this from reviewers; explain it in the certification notes.
+The extension embeds chat pages in its side panel — `https://chat.deepseek.com`, and `https://chatgpt.com` (legacy `https://chat.openai.com`) when the user selects the ChatGPT provider. To make that possible, `rules.json` contains three rules that remove `X-Frame-Options` and `Content-Security-Policy` from `sub_frame` responses for exactly those three origins. It does not set a CORS wildcard, does not affect top-level navigation, and does not apply to any other domain. Do not hide this from reviewers; explain it in the certification notes.
 
 If review objects to the header modification, the fallback is a “lite” build that opens DeepSeek in a normal tab (no iframe/header rule) or moves page access to optional host permissions.
 
@@ -251,7 +251,7 @@ Validate before uploading:
 
 ## 12. Known risks (read before submitting)
 
-1. **Header modification / iframe** — the original “Deepseek Chat Sidebar (Unofficial)” used the same header-removal approach and was published, so this is not automatically disqualifying. This build narrows the rule to `sub_frame` for `chat.deepseek.com` and no longer sets a CORS wildcard. It is still a policy grey area; explain it and be ready to ship a no-iframe fallback.
+1. **Header modification / iframe** — the original “Deepseek Chat Sidebar (Unofficial)” used the same header-removal approach and was published, so this is not automatically disqualifying. This build narrows the rules to `sub_frame` for the three embedded chat origins and no longer sets a CORS wildcard. It is still a policy grey area; explain it and be ready to ship a no-iframe fallback.
 2. **Trademark / unofficial status** — keep “Unofficial / 非官方” in the name, description, and UI; do not use DeepSeek logos. DeepSeek's terms restrict use of its marks; permission is better than a disclaimer.
 3. **`<all_urls>` + clipboard** — the biggest difference from the original. The privacy policy and permission justifications must be complete and truthful. Optional host permissions are the fallback if reviewers object.
 4. **Mobile** — this is a desktop Edge extension; Edge mobile generally does not support sidePanel extensions. Do not claim mobile support in the listing.
