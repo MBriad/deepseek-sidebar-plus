@@ -15,7 +15,10 @@ concurrency:
 jobs:
   test:
     name: Functional tests
-    runs-on: ubuntu-latest
+    # Pinned on purpose: `ubuntu-latest` moved to Ubuntu 26.04, where Playwright
+    # 1.60.0 refuses to install Chromium ("Playwright does not support chromium
+    # on ubuntu26.04-x64"). Unpin after upgrading Playwright and verifying it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     steps:
