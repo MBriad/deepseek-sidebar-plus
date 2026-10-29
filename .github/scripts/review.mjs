@@ -10,7 +10,9 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 const API = 'https://api.deepseek.com/chat/completions';
-const MODEL = process.env.REVIEW_MODEL || 'deepseek-v4-pro';
+// API 只接受 deepseek-flash 和 deepseek-v4-pro 两个名字(传 deepseek-flash-4.1 会被拒)。
+// 默认与 CI 保持一致:flash 更便宜,实测能产出可用的发现。
+const MODEL = process.env.REVIEW_MODEL || 'deepseek-flash';
 const MAX_DIFF_CHARS = 60000;
 const MAX_FINDINGS = 5;
 // 两个可用模型都是推理模型:max_tokens 同时被 reasoning 和正文消耗。
