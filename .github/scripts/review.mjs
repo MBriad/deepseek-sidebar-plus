@@ -32,6 +32,9 @@ const MODULES = [
   { prefix: 'scripts/', spec: 'tests/REVIEW.md' },
   { prefix: 'docs/store/', spec: null },
   { prefix: 'docs/', spec: 'docs/REVIEW.md' },
+  // 口径文件自己审自己:改哪份口径,就按哪份口径审。
+  // 这一条必须排在下面的根目录兜底之前,否则根 REVIEW.md 会被当成"根级 markdown"归到文档模块。
+  { files: ['REVIEW.md'], spec: 'REVIEW.md' },
   { files: ['background.js', 'rules.json', 'manifest.json'], spec: 'REVIEW.md' },
   { prefix: '.github/', spec: 'REVIEW.md' },
 ];
