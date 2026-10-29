@@ -22,6 +22,8 @@ const MAX_TOKENS = Number(process.env.REVIEW_MAX_TOKENS || 32000);
 const SPEC_SECTIONS = ['What failure looks like here', 'Paths to skip', 'Evidence format', 'Nit budget'];
 
 // 模块 → 该模块的 REVIEW.md。顺序有意义:先匹配到的生效。
+// 只按前缀和平台文件枚举;根目录的文档类文件用下面的通配兜底,
+// 免得每加一个根级 markdown 就要记得改这张表(AGENTS.md 的口径是「根目录 *.md」)。
 const MODULES = [
   { prefix: 'src/content/', spec: 'src/content/REVIEW.md' },
   { prefix: 'src/vendor/', spec: null },
@@ -30,7 +32,6 @@ const MODULES = [
   { prefix: 'scripts/', spec: 'tests/REVIEW.md' },
   { prefix: 'docs/store/', spec: null },
   { prefix: 'docs/', spec: 'docs/REVIEW.md' },
-  { files: ['README.md', 'STORE_SUBMISSION.md', 'PRIVACY.md', 'NOTICE', 'RELEASE_NOTES.md', 'INSTALL.md', 'AGENTS.md'], spec: 'docs/REVIEW.md' },
   { files: ['background.js', 'rules.json', 'manifest.json'], spec: 'REVIEW.md' },
   { prefix: '.github/', spec: 'REVIEW.md' },
 ];
@@ -69,6 +70,9 @@ function specFor(file) {
     if (mod.files && mod.files.includes(file)) return mod.spec;
     if (mod.prefix && file.startsWith(mod.prefix)) return mod.spec;
   }
+  // 兜底:根目录的文档类文件(markdown 与 NOTICE)归文档模块。
+  // 这样根 REVIEW.md 本身、以后新增的根级 markdown 都不会漏掉口径。
+  if (!file.includes('/') && (/\.md$/i.test(file) || file === 'NOTICE')) return 'docs/REVIEW.md';
   return null;
 }
 
