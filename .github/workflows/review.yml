@@ -15,7 +15,10 @@ concurrency:
 jobs:
   review:
     name: Agent review
-    if: github.event.pull_request.draft == false
+    # 只在同仓库分支上跑:fork 来的 PR 拿不到 secret,也没必要在这里评。
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -24,6 +27,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # 评审脚本必须用「base 分支的版本」执行。
+      # checkout 取的是 PR 的 ref,直接跑 PR 里的脚本等于让 PR 作者执行任意代码,
+      # 而这一步持有 DEEPSEEK_API_KEY 和 pull-requests: write 的 token。
+      # 残余风险:workflow 文件本身仍来自 PR 的 ref,同仓库分支理论上也能改它;
+      # 这个岗位没有提交权限,只用于读 diff 和发评论。
+      - name: Use the trusted reviewer script
+        run: git checkout "${{ github.event.pull_request.base.sha }}" -- .github/scripts/review.mjs
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -39,5 +50,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          REVIEW_MODEL: deepseek-v4-pro
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          REVIEW_MODEL: deepseek-flash
+          REVIEW_MAX_TOKENS: 32000
         run: node .github/scripts/review.mjs

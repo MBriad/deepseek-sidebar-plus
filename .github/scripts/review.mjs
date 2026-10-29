@@ -13,6 +13,10 @@ const API = 'https://api.deepseek.com/chat/completions';
 const MODEL = process.env.REVIEW_MODEL || 'deepseek-v4-pro';
 const MAX_DIFF_CHARS = 60000;
 const MAX_FINDINGS = 5;
+// 两个可用模型都是推理模型:max_tokens 同时被 reasoning 和正文消耗。
+// 实测:8000 时两个模型都可能把预算全烧在思考上、正文返回空字符串;
+// 32000 才能稳定产出。代价是慢(约 80 秒)且输出 token 多,所以上限可调。
+const MAX_TOKENS = Number(process.env.REVIEW_MAX_TOKENS || 32000);
 const SPEC_SECTIONS = ['What failure looks like here', 'Paths to skip', 'Evidence format', 'Nit budget'];
 
 // 模块 → 该模块的 REVIEW.md。顺序有意义:先匹配到的生效。
@@ -24,7 +28,7 @@ const MODULES = [
   { prefix: 'scripts/', spec: 'tests/REVIEW.md' },
   { prefix: 'docs/store/', spec: null },
   { prefix: 'docs/', spec: 'docs/REVIEW.md' },
-  { files: ['README.md', 'STORE_SUBMISSION.md', 'PRIVACY.md', 'NOTICE', 'RELEASE_NOTES.md', 'INSTALL.md'], spec: 'docs/REVIEW.md' },
+  { files: ['README.md', 'STORE_SUBMISSION.md', 'PRIVACY.md', 'NOTICE', 'RELEASE_NOTES.md', 'INSTALL.md', 'AGENTS.md'], spec: 'docs/REVIEW.md' },
   { files: ['background.js', 'rules.json', 'manifest.json'], spec: 'REVIEW.md' },
   { prefix: '.github/', spec: 'REVIEW.md' },
 ];
@@ -53,8 +57,8 @@ function run(cmd, args) {
   return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
-function changedFiles(base, head) {
-  const out = run('git', ['diff', '--name-only', `${base}...${head}`]);
+function changedFiles(range) {
+  const out = run('git', ['diff', '--name-only', range]);
   return out.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
@@ -88,7 +92,7 @@ function summarizeSpecs(files) {
   });
 }
 
-function buildPrompt(files, specs, diff) {
+function buildPrompt(files, specs, diff, truncated) {
   const specBlock = specs.length
     ? specs
         .map(({ spec, text, filled }) => {
@@ -100,9 +104,13 @@ function buildPrompt(files, specs, diff) {
         .join('\n\n')
     : '（本次改动没有匹配到任何模块的 REVIEW.md）';
 
+  const truncNote = truncated
+    ? `\n> ⚠️ diff 已截断至前 ${MAX_DIFF_CHARS} 字符,末尾不完整。不要据此判断语法完整性(缺大括号、文件被切断等),只评你确实看到的完整片段。\n`
+    : '';
+
   return `改动涉及的文件:\n${files.map((f) => `- ${f}`).join('\n')}\n\n` +
     `---\n\n以下是仓库所有者为这些模块撰写的评审口径(REVIEW.md),请遵守:\n\n${specBlock}\n\n` +
-    `---\n\n以下是 diff:\n\n\`\`\`diff\n${diff}\n\`\`\``;
+    `---\n${truncNote}\n以下是 diff:\n\n\`\`\`diff\n${diff}\n\`\`\``;
 }
 
 async function callModel(system, user) {
@@ -115,17 +123,22 @@ async function callModel(system, user) {
     body: JSON.stringify({
       model: MODEL,
       temperature: 0.1,
-      max_tokens: 2000,
+      max_tokens: MAX_TOKENS,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
     }),
-    signal: AbortSignal.timeout(180000),
+    signal: AbortSignal.timeout(300000),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${(await res.text()).slice(0, 400)}`);
   const json = await res.json();
-  return json.choices?.[0]?.message?.content?.trim() || '';
+  const msg = json.choices?.[0];
+  return {
+    content: msg?.message?.content?.trim() || '',
+    finishReason: msg?.finish_reason || 'unknown',
+    usage: json.usage || {},
+  };
 }
 
 async function postComment(body) {
@@ -160,31 +173,58 @@ if (!process.env.DEEPSEEK_API_KEY) {
   process.exit(0);
 }
 
-const all = changedFiles(BASE_SHA, HEAD_SHA);
-const files = all.filter((f) => !isSkipped(f));
+// 首轮审全量;后续 push 只审新增的那一段,避免同一条发现被反复报。
+// 用 pull_request 事件自带的 before 字段,不依赖读上一轮评论(CI 里拿评论要额外的 API 调用)。
+const BEFORE = process.env.EVENT_BEFORE || '';
+const isIncremental =
+  process.env.EVENT_ACTION === 'synchronize' && /^[0-9a-f]{40}$/.test(BEFORE) && !/^0+$/.test(BEFORE);
+const diffRange = isIncremental ? `${BEFORE}..${HEAD_SHA}` : `${BASE_SHA}...${HEAD_SHA}`;
 
-if (files.length === 0) {
-  console.log(`改动的 ${all.length} 个文件全部在跳过清单里,不发评论。`);
+// 这一段全是 git 调用。评审是建议性的,基础设施失败不该把 PR 卡成红,
+// 所以统一兜住:写 step summary 说明原因,然后正常退出。
+let all;
+let files;
+let specs;
+let diff;
+let truncated;
+try {
+  all = changedFiles(diffRange);
+  files = all.filter((f) => !isSkipped(f));
+
+  if (files.length === 0) {
+    console.log(`改动的 ${all.length} 个文件全部在跳过清单里,不发评论。`);
+    process.exit(0);
+  }
+
+  specs = summarizeSpecs(files);
+  diff = run('git', ['diff', diffRange, '--', ...files]).slice(0, MAX_DIFF_CHARS);
+  truncated = diff.length >= MAX_DIFF_CHARS;
+} catch (error) {
+  console.log(`读取 diff 失败:${error.message}`);
+  stepSummary(`## Agent review 未执行\n\n读取 diff 失败(评审是建议性的,不阻塞 PR):\n\n\`\`\`\n${error.message}\n\`\`\`\n`);
   process.exit(0);
 }
 
-const specs = summarizeSpecs(files);
-const diff = run('git', ['diff', `${BASE_SHA}...${HEAD_SHA}`, '--', ...files]).slice(0, MAX_DIFF_CHARS);
-const truncated = diff.length >= MAX_DIFF_CHARS;
-
-let findings;
+let result;
 try {
-  findings = await callModel(BRIEF, buildPrompt(files, specs, diff));
+  result = await callModel(BRIEF, buildPrompt(files, specs, diff, truncated));
 } catch (error) {
   console.log(`评审调用失败:${error.message}`);
   stepSummary(`## Agent review 未完成\n\n调用模型失败:\n\n\`\`\`\n${error.message}\n\`\`\`\n`);
   process.exit(0);
 }
 
-if (!findings) {
-  console.log('模型返回空内容,不发评论。');
+if (!result.content) {
+  const detail =
+    `finish_reason=${result.finishReason} ` +
+    `completion_tokens=${result.usage.completion_tokens ?? '?'} ` +
+    `reasoning_tokens=${result.usage.completion_tokens_details?.reasoning_tokens ?? '?'}`;
+  console.log(`模型返回空正文,不发评论。${detail}`);
+  stepSummary(`## Agent review 未产出内容\n\n模型没有返回正文,通常是被 max_tokens 截断在思考阶段。\n\n\`\`\`\n${detail}\n\`\`\`\n`);
   process.exit(0);
 }
+
+const findings = result.content;
 
 const coverage = specs.length
   ? specs
@@ -198,9 +238,16 @@ const body = [
   findings,
   '',
   '---',
-  `<sub>diff ${files.length} 个文件${truncated ? `（已截断至 ${MAX_DIFF_CHARS} 字符）` : ''} · 口径:${coverage} · 模型:${MODEL}</sub>`,
+  `<sub>diff ${files.length} 个文件${isIncremental ? '（增量:仅本次 push）' : '（全量:与 base 比对）'}${truncated ? `（已截断至 ${MAX_DIFF_CHARS} 字符）` : ''} · 口径:${coverage} · 模型:${MODEL}${result.finishReason === 'length' ? ' · ⚠️ 回答被 max_tokens 截断' : ''}</sub>`,
+  `<sub>用量:${result.usage.completion_tokens ?? '?'} 输出 token(其中思考 ${result.usage.completion_tokens_details?.reasoning_tokens ?? '?'})</sub>`,
   '<sub>这是自动评审,**不构成批准**。每条发现仍需作者裁决,合并由所有者决定。</sub>',
 ].join('\n');
+
+if (process.env.REVIEW_DRY_RUN) {
+  console.log('=== DRY RUN,以下为将发布的评论 ===');
+  console.log(body);
+  process.exit(0);
+}
 
 try {
   await postComment(body);
