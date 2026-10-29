@@ -1,7 +1,7 @@
 {
   "extName": {
     "description": "Extension name shown in Edge and the store listing",
-    "message": "DeepSeek Sidebar Enhanced (Unofficial)"
+    "message": "AI Sidebar Enhanced (Unofficial)"
   },
   "extDescription": {
     "description": "Short store description (keep under 132 characters)",

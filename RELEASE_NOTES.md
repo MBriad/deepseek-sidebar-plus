@@ -1,4 +1,4 @@
-# v1.11.36 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.11.36 — AI Sidebar Enhanced (Unofficial)
 
 Edge 侧边栏增强版 v1.11.36。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
 
@@ -104,5 +104,6 @@ Edge 侧边栏增强版 v1.11.36。非官方扩展，与 DeepSeek、OpenAI/ChatG
 - v1.9.3 是当前已提交 Microsoft 商店审核的版本；v1.11.36 新增网页标签，暂不覆盖审核中的商店包。
 - 未上架商店时不会自动更新；更新请覆盖同一文件夹后点“重新加载”。
 - 未打包扩展的 ID 默认跟路径走；移动/换文件夹会丢失原设置和提示词库。
-- 隐私政策：https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html
-- 项目主页：https://github.com/lllhcbjj/deepseek-sidebar-plus
+- 隐私政策：https://mbriad.github.io/deepseek-sidebar-plus/privacy.html
+- 项目主页：https://github.com/MBriad/deepseek-sidebar-plus
+- 上游项目：https://github.com/lllhcbjj/deepseek-sidebar-plus（MIT，本仓库为 fork，上游版权保留）

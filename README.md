@@ -1,4 +1,4 @@
-# DeepSeek 侧边栏增强版（非官方）
+# AI 侧边栏增强版（非官方）
 
 在 Microsoft Edge 侧边栏里使用 **DeepSeek 或 ChatGPT**，并补上原版缺少的几件事：
 
@@ -11,8 +11,8 @@
 - **提示词库**：保存当前输入，或直接粘贴文本创建；支持自定义 `/命令`、搜索、编辑、置顶、删除和 JSON 导入/导出。在聊天输入框输入 `/` 会显示命令列表和对应提示词预览。
 - **网页标签**：给当前网页加标签，按标签筛选或自然语言搜索已标记网页；标签可新建、改名、合并、删除。索引只保存在本机，不联网。
 
-> 非官方扩展，与 DeepSeek 官方无关。基于你已安装的 **Deepseek Chat Sidebar (Unofficial) v1.0** 重写增强。  
-> GitHub: https://github.com/lllhcbjj/deepseek-sidebar-plus · 隐私政策: https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html
+> 非官方扩展，与 DeepSeek 官方无关。基于 **Deepseek Chat Sidebar (Unofficial) v1.0** 重写增强；本仓库是 [lllhcbjj/deepseek-sidebar-plus](https://github.com/lllhcbjj/deepseek-sidebar-plus)（MIT）的 fork，上游版权按要求保留。  
+> GitHub: https://github.com/MBriad/deepseek-sidebar-plus · 隐私政策: https://mbriad.github.io/deepseek-sidebar-plus/privacy.html
 
 ## 使用方法（先看这里）
 
@@ -264,7 +264,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 2. 打开 `edge://extensions/`。
 3. 打开左下角的 **开发人员模式**。
 4. 点击 **加载解压缩的扩展**，选择解压后包含 `manifest.json` 的文件夹。
-5. 在扩展列表里把 **DeepSeek 侧边栏增强版** 固定到工具栏。
+5. 在扩展列表里把 **AI 侧边栏增强版** 固定到工具栏。
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
@@ -283,19 +283,18 @@ Settings → Appearance → Show mini menu when selecting text → Off
 
 ## Edge 商店提交材料
 
-**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.11.36 新增网页标签和 DeepSeek / ChatGPT 切换，暂不覆盖审核中的商店包，等审核结束后再提交。
+**本仓库（MBriad fork）尚未向 Microsoft Edge Add-ons 提交任何版本。** 上游 lllhcbjj 曾提交 v1.9.3 并长期处于审核中，那是上游自己的商店条目，与本 fork 无关；本 fork 若上架需用自己的开发者账号重新提交。
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
 - 隐私政策：[docs/privacy.html](docs/privacy.html)、[PRIVACY.md](PRIVACY.md)
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
 - 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)
-- 当前审核包：`deepseek-sidebar-plus-v1.9.3-store.zip`
-- v1.11.36 商店包：`deepseek-sidebar-plus-v1.11.36-store.zip`（审核结束后再提交）
+- 商店包按当前版本号打包（最小包，不含开发文档）：`deepseek-sidebar-plus-v1.11.36-store.zip`
 
 **商店提交前还需要：**
 
-1. 隐私政策已发布在 `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html`（源码 `docs/privacy.html`，GitHub Pages 从 `/docs` 发布）。
+1. 隐私政策发布在 `https://mbriad.github.io/deepseek-sidebar-plus/privacy.html`（源码 `docs/privacy.html`；仓库 Settings → Pages 选 `main` 分支 `/docs` 目录，**首次发布需手动开启一次**）。
 2. 商店截图已准备 6 张 1280×800（见 `docs/store/screenshots/`），不需要 DeepSeek 测试账号。
 3. 没有测试账号时，在认证备注中说明“审核员使用自己的免费 DeepSeek 账号”。
 4. 按 `STORE_SUBMISSION.md` 的权限说明、数据使用披露和认证备注填写。
@@ -449,7 +448,7 @@ deepseek-sidebar-plus/
 
 ## License
 
-- **源代码和本文档**采用 [MIT License](LICENSE)，Copyright (c) 2026 lllhcbjj。
+- **源代码和本文档**采用 [MIT License](LICENSE)：上游 Copyright (c) 2026 lllhcbjj，本 fork 的修改 Copyright (c) 2026 MBriad；两份声明按 MIT 要求同时保留。
 - **包含在 MIT 内**：源码、文档、`icons/` 的原创图标（聊天气泡 + 侧边栏 + 命令符号）和 `docs/store/` 的衍生 Logo/宣传图。
 - **不包含在 MIT 内**：DeepSeek 名称和相关商标；第三方网站/服务仍受各自条款约束。详见 [NOTICE](NOTICE)。
 - 本扩展是非官方项目，与 DeepSeek 官方无关联。商业分发前请自行确认 DeepSeek 商标使用权限。

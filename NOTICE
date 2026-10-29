@@ -1,16 +1,25 @@
-DeepSeek Sidebar Enhanced (Unofficial)
-Copyright (c) 2026 lllhcbjj
+AI Sidebar Enhanced (Unofficial) — fork of DeepSeek Sidebar Enhanced
+
+Upstream project (original work):
+  DeepSeek Sidebar Enhanced (Unofficial)
+  Copyright (c) 2026 lllhcbjj
+  https://github.com/lllhcbjj/deepseek-sidebar-plus
+
+This fork (modifications):
+  Copyright (c) 2026 MBriad
+  https://github.com/MBriad/deepseek-sidebar-plus
 
 The MIT license in LICENSE applies to the source code, documentation, icons,
 and promotional artwork authored for this project, including the current
-icon in icons/ and the store images in docs/store/.
+icon in icons/ and the store images in docs/store/. Both copyright notices
+above are retained as required by the MIT license.
 
 Excluded marks and third-party material
 ----------------------------------------
-- "DeepSeek" and related names, logos, and trademarks belong to their
-  respective owner. They are used only to describe compatibility. This project
-  is unofficial and is not affiliated with, endorsed by, or operated by
-  DeepSeek.
+- "DeepSeek", "ChatGPT", and related names, logos, and trademarks belong to
+  their respective owners. They are used only to describe compatibility. This
+  project is unofficial and is not affiliated with, endorsed by, or operated by
+  DeepSeek or OpenAI.
 - Third-party websites, services, and dependencies remain subject to their own
   terms and licenses.
 - The current icon is an original geometric design (chat bubble, sidebar panel,

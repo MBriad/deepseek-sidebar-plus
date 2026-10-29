@@ -1,4 +1,4 @@
-/* DeepSeek 侧边栏增强版 — background service worker */
+/* AI 侧边栏增强版 — background service worker */
 
 const SIDEBAR_PATH = 'src/sidebar.html';
 const MENU_SELECTION = 'ds-send-selection';

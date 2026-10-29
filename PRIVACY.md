@@ -1,12 +1,12 @@
 # Privacy Policy / 隐私政策
 
-**DeepSeek Sidebar Enhanced (Unofficial)**  
+**AI Sidebar Enhanced (Unofficial)**  
 Effective date / 生效日期：2026-10-25
 
 > **非官方声明 / Unofficial:** 本扩展是第三方工具，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。相关名称仅用于说明兼容性。  
 > This extension is an independent third-party tool, not affiliated with or endorsed by DeepSeek or OpenAI/ChatGPT.
 
-The full policy is in [`docs/privacy.html`](docs/privacy.html), published at **https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html**.
+The full policy is in [`docs/privacy.html`](docs/privacy.html), published at **https://mbriad.github.io/deepseek-sidebar-plus/privacy.html**.
 
 ## 中文摘要
 
@@ -16,7 +16,7 @@ The full policy is in [`docs/privacy.html`](docs/privacy.html), published at **h
 - 没有开发者服务器、分析、遥测或追踪；不出售、不共享给数据经纪人。
 - 内容在用户填入/发送/附加时进入当前选择的聊天服务（DeepSeek 或 ChatGPT），受对应服务的隐私政策约束。
 - 不加载远程代码，不读取登录密码；登录由 DeepSeek / ChatGPT 页面处理。
-- 发布者/联系方式：**lllhcbjj / [GitHub Issues](https://github.com/lllhcbjj/deepseek-sidebar-plus/issues)**。
+- 发布者/联系方式：**MBriad / [GitHub Issues](https://github.com/MBriad/deepseek-sidebar-plus/issues)**。
 
 ## English summary
 
@@ -26,4 +26,8 @@ The full policy is in [`docs/privacy.html`](docs/privacy.html), published at **h
 - No developer server, analytics, telemetry, tracking, sale, or data-broker sharing.
 - Content enters the selected provider (DeepSeek or ChatGPT) only when the user fills, sends, or attaches it; that provider’s privacy policy applies.
 - No remote code and no credential reading; DeepSeek / ChatGPT handles login.
-- Publisher/contact: **lllhcbjj / [GitHub Issues](https://github.com/lllhcbjj/deepseek-sidebar-plus/issues)**.
+- Publisher/contact: **MBriad / [GitHub Issues](https://github.com/MBriad/deepseek-sidebar-plus/issues)**.
+
+## Upstream attribution / 上游署名
+
+This extension is a fork of [lllhcbjj/deepseek-sidebar-plus](https://github.com/lllhcbjj/deepseek-sidebar-plus) (MIT, Copyright (c) 2026 lllhcbjj). This fork retains the upstream MIT notice and adds its own modifications notice; see [LICENSE](LICENSE) and [NOTICE](NOTICE).

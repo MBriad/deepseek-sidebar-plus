@@ -1,11 +1,11 @@
-# Edge Add-ons Submission Pack — v1.9.3
+# Edge Add-ons Submission Pack — AI Sidebar Enhanced
 
-This is the submission worksheet for **DeepSeek Sidebar Enhanced (Unofficial)**.  
+This is the submission worksheet for **AI Sidebar Enhanced (Unofficial)**.  
 It is not a guarantee of approval; it prepares the package and the answers reviewers will look for.
 
-> **v1.9.3 is the version currently in Microsoft certification.** v1.11.0 adds webpage tags and a DeepSeek / ChatGPT provider switch; it is a local/GitHub update only. Do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.11.0 is ready for resubmission.
+> **This worksheet belongs to the MBriad fork** (`https://github.com/MBriad/deepseek-sidebar-plus`), a fork of [`lllhcbjj/deepseek-sidebar-plus`](https://github.com/lllhcbjj/deepseek-sidebar-plus) under the MIT license. The store-review notes below describe the upstream submission history and must be re-checked before submitting under a new publisher account.
 
-**Screenshots are ready in `docs/store/screenshots/`. Remaining before submitting: decide how to handle DeepSeek login for reviewers (test account or a clear note) and complete the Partner Center upload. Privacy URL, publisher, and support contact are filled for `lllhcbjj`.**
+**Screenshots are ready in `docs/store/screenshots/`. Remaining before submitting: enable GitHub Pages once (repository Settings → Pages → branch `main`, folder `/docs`), decide how to handle DeepSeek login for reviewers (test account or a clear note), and complete the Partner Center upload. Privacy URL, publisher, and support contact are filled for `MBriad`.**
 
 ---
 
@@ -13,17 +13,17 @@ It is not a guarantee of approval; it prepares the package and the answers revie
 
 | Field | Value |
 | --- | --- |
-| Extension name (en) | `DeepSeek Sidebar Enhanced (Unofficial)` |
-| Extension name (zh-CN) | `DeepSeek 侧边栏增强版（非官方）` |
-| Version | `1.9.3` |
+| Extension name (en) | `AI Sidebar Enhanced (Unofficial)` |
+| Extension name (zh-CN) | `AI 侧边栏增强版（非官方）` |
+| Version | `1.11.36` |
 | Category | Productivity |
 | Languages | en-US, zh-CN (from `_locales`) |
-| Publisher display name | `lllhcbjj` |
-| Support contact | `https://github.com/lllhcbjj/deepseek-sidebar-plus/issues` |
-| Website (optional) | `https://github.com/lllhcbjj/deepseek-sidebar-plus` |
-| Privacy policy URL | `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html` |
-| Short description (en) | Unofficial DeepSeek sidebar: page documents, tab @ mentions, selection autofill, prompt commands, and PDF support. |
-| Short description (zh) | 非官方 DeepSeek 侧边栏：网页文档、@ 标签页、划词填入、提示词命令、PDF 支持。 |
+| Publisher display name | `MBriad` |
+| Support contact | `https://github.com/MBriad/deepseek-sidebar-plus/issues` |
+| Website (optional) | `https://github.com/MBriad/deepseek-sidebar-plus` |
+| Privacy policy URL | `https://mbriad.github.io/deepseek-sidebar-plus/privacy.html` |
+| Short description (en) | Unofficial DeepSeek + ChatGPT sidebar: page documents, tab @ mentions, selection autofill, prompt commands, tags, and PDF support. |
+| Short description (zh) | 非官方 DeepSeek / ChatGPT 侧边栏：网页文档、@ 标签页、划词填入、提示词命令、网页标签与语义搜索、PDF 支持。 |
 
 The manifest uses `__MSG_extName__` / `__MSG_extDescription__`; Partner Center reads the localized values from `_locales/`.
 
@@ -31,7 +31,7 @@ The manifest uses `__MSG_extName__` / `__MSG_extDescription__`; Partner Center r
 
 ## 2. Detailed description (zh-CN)
 
-DeepSeek 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，把 DeepSeek 聊天放进浏览器侧边栏，并为阅读、写作和提示词工作流补上上下文工具。它不是 DeepSeek 官方产品，与 DeepSeek 官方无关联。
+AI 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，把 DeepSeek / ChatGPT 聊天放进浏览器侧边栏，并为阅读、写作和提示词工作流补上上下文工具。它不是 DeepSeek 或 OpenAI 官方产品，与两者均无关联。
 
 主要功能：
 
@@ -60,7 +60,7 @@ DeepSeek 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩�
 
 ## 3. Detailed description (en-US)
 
-DeepSeek Sidebar Enhanced (Unofficial) is an independent third-party Edge extension that puts DeepSeek chat in the browser sidebar and adds practical context tools for reading, writing, and prompt workflows. It is not an official DeepSeek product and is not affiliated with DeepSeek.
+AI Sidebar Enhanced (Unofficial) is an independent third-party Edge extension that puts DeepSeek and ChatGPT chat in the browser sidebar and adds practical context tools for reading, writing, and prompt workflows. It is not an official DeepSeek or OpenAI product and is not affiliated with either.
 
 Features:
 
@@ -153,7 +153,7 @@ Certify:
 - Data is not used for purposes unrelated to the single purpose.
 - The privacy policy URL is accurate and up to date.
 
-Privacy policy: **https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html** (source: `docs/privacy.html`, published from GitHub Pages `/docs`).
+Privacy policy: **https://mbriad.github.io/deepseek-sidebar-plus/privacy.html** (source: `docs/privacy.html`, published from GitHub Pages `/docs`).
 
 ---
 
@@ -236,8 +236,8 @@ Validate before uploading:
 
 ## 11. Submission checklist
 
-- [x] Publisher/contact set to `lllhcbjj` / GitHub Issues in `docs/privacy.html` and `PRIVACY.md`.
-- [x] Verify `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html` is live (GitHub Pages `/docs`, status built).
+- [x] Publisher/contact set to `MBriad` / GitHub Issues in `docs/privacy.html` and `PRIVACY.md`.
+- [ ] Verify `https://mbriad.github.io/deepseek-sidebar-plus/privacy.html` is live (enable GitHub Pages: Settings → Pages → branch `main`, folder `/docs`).
 - [ ] Capture real screenshots at 1280×800 or 640×480.
 - [x] Logo 300×300 and optional tiles generated in `docs/store/`.
 - [ ] Create/verify Partner Center individual account (free).
