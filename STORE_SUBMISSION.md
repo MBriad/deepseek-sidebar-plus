@@ -108,13 +108,13 @@ Paste these into **Privacy → Permission justification**:
 | `contextMenus` | Provide the optional “send selection”, “read page”, and “quote to input” context-menu actions. |
 | `clipboardRead` | Read clipboard text only when the user clicks the “Paste from clipboard” toolbar button. No background clipboard monitoring. |
 | `clipboardWrite` | Copy page text only when the user clicks the “Copy” button in the page preview. |
-| `declarativeNetRequestWithHostAccess` | Apply a header rule only to `chat.deepseek.com` so the DeepSeek page can render inside the extension side panel. The rule does not target other domains. |
+| `declarativeNetRequestWithHostAccess` | Apply header rules only to the three chat services the extension embeds (`chat.deepseek.com`, `chatgpt.com`, `chat.openai.com`), and only to `sub_frame` requests, removing `X-Frame-Options` / CSP so they can render inside the side panel. No other domains are affected. |
 | `<all_urls>` host permission | Capture a user's text selection and extract the current page's body only when the user has enabled selection autofill or clicked “Read this page”. No automatic background collection or upload. |
 | `web_accessible_resources` (`pdf-main.js`) | Expose the PDF selection bridge script to PDF pages so the extension can read the Edge PDF viewer's selected text. |
 
 ### Important transparency note for reviewers
 
-The extension embeds `https://chat.deepseek.com` in its side panel. To make that possible, `rules.json` removes `X-Frame-Options` and `Content-Security-Policy` from `sub_frame` responses for `chat.deepseek.com`. It does not set a CORS wildcard and does not modify other domains. Do not hide this from reviewers; explain it in the certification notes.
+The extension embeds chat pages in its side panel — `https://chat.deepseek.com`, and `https://chatgpt.com` (legacy `https://chat.openai.com`) when the user selects the ChatGPT provider. To make that possible, `rules.json` contains three rules that remove `X-Frame-Options` and `Content-Security-Policy` from `sub_frame` responses for exactly those three origins. It does not set a CORS wildcard, does not affect top-level navigation, and does not apply to any other domain. Do not hide this from reviewers; explain it in the certification notes.
 
 If review objects to the header modification, the fallback is a “lite” build that opens DeepSeek in a normal tab (no iframe/header rule) or moves page access to optional host permissions.
 
@@ -172,7 +172,7 @@ This is an unofficial DeepSeek sidebar extension. DeepSeek login is required for
 6. Open the prompt library, paste-create a prompt, set a custom command, then type `/` in the DeepSeek input and verify the command preview and Enter insertion.
 7. Open two other tabs, type `@` in the DeepSeek input: the current page is the first item, and other tabs from all windows follow. Press Enter to attach the current page as a document; repeat and select another tab and verify its content attaches without changing the input.
 8. Open a PDF URL and use the PDF attach flow; the input should remain unchanged.
-9. The declarativeNetRequest rule only targets chat.deepseek.com and exists to allow the DeepSeek page to render in the side panel. It does not modify other sites.
+9. The declarativeNetRequest rules target only the three embedded chat origins (chat.deepseek.com, chatgpt.com, chat.openai.com) and only `sub_frame` requests, so those pages can render in the side panel. They do not modify other sites.
 10. The extension never clicks DeepSeek's Send button automatically.
 
 For local file:// PDFs, Edge's "Allow access to file URLs" setting must be enabled by the user; test with a web PDF if file access is disabled.
@@ -230,7 +230,7 @@ Validate before uploading:
 - `_locales/en` and `_locales/zh_CN` exist and `default_locale` is `en`.
 - No `key` / `update_url` in the store manifest.
 - The extension loads unpacked and the side panel opens.
-- `rules.json` is present and only targets `chat.deepseek.com`.
+- `rules.json` is present and targets only the three embedded chat origins (`chat.deepseek.com`, `chatgpt.com`, `chat.openai.com`), `sub_frame` only.
 
 ---
 
@@ -251,7 +251,7 @@ Validate before uploading:
 
 ## 12. Known risks (read before submitting)
 
-1. **Header modification / iframe** — the original “Deepseek Chat Sidebar (Unofficial)” used the same header-removal approach and was published, so this is not automatically disqualifying. This build narrows the rule to `sub_frame` for `chat.deepseek.com` and no longer sets a CORS wildcard. It is still a policy grey area; explain it and be ready to ship a no-iframe fallback.
+1. **Header modification / iframe** — the original “Deepseek Chat Sidebar (Unofficial)” used the same header-removal approach and was published, so this is not automatically disqualifying. This build narrows the rules to `sub_frame` for the three embedded chat origins and no longer sets a CORS wildcard. It is still a policy grey area; explain it and be ready to ship a no-iframe fallback.
 2. **Trademark / unofficial status** — keep “Unofficial / 非官方” in the name, description, and UI; do not use DeepSeek logos. DeepSeek's terms restrict use of its marks; permission is better than a disclaimer.
 3. **`<all_urls>` + clipboard** — the biggest difference from the original. The privacy policy and permission justifications must be complete and truthful. Optional host permissions are the fallback if reviewers object.
 4. **Mobile** — this is a desktop Edge extension; Edge mobile generally does not support sidePanel extensions. Do not claim mobile support in the listing.

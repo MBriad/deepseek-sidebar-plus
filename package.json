@@ -4,7 +4,8 @@
   "private": true,
   "description": "Unofficial Edge side panel for DeepSeek and ChatGPT",
   "scripts": {
-    "check": "node scripts/check.mjs",
+    "check": "node scripts/check.mjs && node scripts/docs-check.mjs",
+    "classify": "node scripts/classify.mjs",
     "test": "node tests/functional.test.js"
   },
   "devDependencies": {
