@@ -48,8 +48,20 @@ function isSafePath(path) {
 // 首轮审全量;后续 push 只审新增的那一段(D-7),避免同一条发现被反复报。
 const eventAction = process.env.EVENT_ACTION || '';
 const beforeSha = process.env.EVENT_BEFORE || '';
-const incremental =
+let incremental =
   eventAction === 'synchronize' && /^[0-9a-f]{40}$/.test(beforeSha) && !/^0+$/.test(beforeSha);
+
+// force-push 之后,事件里的 before 指向一个在新 checkout 里根本不存在的 commit
+// (PR ref 只带它自己的历史)。这时增量范围算不出来,退回全量 —— 否则整个采集直接失败。
+if (incremental) {
+  try {
+    execFileSync('git', ['-C', prDir, 'cat-file', '-e', `${beforeSha}^{commit}`], { stdio: 'ignore' });
+  } catch {
+    console.log(`collect-diff: before ${beforeSha.slice(0, 8)} 不在本次 checkout 里,按全量处理`);
+    incremental = false;
+  }
+}
+
 const range = incremental ? `${beforeSha}..${headSha}` : `${baseSha}...${headSha}`;
 
 const cwd = process.cwd();
