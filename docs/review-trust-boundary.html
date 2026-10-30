@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>信任边界：可信程序 × 不可信输入</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e4e7ec; --ink:#101828; --muted:#667085;
+    --red:#b42318; --red-bg:#fef3f2; --red-line:#fecdca;
+    --green:#067647; --green-bg:#ecfdf3; --green-line:#abefc6;
+    --blue:#175cd3; --blue-bg:#eff8ff; --blue-line:#b2ddff;
+    --amber:#b54708; --amber-bg:#fffaeb; --amber-line:#fedf89;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:36px 28px 56px;
+    background:var(--bg); color:var(--ink);
+    font:15px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:.2px}
+  .sub{color:var(--muted);margin:0 0 30px}
+  h2{font-size:15px;margin:34px 0 12px;color:var(--muted);font-weight:700;letter-spacing:.4px}
+  h2 b{color:var(--ink);font-weight:700;margin-right:8px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .cols{display:grid;gap:16px}
+  .c2{grid-template-columns:1fr 1fr}
+  .c3{grid-template-columns:repeat(3,1fr)}
+  .c5{grid-template-columns:repeat(5,1fr)}
+
+  .chip{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:#fff}
+  .chip.red{color:var(--red);background:var(--red-bg);border-color:var(--red-line)}
+  .chip.green{color:var(--green);background:var(--green-bg);border-color:var(--green-line)}
+  .chip.blue{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-line)}
+  .chip.amber{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-line)}
+
+  ul{margin:8px 0 0;padding-left:18px}
+  li{margin:5px 0}
+
+  /* 信任边界 */
+  .boundary{display:grid;grid-template-columns:1fr 74px 1fr;align-items:stretch;gap:0}
+  .side{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff}
+  .side.untrusted{border-color:var(--red-line);background:var(--red-bg)}
+  .side.trusted{border-color:var(--green-line);background:var(--green-bg)}
+  .side h3{margin:0 0 8px;font-size:14px}
+  .side.untrusted h3{color:var(--red)}
+  .side.trusted h3{color:var(--green)}
+  .wall{display:grid;place-items:center;position:relative}
+  .wall::before{content:"";position:absolute;top:6px;bottom:6px;left:50%;border-left:2px dashed #98a2b3}
+  .wall span{
+    position:relative;font-size:12px;letter-spacing:0;line-height:1;
+    color:#475467;background:var(--bg);padding:6px 2px;white-space:nowrap;
+  }
+  .flow{margin-top:14px;text-align:center;color:var(--muted);font-size:13px}
+  .flow b{color:var(--ink)}
+
+  /* 两道门 */
+  .door{display:flex;gap:12px;align-items:flex-start}
+  .door .num{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:#eef2f6;color:#475467;font-size:13px;flex:none}
+  .door b{display:block;font-size:14px;margin-bottom:2px}
+  .door .k{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--blue)}
+
+  /* 双 job */
+  .job{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff}
+  .job.a{border-color:var(--red-line);background:var(--red-bg)}
+  .job.b{border-color:var(--green-line);background:var(--green-bg)}
+  .job h3{margin:0 0 4px;font-size:15px}
+  .job.a h3{color:var(--red)} .job.b h3{color:var(--green)}
+  .arrow{display:grid;place-items:center;padding:10px 0;color:var(--muted);font-size:12.5px;gap:2px}
+  .arrow .line{width:2px;height:26px;background:#98a2b3;position:relative}
+  .arrow .line::after{content:"";position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);
+    border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #98a2b3}
+
+  /* 攻击面 */
+  .risk{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
+  .risk b{display:block;font-size:13.5px;margin-bottom:4px}
+  .risk span{font-size:12.5px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12.5px}
+  td.q{width:62%}
+  .yes{color:var(--green);font-weight:700}
+  .no{color:var(--red);font-weight:700}
+  code{background:#eef2f6;border-radius:5px;padding:1px 5px;font:12.5px "Cascadia Code",Consolas,monospace}
+  .kicker{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:12px 16px;border-radius:12px;background:#fff;border:1px solid var(--line)}
+  .kicker b{font-size:15px}
+  .kicker span{color:var(--muted);font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>可信程序 × 不可信输入</h1>
+  <p class="sub">漏洞通常不来自“代码不可信”，而来自<strong>可信代码不安全地处理了不可信数据</strong>。</p>
+
+  <div class="kicker">
+    <b>一条等式</b>
+    <span>可信程序 + 不可信输入 + 没有边界 = 漏洞</span>
+  </div>
+
+  <h2><b>1</b>边界划在哪里</h2>
+  <div class="boundary">
+    <div class="side untrusted">
+      <h3>不可信 · 来自 PR</h3>
+      <div>
+        <span class="chip red">PR 提交的代码</span>
+        <span class="chip red">diff 文本</span>
+        <span class="chip red">文件路径 / 文件名</span>
+        <span class="chip red">artifact 内容</span>
+      </div>
+      <ul>
+        <li>能执行、能造文件、能写任意字节</li>
+        <li>也能源源不断地做“提示词注入”</li>
+      </ul>
+    </div>
+    <div class="wall"><span>信任边界</span></div>
+    <div class="side trusted">
+      <h3>可信 · 来自 main</h3>
+      <div>
+        <span class="chip green">workflow 定义</span>
+        <span class="chip green">review.mjs</span>
+        <span class="chip green">API key</span>
+      </div>
+      <ul>
+        <li>程序可信，不代表它能安全处理上面那些输入</li>
+        <li>边界必须在<strong>执行之前</strong>，不是执行之后</li>
+      </ul>
+    </div>
+  </div>
+  <p class="flow">跨界只允许一种形式：<b>数据</b>。不允许“代码”，也不允许“路径指令”。</p>
+
+  <h2><b>2</b>三道锁，各锁一件事</h2>
+  <div class="cols c3">
+    <div class="card">
+      <div class="door">
+        <div class="num">1</div>
+        <div>
+          <b>锁 workflow 的来源</b>
+          <span class="k">pull_request_target</span>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px">PR 改不了要跑哪些步骤。</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="door">
+        <div class="num">2</div>
+        <div>
+          <b>锁 checkout 的来源</b>
+          <span class="k">ref: main</span>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px">跑的是 main 上的脚本，不是 PR 的。</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="door">
+        <div class="num">3</div>
+        <div>
+          <b>锁 secret 的邻居</b>
+          <span class="k">job 隔离</span>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px">key 与 PR 代码永不同容器。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2><b>3</b>两个 job，一条单向的数据流</h2>
+  <div class="cols" style="grid-template-columns:1fr;">
+    <div class="job a">
+      <h3>Job A · PR 处理</h3>
+      <span class="chip red">无 secret</span>
+      <span class="chip">contents: read</span>
+      <ul>
+        <li>安装依赖、执行 PR 测试（不可信代码在这一格）</li>
+        <li>生成 diff，写进 artifact</li>
+      </ul>
+    </div>
+
+    <div class="arrow">
+      <div class="line"></div>
+      <div>artifact · 只当<strong>数据</strong>传，名字固定</div>
+    </div>
+
+    <div class="job b">
+      <h3>Job B · AI Review</h3>
+      <span class="chip green">持有 API key</span>
+      <ul>
+        <li>checkout main，跑可信的 <code>review.mjs</code></li>
+        <li>读 Job A 传来的 diff，调用模型</li>
+        <li><strong>不 checkout PR 代码，不按 diff 里的路径读文件</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><b>4</b>跨界之后，剩下的全是“输入”</h2>
+  <div class="cols c5">
+    <div class="risk"><b>zip-slip</b><span>条目名带 <code>../</code>，解压写穿目录</span></div>
+    <div class="risk"><b>符号链接</b><span>PR 放一个指向 <code>/etc/passwd</code> 的链接</span></div>
+    <div class="risk"><b>路径拼接</b><span>拿 diff 里的路径直接 join</span></div>
+    <div class="risk"><b>体积炸弹</b><span>超长 diff 拖垮 runner 与 token</span></div>
+    <div class="risk"><b>提示词注入</b><span>diff 里写“忽略以上规则”</span></div>
+  </div>
+  <p class="flow" style="margin-top:12px">对应做法：解压后校验仍在目标目录内 · 拒绝绝对路径与 <code>..</code> · 先截断 · diff 永远只是数据</p>
+
+  <h2><b>5</b>五个问题，全答“是”才算过</h2>
+  <div class="card" style="padding:8px 6px">
+    <table>
+      <thead><tr><th>问题</th><th>安全答案</th></tr></thead>
+      <tbody>
+        <tr><td class="q">PR 能改到要跑的 workflow 吗？</td><td class="no">不能</td></tr>
+        <tr><td class="q">持有 key 的 job 里 checkout 过 PR 代码吗？</td><td class="no">没有</td></tr>
+        <tr><td class="q">有按 diff 里的路径去读文件吗？</td><td class="no">不读</td></tr>
+        <tr><td class="q">artifact 名字是固定的吗？</td><td class="yes">是</td></tr>
+        <tr><td class="q">跑 PR 代码的那个 job 权限只读吗？</td><td class="yes">是</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
