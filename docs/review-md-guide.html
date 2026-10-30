@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>怎么填 REVIEW.md</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e4e7ec; --ink:#101828; --muted:#667085;
+    --red:#b42318; --red-bg:#fef3f2; --red-line:#fecdca;
+    --green:#067647; --green-bg:#ecfdf3; --green-line:#abefc6;
+    --blue:#175cd3; --blue-bg:#eff8ff;
+    --amber:#b54708; --amber-bg:#fffaeb; --amber-line:#fedf89;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 26px 60px;background:var(--bg);color:var(--ink);
+    font:15px/1.65 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 26px}
+  h2{font-size:14px;letter-spacing:.4px;color:var(--muted);margin:30px 0 10px}
+  h2 b{color:var(--ink);margin-right:8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  code{background:#eef2f6;border-radius:5px;padding:1px 5px;font:12.5px "Cascadia Code",Consolas,monospace}
+  pre{margin:0;background:#0f172a;color:#dbe4f0;border-radius:12px;padding:14px 16px;overflow:auto;
+    font:12.5px/1.65 "Cascadia Code",Consolas,monospace}
+  pre .c{color:#7c8ea6}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#fafbfc;color:var(--muted);font-weight:600;font-size:12.5px}
+  tr:last-child td{border-bottom:0}
+  .bad{color:var(--red)}
+  .good{color:var(--green)}
+  .flow{display:grid;grid-template-columns:1fr 30px 1fr;align-items:center;margin:6px 0 0}
+  .node{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;font-size:13px}
+  .node b{display:block;font-size:13.5px;margin-bottom:3px}
+  .node.ok{border-color:var(--green-line);background:var(--green-bg)}
+  .arrow{text-align:center;color:#98a2b3}
+  .pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:#fff}
+  .pill.red{color:var(--red);background:var(--red-bg);border-color:var(--red-line)}
+  .pill.green{color:var(--green);background:var(--green-bg);border-color:var(--green-line)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .note{color:var(--muted);font-size:13px}
+  ol.steps{counter-reset:s;margin:0;padding:0;list-style:none}
+  ol.steps li{position:relative;padding:9px 0 9px 34px;border-bottom:1px dashed var(--line);font-size:14px}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:9px;
+    width:22px;height:22px;border-radius:7px;background:#eef2f6;color:#475467;display:grid;place-items:center;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>如何填写 REVIEW.md</h1>
+  <p class="sub">它是写给 <strong>reviewer</strong> 的评审口径，不是给人读的说明文档。写“什么算坏”，不写“什么是好”。</p>
+
+  <h2><b>1</b>它什么时候被用到</h2>
+  <div class="flow">
+    <div class="node ok"><b>diff 触及某模块</b>src/content/ 下有改动</div>
+    <div class="arrow">→</div>
+    <div class="node"><b>只加载那一份</b>src/content/REVIEW.md，其余不加载</div>
+  </div>
+  <p class="note" style="margin-top:10px">改根目录 REVIEW.md 时按平台口径审它自己；空着也不报错，但正文会标注“口径未填写”，reviewer 退回通用三闸门。</p>
+
+  <h2><b>2</b>四个小节，各填什么</h2>
+  <table>
+    <thead><tr><th style="width:190px">小节（名字别改）</th><th>填什么</th><th style="width:280px">反例 → 正例</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>## What failure looks like here</code></td>
+        <td>这个模块“坏了”具体长什么样。一条一句，必须能验收。</td>
+        <td class="bad">注意边界情况 → <span class="good">划词后文字没进输入框</span></td>
+      </tr>
+      <tr>
+        <td><code>## Paths to skip</code></td>
+        <td>哪些东西看起来可疑、其实是正常的。<strong>这条直接决定误报率。</strong></td>
+        <td class="bad">随便一点 → <span class="good">vendor 副本、有意的静默 catch</span></td>
+      </tr>
+      <tr>
+        <td><code>## Evidence format</code></td>
+        <td>这个模块的改动必须附什么证据：命令、截图、在哪个站点操作。</td>
+        <td class="bad">要有证据 → <span class="good">附改动前后 console 输出</span></td>
+      </tr>
+      <tr>
+        <td><code>## Nit budget</code></td>
+        <td>这一份最多报几条，超出只报最严重的。</td>
+        <td class="bad">尽量少 → <span class="good">至多 3 条</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><b>3</b>一份填好的样子</h2>
+  <pre><span class="c"># REVIEW.md — content scripts</span>
+
+Covers: `src/content/chat-bridge.js`, `src/content/page-tools.js`,
+`src/content/pdf-main.js`
+
+<span class="c">## What failure looks like here</span>
+- 侧边栏收不到页面选区:page-tools 拿到了选区却没 postMessage,
+  或 chat-bridge 的 origin 校验把消息丢掉。
+- 重复注入:同一次页面加载里内容脚本被注入两次,浮动按钮出现两个。
+- PDF 选区错位:pdf-main 用了旧的 scrollTop,浮动输入框不跟随滚动。
+- 任何把页面正文、选区写进 chrome.storage 的改动。
+
+<span class="c">## Paths to skip</span>
+- `src/vendor/pdfjs/` 下的任何文件:上游整包,不在这里审。
+- 有意的 `chrome.runtime.lastError` 静默分支:消息对端已关闭时是预期情况。
+
+<span class="c">## Evidence format</span>
+- 必须说明:在哪个站点、哪一步操作下能复现。
+- 涉及 DOM 选择的改动,附改动前后的 console 输出或截图。
+- 不需要附 npm test 的输出(CI 会跑)。
+
+<span class="c">## Nit budget</span>
+- 至多 3 条;超过的话只报最严重的那些。</pre>
+
+  <h2><b>4</b>四条纪律</h2>
+  <div class="card">
+    <ol class="steps">
+      <li><strong>只有你能写。</strong> reviewer 只读不改 —— 自己定义“怎么审自己”等于把判断权交出去。</li>
+      <li><strong>控制在 60 行内。</strong> 超了说明在写散文，不是口径。AGENTS.md 已经因为太长被记了一笔。</li>
+      <li><strong>不抄 AGENTS.md。</strong> 那里是项目通用规则；这里只写这个模块特有的东西。</li>
+      <li><strong>改口径本身要停下。</strong> 改 REVIEW.md 会被分类器判成“中风险 + 必须人工”，因为它在改以后怎么审。</li>
+    </ol>
+  </div>
+
+  <h2><b>5</b>写之前问自己三句</h2>
+  <div class="grid2">
+    <div class="card"><span class="pill red">Q1</span>
+      <p style="margin:8px 0 0">这条能不能判某个<strong>具体行为</strong>“坏了”？判不了就别写。</p></div>
+    <div class="card"><span class="pill red">Q2</span>
+      <p style="margin:8px 0 0">删掉它，reviewer 会<strong>误报</strong>什么？答不出来，说明它没用。</p></div>
+  </div>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><span class="pill red">Q3</span>
+      <p style="margin:8px 0 0">这些文件路径/行为描述，<strong>三个月后还成立</strong>吗？会变的写成原则，不写死行号。</p></div>
+    <div class="card"><span class="pill green">顺序建议</span>
+      <p style="margin:8px 0 0">先写 <code>Paths to skip</code> —— 它最直接地降低噪音，也最容易验证效果。</p></div>
+  </div>
+
+</div>
+</body>
+</html>
