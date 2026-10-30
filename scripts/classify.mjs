@@ -269,7 +269,7 @@ export function classify({ base, head, range } = {}) {
       module: rule.module,
       spec: rule.spec,
       tier,
-      sendToModel: rule.model !== false,
+      sendToModel: false,
       tierReason: isPage ? '文档页面(HTML),要截图' : undefined,
       alwaysHuman: rule.alwaysHuman,
     };
