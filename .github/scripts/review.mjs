@@ -143,6 +143,8 @@ function buildPrompt(files, specs, diff, truncated, history) {
   const prevBlock = history.previous.length
     ? `\n## 上一轮已经提出的发现\n\n这是第 ${history.round} 轮。下面是上一轮报过的内容,**不要重复报**。你只需要:\n` +
       `(a) 确认它们是否已被这次 diff 解决;(b) 找出这次新 diff 引入的新问题。\n\n` +
+      `以「作者回复 @xxx:」开头的是对那条发现的回应。作者已经给出理由、你也接受的,不要再报;\n` +
+      `若回复与代码矛盾,可以再报一次,但必须写明矛盾在哪。作者没回应的,可以在汇总里提一句"仍未回应"。\n\n` +
       history.previous.map((p, i) => `### 上轮 ${i + 1}\n\n${p.slice(0, 1500)}`).join('\n\n') +
       '\n'
     : `\n这是第 ${history.round} 轮评审。\n`;
@@ -357,12 +359,36 @@ function stepSummary(text) {
   }
 }
 
-// --- 历史与轮次(D-7:三轮封顶、首轮后只审新 diff、不重复报)------------------
+// --- 历史、回复与轮次(D-7:三轮封顶、首轮后只审新 diff、不重复报)------------
 // reviewer 每次都是新上下文,记不住上一轮。所以由这里数出轮次、把上一轮的发现
 // 原文取出来一起喂给它,否则"不重复报"和"三轮封顶"都无从执行。
-// inline 化之后发现散在 review comments 里,得按 review 分组还原。
+// 文章里还有一条"每条发现都必须被回应"——回应也在这里读回来:作者在自己那条
+// inline 评论下回复"已修 / 不修 + 理由",下一轮要把这些回复一并喂给模型,
+// 否则模型每次都当作者没说话,同一件事会被重新报一遍。
+const CAP_SENTINEL = '轮次上限';
+
+function isReviewerComment(comment) {
+  return comment.user?.type === 'Bot';
+}
+
+function clips(text, max = 400) {
+  const value = String(text ?? '').trim();
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function renderRound(body, parents) {
+  const parts = [body];
+  for (const { comment, replies } of parents) {
+    parts.push(`- \`${comment.path}:${comment.line ?? '?'}\` ${clips(comment.body)}`);
+    for (const reply of replies) {
+      parts.push(`  - 作者回复 @${reply.user?.login || '?'}: ${clips(reply.body)}`);
+    }
+  }
+  return parts.join('\n');
+}
+
 async function fetchHistory(repo, number) {
-  const empty = { round: 1, previous: [] };
+  const empty = { round: 1, previous: [], unanswered: 0, capped: false };
   if (!process.env.GITHUB_TOKEN || !repo || !number) return empty;
   try {
     const [reviewsRes, commentsRes, issuesRes] = await Promise.all([
@@ -376,29 +402,45 @@ async function fetchHistory(repo, number) {
     const inline = commentsRes.ok ? await commentsRes.json() : [];
     const issues = issuesRes.ok ? await issuesRes.json() : [];
 
-    const inlineByReview = new Map();
+    // 父评论 id → 作者回复(reviewer 自己的回复不算,否则自己跟自己聊)
+    const repliesByParent = new Map();
+    const byReview = new Map();
     for (const comment of inline) {
+      if (comment.in_reply_to_id) {
+        if (isReviewerComment(comment)) continue;
+        if (!repliesByParent.has(comment.in_reply_to_id)) repliesByParent.set(comment.in_reply_to_id, []);
+        repliesByParent.get(comment.in_reply_to_id).push(comment);
+        continue;
+      }
       const key = comment.pull_request_review_id;
-      if (!inlineByReview.has(key)) inlineByReview.set(key, []);
-      inlineByReview.get(key).push(comment);
+      if (!byReview.has(key)) byReview.set(key, []);
+      byReview.get(key).push(comment);
     }
 
     const rounds = [];
     for (const review of reviews) {
       if (typeof review.body !== 'string' || !review.body.startsWith(MARKER)) continue;
-      const parts = [review.body.slice(MARKER.length).trim()];
-      for (const comment of inlineByReview.get(review.id) || []) {
-        parts.push(`- \`${comment.path}:${comment.line ?? '?'}\` ${comment.body}`);
-      }
-      rounds.push(parts.join('\n'));
+      const parents = (byReview.get(review.id) || []).map((comment) => ({
+        comment,
+        replies: repliesByParent.get(comment.id) || [],
+      }));
+      rounds.push({ text: renderRound(review.body.slice(MARKER.length).trim(), parents), parents });
     }
     // inline 化之前留下的历史评论仍然算轮次,否则同一个 PR 会从第 1 轮重来。
     for (const comment of issues) {
       if (typeof comment.body === 'string' && comment.body.startsWith(MARKER)) {
-        rounds.push(comment.body.slice(MARKER.length).trim());
+        rounds.push({ text: comment.body.slice(MARKER.length).trim(), parents: [] });
       }
     }
-    return { round: rounds.length + 1, previous: rounds.slice(-2) };
+
+    const last = rounds[rounds.length - 1];
+    const unanswered = last ? last.parents.filter((p) => p.replies.length === 0).length : 0;
+    return {
+      round: rounds.length + 1,
+      previous: rounds.slice(-2).map((r) => r.text),
+      unanswered,
+      capped: rounds.some((r) => r.text.includes(CAP_SENTINEL)),
+    };
   } catch (error) {
     console.log(`读取历史失败,按第 1 轮处理:${error.message}`);
     return empty;
@@ -452,6 +494,39 @@ if (history.round > MAX_ROUNDS) {
     `## Agent review 已到轮次上限\n\n这是第 ${history.round} 轮,D-7 规定 ${MAX_ROUNDS} 轮后不再新增发现。\n` +
       `作者应该停下来重新考虑方案,而不是继续修。若确有需要,关闭并重开 PR 可重置轮次。\n`,
   );
+
+  // 只在第一次到顶时喊停。写在 step summary 里没人看得见,必须落到 PR 上。
+  if (history.capped) {
+    console.log('上次已经喊停过,不重复发。');
+    await quit();
+  }
+
+  const capBody = [
+    MARKER,
+    '',
+    `### 已到${CAP_SENTINEL}(${MAX_ROUNDS} 轮)`,
+    '',
+    `这已经是第 ${history.round} 轮。继续修只会把问题挪来挪去:实测里被反复指出的东西,大多在首轮之前就已存在。`,
+    '',
+    '请停下来做三件事:',
+    '1. 重新考虑方案本身——是不是改动范围就该更小;',
+    '2. 把上一轮没回应的发现逐条回应:已修,或写明不修的理由;',
+    '3. 确有必要继续时,关闭并重开 PR 可重置轮次。',
+    '',
+    '<sub>这一条之后 reviewer 不再产出新发现,直到轮次被重置。</sub>',
+  ].join('\n');
+
+  if (process.env.REVIEW_DRY_RUN) {
+    console.log('=== DRY RUN,以下为将提交的 review payload ===');
+    console.log(JSON.stringify({ commit_id: HEAD_SHA || '(local)', event: 'COMMENT', body: capBody, comments: [] }, null, 2));
+    await quit();
+  }
+  if (!GITHUB_REPOSITORY || !PR_NUMBER || !process.env.GITHUB_TOKEN) {
+    console.log('缺少 GITHUB_REPOSITORY / PR_NUMBER / GITHUB_TOKEN,无法发布。');
+    await quit();
+  }
+  const capped = await publish({ repo: GITHUB_REPOSITORY, number: PR_NUMBER, commitId: HEAD_SHA, body: capBody, comments: [] });
+  console.log(capped.ok ? `已发布(${capped.label})` : `发布失败:${capped.detail}`);
   await quit();
 }
 
@@ -498,6 +573,9 @@ const coverage = specs.length
   : '无匹配模块';
 
 const bodyLines = [MARKER, '', parsed.summary || '发现:严重 0 / 一般 0 / 既存 0', ''];
+if (history.unanswered) {
+  bodyLines.push(`> ⚠️ 上一轮有 ${history.unanswered} 条发现没有任何回应。修了或写明不修的理由,都算回应。`, '');
+}
 if (loose.length) {
   bodyLines.push(`### 无法定位到具体行(${loose.length} 条)`, '');
   for (const finding of loose) {
