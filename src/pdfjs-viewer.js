@@ -260,6 +260,9 @@ try {
     };
 
     const persistPosition = () => {
+      // pagehide 时布局已经塌成 0,这时量出来的页码是假的 —— 宁可不写,
+      // 也不能用一个错误的 1 去覆盖用户真实读到的位置。
+      if (!scrollContainer.getBoundingClientRect().height) return;
       const page = currentPageNumber();
       chrome.storage.local.get(POSITIONS_KEY).then((stored) => {
         const map = stored?.[POSITIONS_KEY] && typeof stored[POSITIONS_KEY] === 'object'

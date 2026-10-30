@@ -390,6 +390,31 @@ async function testPdfRemembersPosition() {
     return false;
   }, { timeout: 20000, message: 'reading position restored' });
 
+  // 显式给了 page 参数时,必须以参数为准,不能被历史位置盖掉。
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=two-pages.pdf&page=1`
+  );
+  await waitFor(async () => {
+    for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
+      try {
+        if (await candidate.evaluate(() => document.querySelectorAll('.pdfjs-page').length >= 2)) return true;
+      } catch {
+        // 同上
+      }
+    }
+    return false;
+  }, { timeout: 20000, message: 'two-page viewer after explicit navigation' });
+  await reader.waitForTimeout(1200);
+
+  const explicitTops = [];
+  for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
+    explicitTops.push(await candidate.evaluate(() => document.getElementById('pdfjs-container')?.scrollTop ?? 0).catch(() => 0));
+  }
+  assert.ok(
+    explicitTops.every((top) => top === 0),
+    `explicit ?page=1 should beat the saved position (scrollTop=${explicitTops.join(',')})`
+  );
+
   await reader.close();
   console.log('PASS PDF remembers the last reading position');
 }

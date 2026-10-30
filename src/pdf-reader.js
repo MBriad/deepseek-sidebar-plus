@@ -459,7 +459,9 @@
 
       embed = document.createElement('embed');
       embed.type = 'application/pdf';
-      embed.src = `${objectUrl}#page=${startPage}`;
+      // 内置 <embed> 阅读器的滚动位置读不到、也写不回去:这条路径不承诺记忆,
+      // 否则用户会以为"换了模式就读不到上次的位置了"。
+      embed.src = `${objectUrl}#page=${initialPage}`;
       embed.title = fileName;
       viewer.appendChild(embed);
 
