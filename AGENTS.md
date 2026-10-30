@@ -46,7 +46,7 @@
 |---|---|---|
 | **高** | `manifest.json` 的 permissions / 版本号、`rules.json`、存储键或数据格式、content script 注入时机、任何新增的对外 `fetch` | **必须**我逐条确认,**不许合批** |
 | **中** | `src/` 下任何行为改动 | CI 绿 + 我抽查 |
-| **低** | `docs/`、README、`_locales` 文案、注释 | 可合批,一次确认 |
+| **低** | `docs/`、README、`_locales` 文案、注释 | 0 人审批,`npm run check`(Markdown + 链接)绿即合(D-9) |
 
 ## 安全检查清单(阶段 2 每次自查)
 
