@@ -9,8 +9,15 @@
 
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 // 路径 → 模块 → REVIEW.md 的那张表只存在于分类器里。reviewer 再维护一份必然漂移。
 import { classify } from '../../scripts/classify.mjs';
+
+// 双 job 模式下,评审输入由无密钥的 job 采集好放进 artifact。
+// 设了这个目录,本进程**不碰 PR 的工作区**:diff 与文件内容都是 JSON 里的字符串。
+const ARTIFACT = process.env.REVIEW_ARTIFACT || '';
+let artifactFiles = null;
+
 
 const API = 'https://api.deepseek.com/chat/completions';
 const GITHUB = 'https://api.github.com';
@@ -261,6 +268,11 @@ function anchorableLines(diffText) {
 }
 
 function linesOf(path) {
+  // artifact 模式:内容来自 JSON,按 key 取,不做任何文件系统访问。
+  if (artifactFiles) {
+    const text = artifactFiles[path];
+    return typeof text === 'string' ? text.split('\n') : null;
+  }
   try {
     return readFileSync(path, 'utf8').split('\n');
   } catch {
@@ -547,7 +559,25 @@ let diff;
 let truncated;
 let projectContext = null;
 try {
-  const classification = classify({ range: diffRange });
+  let classification;
+  if (ARTIFACT) {
+    // 双 job 模式:输入全部来自 artifact,本进程不读 PR 工作区。
+    const readJson = (name, maxChars) => {
+      const text = readFileSync(join(ARTIFACT, name), 'utf8');
+      if (text.length > maxChars) throw new Error(`${name} 超过 ${maxChars} 字符,拒绝处理`);
+      return JSON.parse(text);
+    };
+    const rawDiff = readFileSync(join(ARTIFACT, 'diff.txt'), 'utf8');
+    if (rawDiff.length > MAX_DIFF_CHARS * 2) throw new Error('diff.txt 过大');
+    classification = readJson('classification.json', 4 * 1024 * 1024);
+    artifactFiles = readJson('files.json', 8 * 1024 * 1024);
+    diff = rawDiff.slice(0, MAX_DIFF_CHARS);
+    truncated = rawDiff.length > MAX_DIFF_CHARS;
+  } else {
+    classification = classify({ range: diffRange });
+    artifactFiles = null;
+  }
+
   files = classification.files.filter((f) => f.sendToModel).map((f) => f.path);
 
   if (files.length === 0) {
@@ -558,8 +588,10 @@ try {
   const specByFile = new Map(classification.files.map((f) => [f.path, f.spec]));
   specs = summarizeSpecs(files, specByFile);
   projectContext = fromBase('docs/PROJECT_CONTEXT.md');
-  diff = run('git', ['diff', diffRange, '--', ...files]).slice(0, MAX_DIFF_CHARS);
-  truncated = diff.length >= MAX_DIFF_CHARS;
+  if (!ARTIFACT) {
+    diff = run('git', ['diff', diffRange, '--', ...files]).slice(0, MAX_DIFF_CHARS);
+    truncated = diff.length >= MAX_DIFF_CHARS;
+  }
 } catch (error) {
   console.log(`读取 diff 失败:${error.message}`);
   stepSummary(`## Agent review did not run\n\nReading the diff failed (review is advisory; this does not block the PR):\n\n\`\`\`\n${error.message}\n\`\`\`\n`);
