@@ -28,20 +28,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 评审脚本必须用「base 分支的版本」执行。
-      # checkout 取的是 PR 的 ref,直接跑 PR 里的脚本等于让 PR 作者执行任意代码,
-      # 而这一步持有 DEEPSEEK_API_KEY 和 pull-requests: write 的 token。
+      # 业务代码保持 PR 版本(checkout 出来的就是 PR 的合并结果),
+      # 只有**工具脚本**换成 base 分支的版本。
+      # 不换的话,等于让 PR 作者执行任意代码 —— 这一步持有 DEEPSEEK_API_KEY
+      # 和 pull-requests: write 的 token。
+      #
+      # 取 base 分支的**当前 head**,不是 pull_request.base.sha:后者在 PR 存续期间
+      # 停在 PR 创建时的那个 commit,main 合了脚本修复它也不会动。
+      # diff 基准不动 —— 旧 PR 不需要为了这个去同步 main。
       # 残余风险:workflow 文件本身仍来自 PR 的 ref,同仓库分支理论上也能改它;
       # 这个岗位没有提交权限,只用于读 diff 和发评论。
-      - name: Use the trusted reviewer script
+      - name: Use the trusted reviewer and its dependencies
+        # classify.mjs 必须一起换:它决定哪些文件送进模型。
+        # 留给 PR 版本的话,一个 PR 只要动它,就能把自己标成 sendToModel:false,
+        # 让评审直接跳过自己。
+        # 分支名从 env 进 shell,不直接拼进脚本正文:ref 名允许出现 $(、反引号、;,
+        # 直接内插等于把分支名当代码执行。变量展开不会再求值命令替换。
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          BASE="${{ github.event.pull_request.base.sha }}"
-          if git cat-file -e "$BASE:.github/scripts/review.mjs" 2>/dev/null; then
-            git checkout "$BASE" -- .github/scripts/review.mjs
-            echo "reviewer script restored from base ($BASE)"
-          else
-            echo "::warning file=.github/scripts/review.mjs::the script does not exist on the base branch yet - this PR introduces it, so the PR copy runs this once"
-          fi
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          BASE="refs/remotes/origin/$BASE_REF"
+          for f in .github/scripts/review.mjs scripts/classify.mjs; do
+            if git cat-file -e "$BASE:$f" 2>/dev/null; then
+              mkdir -p "$(dirname "$f")"
+              git show "$BASE:$f" > "$f"
+              echo "trusted $f <- $BASE ($(git rev-parse --short "$BASE"))"
+            else
+              echo "::warning::trusted copy of $f does not exist on $BASE yet - the PR copy runs this once"
+            fi
+          done
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -55,6 +71,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # diff 基准仍是 PR 自己的 base,不跟着 main 走:旧 PR 不需要同步 main。
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           EVENT_ACTION: ${{ github.event.action }}
