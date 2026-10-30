@@ -292,6 +292,9 @@ function bodyFor(finding) {
   const tag = ['严重', '一般', '既存'].includes(finding.tag) ? finding.tag : '一般';
   const parts = [`**${tag}** — ${finding.problem || '(模型没写问题描述)'}`];
   if (finding.fix) parts.push(`\n最小修法:${finding.fix}`);
+  // 带上引用的源码行:万一行号锚定是按片段回退到的位置,读者能立刻发现挂错了。
+  const quote = firstLineOf(finding.snippet);
+  if (quote) parts.push(`\n> ${quote}`);
   return parts.join('\n');
 }
 
