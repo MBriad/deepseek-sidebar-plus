@@ -192,12 +192,15 @@ async function callModel(system, user, { jsonMode = true } = {}) {
   });
 
   if (res.status === 400 && jsonMode) {
+    // 400 的措辞不保证提到 response_format(可能是 "invalid parameter"、也可能本地化),
+    // 所以只要带了 JSON 模式就先退回普通模式重试一次;重试失败再把两次原因一起抛。
     const detail = await res.text();
-    if (/response_format|json_object/i.test(detail)) {
-      console.log(`模型不接受 JSON 模式,回退到普通模式:${detail.slice(0, 120)}`);
-      return callModel(system, user, { jsonMode: false });
+    console.log(`模型拒绝带 response_format 的请求,回退普通模式重试:${detail.slice(0, 160)}`);
+    try {
+      return await callModel(system, user, { jsonMode: false });
+    } catch (error) {
+      throw new Error(`API 400(with response_format): ${detail.slice(0, 300)} / retry: ${error.message}`);
     }
-    throw new Error(`API 400: ${detail.slice(0, 400)}`);
   }
 
   if (!res.ok) throw new Error(`API ${res.status}: ${(await res.text()).slice(0, 400)}`);
@@ -376,12 +379,12 @@ function parseFindings(text) {
       try {
         const parsed = JSON.parse(attempt);
         if (!parsed || typeof parsed !== 'object') continue;
-        const findings = Array.isArray(parsed.findings)
-          ? parsed.findings.filter((finding) => finding && typeof finding === 'object')
-          : [];
+        // 没有 findings 数组 ≠ 0 条发现。键名写错或对象被提前闭合都会走到这里,
+        // 当成"没问题"发布等于用格式错误换一次假绿灯。
+        if (!Array.isArray(parsed.findings)) continue;
         return {
           summary: typeof parsed.summary === 'string' ? parsed.summary : '',
-          findings,
+          findings: parsed.findings.filter((finding) => finding && typeof finding === 'object'),
           repaired: attempt !== slice,
         };
       } catch {
@@ -676,14 +679,14 @@ const countLine = `Findings: Critical ${counts.Critical} / Nit ${counts.Nit} / P
 const modelNote = parsed.summary && !parsed.summary.startsWith('Findings:') ? parsed.summary : '';
 
 const bodyLines = [MARKER, ''];
-if (parsed.unparsed) {
+if (parsed.unparsed !== undefined) {
   bodyLines.push(
     'Findings: unparsed — the model did not return usable JSON, so nothing is anchored to a line.',
     '',
     '<details><summary>Raw model output</summary>',
     '',
     '```',
-    parsed.unparsed.slice(0, 4000),
+    String(parsed.unparsed || '(empty)').slice(0, 4000),
     '```',
     '',
     '</details>',
