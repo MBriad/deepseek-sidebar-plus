@@ -167,24 +167,39 @@ function buildPrompt(files, specs, diff, truncated, history, projectContext) {
   );
 }
 
-async function callModel(system, user) {
-  const res = await fetch(API, {
+async function callModel(system, user, { jsonMode = true } = {}) {
+  const payload = {
+    model: MODEL,
+    temperature: 0.1,
+    max_tokens: MAX_TOKENS,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+  };
+  // JSON 模式能挡掉大半"前后带客套话/少个括号"的烂尾。老模型若拒收这个参数,
+  // 下面会带一次 400 重试,不至于因此整条评审失败。
+  if (jsonMode) payload.response_format = { type: 'json_object' };
+
+  let res = await fetch(API, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: 0.1,
-      max_tokens: MAX_TOKENS,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-    }),
+    body: JSON.stringify(payload),
     signal: AbortSignal.timeout(300000),
   });
+
+  if (res.status === 400 && jsonMode) {
+    const detail = await res.text();
+    if (/response_format|json_object/i.test(detail)) {
+      console.log(`模型不接受 JSON 模式,回退到普通模式:${detail.slice(0, 120)}`);
+      return callModel(system, user, { jsonMode: false });
+    }
+    throw new Error(`API 400: ${detail.slice(0, 400)}`);
+  }
+
   if (!res.ok) throw new Error(`API ${res.status}: ${(await res.text()).slice(0, 400)}`);
   const json = await res.json();
   const msg = json.choices?.[0];
@@ -312,19 +327,69 @@ function bodyFor(finding) {
 }
 
 // 模型的 JSON 经常被包在 ```json 里,或者前后带一句客套话。两种都容忍。
-function parseFindings(text) {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const raw = fenced ? fenced[1] : text;
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(raw.slice(start, end + 1));
-    const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
-    return { summary: typeof parsed.summary === 'string' ? parsed.summary : '', findings };
-  } catch {
-    return null;
+// 模型偶尔给出"人看着像 JSON"的东西:真实换行进了字符串、尾逗号、前后带散文。
+// 逐个修一遍再放弃;放弃时绝不假装 0 条发现。
+function repairJson(text) {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        out += ch;
+      } else if (ch === '\\') {
+        escaped = true;
+        out += ch;
+      } else if (ch === '"') {
+        inString = false;
+        out += ch;
+      } else if (ch === '\n') {
+        out += '\\n';
+      } else if (ch === '\r') {
+        // drop
+      } else if (ch === '\t') {
+        out += '\\t';
+      } else {
+        out += ch;
+      }
+      continue;
+    }
+    if (ch === '"') inString = true;
+    out += ch;
   }
+  return out.replace(/,\s*([\]}])/g, '$1');
+}
+
+function parseFindings(text) {
+  const candidates = [];
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+  if (fenced) candidates.push(fenced[1]);
+  candidates.push(text);
+
+  for (const candidate of candidates) {
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start < 0 || end <= start) continue;
+    const slice = candidate.slice(start, end + 1);
+    for (const attempt of [slice, repairJson(slice)]) {
+      try {
+        const parsed = JSON.parse(attempt);
+        if (!parsed || typeof parsed !== 'object') continue;
+        const findings = Array.isArray(parsed.findings)
+          ? parsed.findings.filter((finding) => finding && typeof finding === 'object')
+          : [];
+        return {
+          summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+          findings,
+          repaired: attempt !== slice,
+        };
+      } catch {
+        /* try next attempt */
+      }
+    }
+  }
+  return null;
 }
 
 // --- 发布 ------------------------------------------------------------------
@@ -547,7 +612,11 @@ if (history.round > MAX_ROUNDS) {
 let parsed;
 if (process.env.REVIEW_FAKE_FINDINGS) {
   // 本地验证发布路径用:不调模型,直接喂一份假的模型输出。
-  parsed = parseFindings(process.env.REVIEW_FAKE_FINDINGS);
+  parsed = parseFindings(process.env.REVIEW_FAKE_FINDINGS) || {
+    summary: '',
+    findings: [],
+    unparsed: process.env.REVIEW_FAKE_FINDINGS,
+  };
   console.log('使用 REVIEW_FAKE_FINDINGS,跳过模型调用。');
 } else {
   let result;
@@ -571,8 +640,10 @@ if (process.env.REVIEW_FAKE_FINDINGS) {
 
   parsed = parseFindings(result.content);
   if (!parsed) {
-    // 解析不了就把原文当汇总发出去 —— 宁可格式差,不可丢发现。
-    parsed = { summary: result.content, findings: [] };
+    // 解析不了就如实说"没解析出来",把原文缩进折叠块里。
+    // 绝不把 findings 当成 0 条往上贴 —— 那会把"没读懂"伪装成"没问题"。
+    parsed = { summary: '', findings: [], unparsed: result.content };
+    console.log(`模型输出无法解析为 JSON(finish_reason=${result.finishReason}),按"未解析"发布。`);
   }
 }
 
@@ -604,8 +675,25 @@ for (const finding of parsed.findings) {
 const countLine = `Findings: Critical ${counts.Critical} / Nit ${counts.Nit} / Pre-existing ${counts['Pre-existing']}`;
 const modelNote = parsed.summary && !parsed.summary.startsWith('Findings:') ? parsed.summary : '';
 
-const bodyLines = [MARKER, '', countLine, ''];
-if (modelNote) bodyLines.push(modelNote, '');
+const bodyLines = [MARKER, ''];
+if (parsed.unparsed) {
+  bodyLines.push(
+    'Findings: unparsed — the model did not return usable JSON, so nothing is anchored to a line.',
+    '',
+    '<details><summary>Raw model output</summary>',
+    '',
+    '```',
+    parsed.unparsed.slice(0, 4000),
+    '```',
+    '',
+    '</details>',
+    '',
+  );
+} else {
+  bodyLines.push(countLine, '');
+  if (modelNote) bodyLines.push(modelNote, '');
+  if (parsed.repaired) bodyLines.push('> Note: the model JSON had to be repaired before parsing.', '');
+}
 if (history.round > 2) {
   bodyLines.push(
     '> ⚠️ Round cap reached. Human intervention required.',
