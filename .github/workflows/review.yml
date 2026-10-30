@@ -31,14 +31,20 @@ jobs:
       # 评审脚本必须用「base 分支的版本」执行。
       # checkout 取的是 PR 的 ref,直接跑 PR 里的脚本等于让 PR 作者执行任意代码,
       # 而这一步持有 DEEPSEEK_API_KEY 和 pull-requests: write 的 token。
+      # 用 base 分支的**当前 head**,不是 pull_request.base.sha —— 后者在 PR 存续期间
+      # 会停在 PR 创建/上次同步时的那个 commit,main 上合了修复它也不会动。
+      # 实测:PR #6 已把解析修复合进 main,PR #5 的下一轮仍然从旧 commit 取脚本。
       # 残余风险:workflow 文件本身仍来自 PR 的 ref,同仓库分支理论上也能改它;
       # 这个岗位没有提交权限,只用于读 diff 和发评论。
       - name: Use the trusted reviewer script
         run: |
-          BASE="${{ github.event.pull_request.base.sha }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          BASE="refs/remotes/origin/$BASE_REF"
+          echo "BASE_SHA=$(git rev-parse "$BASE")" >> "$GITHUB_ENV"
           if git cat-file -e "$BASE:.github/scripts/review.mjs" 2>/dev/null; then
-            git checkout "$BASE" -- .github/scripts/review.mjs
-            echo "reviewer script restored from base ($BASE)"
+            git show "$BASE:.github/scripts/review.mjs" > .github/scripts/review.mjs
+            echo "reviewer script restored from $BASE ($(git rev-parse --short "$BASE"))"
           else
             echo "::warning file=.github/scripts/review.mjs::the script does not exist on the base branch yet - this PR introduces it, so the PR copy runs this once"
           fi
@@ -55,7 +61,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # BASE_SHA 由上一个 step 写进 GITHUB_ENV(取 base 分支当前 head)。
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           EVENT_ACTION: ${{ github.event.action }}
           EVENT_BEFORE: ${{ github.event.before }}
