@@ -15,6 +15,11 @@
   // 显式给了 page 就听它的;没给才回落到"上次读到第几页"。
   const hasExplicitPage = params.has('page');
   const POSITIONS_KEY = 'pdfReadingPositions';
+  // 原来的硬上限是 200MB,扫描版教材/手册经常超过这个数,结果是"文件能打开却先被我们拒掉"。
+  // 现在只留一个防呆上限,并把体积显示出来 —— 大文件要等,用户至少知道它在动。
+  const MAX_PDF_BYTES = 2 * 1024 * 1024 * 1024;
+  const SLOW_NOTICE_BYTES = 80 * 1024 * 1024;
+  const FETCH_TIMEOUT_MS = 5 * 60 * 1000;
 
   const viewer = document.getElementById('viewer');
   const pdfJsFrame = document.getElementById('pdfjs-frame');
@@ -429,15 +434,16 @@
     }
 
     try {
-      const response = await fetchWithTimeout(fileUrl, 60000);
+      const response = await fetchWithTimeout(fileUrl, FETCH_TIMEOUT_MS);
       if (!response.ok) throw new Error(`无法下载 PDF（HTTP ${response.status}）。`);
 
       const length = Number(response.headers.get('content-length') || 0);
-      if (length > 200 * 1024 * 1024) throw new Error('PDF 超过 200 MB。');
+      if (length > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)}。`);
+      if (length > SLOW_NOTICE_BYTES) setOverlayText(`正在读取 PDF（${formatSize(length)}）…`);
 
       const blob = await response.blob();
       if (!blob.size) throw new Error('PDF 文件为空。');
-      if (blob.size > 200 * 1024 * 1024) throw new Error('PDF 超过 200 MB。');
+      if (blob.size > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)}。`);
 
       const head = new TextDecoder().decode(await blob.slice(0, 1024).arrayBuffer());
       if (!head.includes('%PDF')) {
@@ -600,6 +606,15 @@
         showToast(`打开侧边栏失败：${error.message}`, 4000);
       });
     });
+  }
+
+  function setOverlayText(text) {
+    if (overlayText) overlayText.textContent = text;
+  }
+
+  function formatSize(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+    return `${Math.round(bytes / 1024 / 1024)} MB`;
   }
 
   function showError(message) {
