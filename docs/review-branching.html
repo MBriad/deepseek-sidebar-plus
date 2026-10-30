@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>为什么旧 PR 会跑到旧评审脚本</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --blue: #4f8cff;
+    --pink: #ff5c8a;
+    --red: #ff6b6b;
+    --green: #38d39f;
+    --amber: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 32px 56px;
+    background: radial-gradient(1200px 600px at 12% -10%, #1b2334 0%, var(--bg) 60%);
+    color: var(--text);
+    font: 15px/1.65 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: .2px; }
+  .sub { color: var(--muted); margin: 0 0 32px; }
+  h2 { font-size: 17px; margin: 40px 0 12px; }
+  h2 .n {
+    display: inline-grid; place-items: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    background: #232936; color: var(--muted);
+    font-size: 12px; margin-right: 8px; vertical-align: 2px;
+  }
+  p { margin: 10px 0; }
+  code {
+    background: #232936; padding: 1px 6px; border-radius: 5px;
+    font: 13px/1.4 "Cascadia Code", Consolas, monospace; color: #cfe0ff;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px 20px; margin: 16px 0;
+  }
+  .card.red { border-color: #4a2731; background: linear-gradient(180deg, #1d161a, #171a21); }
+  .card.green { border-color: #1e4438; background: linear-gradient(180deg, #141d1a, #171a21); }
+  .card h3 { margin: 0 0 8px; font-size: 14px; letter-spacing: .3px; }
+  .card.red h3 { color: var(--red); }
+  .card.green h3 { color: var(--green); }
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 10px 0 4px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  td.yes { color: var(--green); }
+  td.no { color: var(--muted); }
+  .mono { font: 13px/1.5 "Cascadia Code", Consolas, monospace; color: #cfe0ff; }
+  .note { color: var(--muted); font-size: 13px; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>为什么旧 PR 会跑到旧评审脚本</h1>
+  <p class="sub">一次真实事故的时间线复盘 —— 里面用到的 commit 都是这条仓库里真实存在的。</p>
+
+  <h2><span class="n">1</span>事故现场</h2>
+
+  <p>PR #5 推了新 commit，评审却输出了下面这段<strong>裸 JSON</strong>，并把计数写成 <code>Critical 0</code>：</p>
+
+  <div class="card red">
+    <h3>那轮日志里的两行</h3>
+    <div class="mono">reviewer script restored from base (ea99cd25e880a2077d1a62586248123764023573)</div>
+    <div class="mono">BASE_SHA: ea99cd25e880a2077d1a62586248123764023573</div>
+    <p class="note" style="margin-top:10px">
+      脚本是从 <code>ea99cd2</code> 取的。而 main 早就前进到 <code>a3152f7</code> 了 —— 那里才有 JSON 解析的修复。
+    </p>
+  </div>
+
+  <h2><span class="n">2</span>时间线：base.sha 停在了开 PR 的那一刻</h2>
+
+  <svg viewBox="0 0 1080 300" width="100%" role="img" aria-label="main 与 PR 分支的时间线">
+    <defs>
+      <marker id="a-red" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 z" fill="#ff6b6b"/>
+      </marker>
+      <marker id="a-green" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 z" fill="#38d39f"/>
+      </marker>
+    </defs>
+
+    <!-- main lane: 标签全部放线上方,线下方留给箭头 -->
+    <text x="46" y="74" fill="#9aa3b2" font-size="13">main</text>
+    <line x1="110" y1="70" x2="990" y2="70" stroke="#4f8cff" stroke-width="3"/>
+    <circle cx="110" cy="70" r="9" fill="#0f1115" stroke="#4f8cff" stroke-width="3"/>
+    <circle cx="430" cy="70" r="9" fill="#0f1115" stroke="#4f8cff" stroke-width="3"/>
+    <circle cx="780" cy="70" r="9" fill="#0f1115" stroke="#4f8cff" stroke-width="3"/>
+
+    <text x="110" y="46" fill="#9aa3b2" font-size="12" text-anchor="middle">ea99cd2</text>
+    <text x="20" y="30" fill="#ff6b6b" font-size="11" text-anchor="start">10:19 开 PR #5 时的 main（base.sha 钉在这）</text>
+
+    <text x="430" y="46" fill="#38d39f" font-size="12" text-anchor="middle">a3152f7</text>
+    <text x="430" y="30" fill="#9aa3b2" font-size="11" text-anchor="middle">11:07 合并 PR #6（解析修复）</text>
+
+    <text x="860" y="46" fill="#9aa3b2" font-size="12" text-anchor="middle">之后的任意 commit</text>
+
+    <!-- PR lane -->
+    <text x="46" y="196" fill="#9aa3b2" font-size="13">PR #5</text>
+    <path d="M110,70 C110,130 110,160 110,190" fill="none" stroke="#ff5c8a" stroke-width="2.5"/>
+    <line x1="110" y1="190" x2="580" y2="190" stroke="#ff5c8a" stroke-width="2.5"/>
+    <circle cx="200" cy="190" r="8" fill="#0f1115" stroke="#ff5c8a" stroke-width="2.5"/>
+    <circle cx="560" cy="190" r="10" fill="#ff5c8a"/>
+    <text x="560" y="172" fill="#ff5c8a" font-size="12" text-anchor="middle">ca56cb6</text>
+    <text x="560" y="156" fill="#9aa3b2" font-size="11" text-anchor="middle">11:11 新 commit → 触发评审</text>
+
+    <!-- 旧: 从 base.sha 取脚本 -->
+    <path d="M552,180 C430,150 200,120 120,82" fill="none" stroke="#ff6b6b" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a-red)"/>
+    <text x="330" y="108" fill="#ff6b6b" font-size="12" text-anchor="middle">① 旧：从 base.sha 取脚本 → 旧的 review.mjs</text>
+
+    <!-- 新: 从 main 当前 head 取脚本 -->
+    <path d="M600,190 C700,186 760,120 775,80" fill="none" stroke="#38d39f" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a-green)"/>
+    <text x="930" y="118" fill="#38d39f" font-size="12" text-anchor="middle">② 修复后：取 main 当前 head</text>
+  </svg>
+
+  <div class="legend">
+    <span><i style="background:#4f8cff"></i>main</span>
+    <span><i style="background:#ff5c8a"></i>PR 分支</span>
+    <span><i style="background:#ff6b6b"></i>旧行为取脚本的位置</span>
+    <span><i style="background:#38d39f"></i>修复后取脚本的位置</span>
+  </div>
+
+  <div class="card">
+    <h3 style="color:var(--amber)">关键点</h3>
+    <p><code>pull_request.base.sha</code> 是「<strong>这个 PR 的 base 分支在事件发生那一刻的 commit</strong>」，
+       但它在 PR 存续期间不会跟着 main 前移。PR #5 是 10:19 开的，之后 main 又合了 PR #6，
+       它的 <code>base.sha</code> 仍然是 <code>ea99cd2</code>。</p>
+    <p>于是「从 base 恢复评审脚本」这一步，恢复的是一个<strong>没有解析修复的版本</strong>。
+       评审结果又退回到把模型原始 JSON 贴进正文、计数写成 0 的样子。</p>
+  </div>
+
+  <h2><span class="n">3</span>修法：脚本跟 main 走，diff 基准不动</h2>
+
+  <div class="card green">
+    <h3>取最新的是脚本，不是基准</h3>
+    <div class="mono">
+      git fetch origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"<br>
+      git show "refs/remotes/origin/$BASE_REF:.github/scripts/review.mjs" &gt; .github/scripts/review.mjs<br><br>
+      # diff 基准仍然是 PR 自己的 base，旧 PR 不需要 rebase<br>
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    </div>
+    <p class="note" style="margin-top:10px">
+      只换脚本来源，不动 diff 基准 —— main 上修了脚本，存量 PR 不用同步 main 也能用上；
+      而「这次 PR 相对它自己的 base 改了什么」保持原样。
+    </p>
+  </div>
+
+  <h2><span class="n">4</span>一个绕不过去的死循环：改脚本的 PR 无法自证</h2>
+
+  <p>为什么不能干脆「跑 PR 里的脚本」？因为那等于让 PR 作者执行任意代码，而这一步持有
+     <code>DEEPSEEK_API_KEY</code> 和可写评论的 token。所以脚本必须来自 base。</p>
+
+  <div class="card red">
+    <h3>推论</h3>
+    <p>PR #6 改的是 <code>review.mjs</code>。它在自己身上被评审时，用的仍是 main 上的<strong>旧脚本</strong>。
+       你在那个 PR 里怎么同步 main 都没用 —— 脚本不是从 PR 分支取的。</p>
+    <p><strong>唯一出路：先合并，再用一个普通 PR 验证。</strong> PR #6 合进 main 之后，PR #8 用修好的脚本跑通了一次，
+       那一轮才第一次看到正常的 <code>Findings: Critical 1 …</code>。</p>
+  </div>
+
+  <div class="card">
+    <h3 style="color:var(--blue)">但 yml 不一样</h3>
+    <p>workflow 文件本身来自 <strong>PR 的 ref</strong>。所以改 <code>review.yml</code> 的 PR，跑的是它自己那份 yml。
+       对这类 PR 来说，「同步 main」是有意义的（避免和 main 上的 yml 结构冲突），
+       而改 <code>review.mjs</code> 的 PR 里，同步 main 没有意义。</p>
+  </div>
+
+  <h2><span class="n">5</span>什么时候会跑什么</h2>
+
+  <table>
+    <thead>
+      <tr><th>事件</th><th>ci.yml（语法 / 测试 / 打包）</th><th>review.yml（评审）</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>向 PR 分支 push</td><td class="yes">跑</td><td class="yes">跑</td></tr>
+      <tr><td>开 PR / 重开 / 标 ready</td><td class="yes">跑</td><td class="yes">跑</td></tr>
+      <tr><td>合并进 main（push 到 main）</td><td class="yes">跑</td><td class="no">不跑</td></tr>
+      <tr><td>直接 push main</td><td class="yes">跑</td><td class="no">不跑</td></tr>
+    </tbody>
+  </table>
+
+  <p class="note">所以「PR 有自己的 CI」和「合并时也有 CI」是两条独立的运行：前者在 PR 分支上，后者在 main 上。</p>
+
+  <h2><span class="n">6</span>这次事故真正教给我们的一件事</h2>
+
+  <div class="card">
+    <p>评审脚本的版本，不该由「PR 是在什么时候开的」决定，而该由「main 现在是什么」决定。
+       否则一个 PR 的价值取决于它开得早还是晚 —— 早开的 PR 会一直用旧规则被审。</p>
+    <p class="note">代价是：脚本更新的效果对存量 PR 立刻生效，这一点需要知道（一次修复会影响所有在途 PR 的下一轮）。</p>
+  </div>
+
+</div>
+</body>
+</html>
