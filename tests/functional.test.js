@@ -26,6 +26,7 @@ let context;
 let extensionId;
 let server;
 let pdfUrl;
+let twoPagePdfUrl;
 
 async function waitFor(check, { timeout = 15000, interval = 200, message = 'condition' } = {}) {
   const start = Date.now();
@@ -80,20 +81,56 @@ async function setup() {
   extensionId = new URL(worker.url()).host;
 
   server = http.createServer((request, response) => {
-    if (request.url !== '/text.pdf') {
-      response.writeHead(404);
-      response.end('not found');
+    const send = (body) => {
+      response.writeHead(200, {
+        'content-type': 'application/pdf',
+        'content-length': body.length
+      });
+      response.end(body);
+    };
+    if (request.url === '/text.pdf') {
+      send(fs.readFileSync(pdfFixture));
       return;
     }
-    const body = fs.readFileSync(pdfFixture);
-    response.writeHead(200, {
-      'content-type': 'application/pdf',
-      'content-length': body.length
-    });
-    response.end(body);
+    if (request.url === '/two-pages.pdf') {
+      send(twoPagePdf());
+      return;
+    }
+    response.writeHead(404);
+    response.end('not found');
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   pdfUrl = `http://127.0.0.1:${server.address().port}/text.pdf`;
+  twoPagePdfUrl = `http://127.0.0.1:${server.address().port}/two-pages.pdf`;
+}
+
+// 现造一份两页 PDF:夹具只有一页,而"记住读到第几页"必须跨页才验得出来。
+function twoPagePdf() {
+  const content = (text) => `BT /F1 24 Tf 40 300 Td (${text}) Tj ET`;
+  const streams = [content('Page One'), content('Page Two')];
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${streams[0].length} >>\nstream\n${streams[0]}\nendstream`,
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>',
+    `<< /Length ${streams[1].length} >>\nstream\n${streams[1]}\nendstream`
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefAt = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
 }
 
 async function openSidebar() {
@@ -314,6 +351,80 @@ async function testPdfFollowAndSend() {
   console.log('PASS PDF.js follow selection + Enter send');
 }
 
+async function testPdfRemembersPosition() {
+  const reader = await context.newPage();
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=two-pages.pdf`
+  );
+
+  const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
+    timeout: 25000,
+    message: 'PDF.js iframe (two pages)'
+  });
+  await frame.waitForSelector('#pdfjs-outline-toggle:not([hidden])', { timeout: 25000 });
+  await reader.click('#btn-outline');
+  await waitFor(() => frame.evaluate(() =>
+    document.querySelectorAll('#pdfjs-outline-list button').length >= 2
+  ), { message: 'two-page directory' });
+
+  await frame.evaluate(() => {
+    const button = Array.from(document.querySelectorAll('#pdfjs-outline-list button'))
+      .find((item) => item.textContent.trim() === '第 2 页');
+    button?.click();
+  });
+
+  await waitFor(() => frame.evaluate(() => document.getElementById('pdfjs-container').scrollTop > 50), {
+    message: 'scrolled to page 2'
+  });
+  await reader.waitForTimeout(700); // 等防抖的持久化写完
+
+  await reader.reload();
+  await waitFor(async () => {
+    for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
+      try {
+        if (await candidate.evaluate(() => document.getElementById('pdfjs-container')?.scrollTop > 50)) return true;
+      } catch {
+        // 旧 frame 在导航时会失效,忽略
+      }
+    }
+    return false;
+  }, { timeout: 20000, message: 'reading position restored' });
+
+  // 显式给了 page 参数时,必须以参数为准,不能被历史位置盖掉。
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=two-pages.pdf&page=1`
+  );
+  await waitFor(async () => {
+    for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
+      try {
+        if (await candidate.evaluate(() => document.querySelectorAll('.pdfjs-page').length >= 2)) return true;
+      } catch {
+        // 同上
+      }
+    }
+    return false;
+  }, { timeout: 20000, message: 'two-page viewer after explicit navigation' });
+  await reader.waitForTimeout(1200);
+
+  const explicitTops = [];
+  for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
+    explicitTops.push(await candidate.evaluate(() => {
+      const container = document.getElementById('pdfjs-container');
+      if (!container) throw new Error('pdfjs container missing');
+      return container.scrollTop;
+    }));
+  }
+  // 没有可测的 frame 就等于什么都没证明——不能让空数组把断言"通过"掉。
+  assert.ok(explicitTops.length > 0, 'no pdfjs frame to measure');
+  assert.ok(
+    explicitTops.every((top) => top === 0),
+    `explicit ?page=1 should beat the saved position (scrollTop=${explicitTops.join(',')})`
+  );
+
+  await reader.close();
+  console.log('PASS PDF remembers the last reading position');
+}
+
 const watchdog = setTimeout(() => {
   console.error('FUNCTIONAL TEST WATCHDOG TIMEOUT');
   process.exit(1);
@@ -361,6 +472,7 @@ async function testChatgptProvider() {
     await testWebMouseSelection();
     await testEnterSends();
     await testPdfFollowAndSend();
+    await testPdfRemembersPosition();
     await testChatgptProvider();
     console.log('ALL FUNCTIONAL TESTS PASSED');
   } catch (error) {
