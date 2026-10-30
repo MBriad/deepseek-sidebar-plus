@@ -53,7 +53,7 @@ function checkFile(file) {
       let target = match[1].trim();
       if (target.startsWith('<') && target.endsWith('>')) target = target.slice(1, -1);
       if (!target) continue;
-      if (/^(https?:|mailto:|tel:|data:|#|\/\/|\.)/i.test(target)) continue; // 外链与页内锚点不在本文范围
+      if (/^(https?:|mailto:|tel:|data:|#|\/\/)/i.test(target)) continue; // 外链与页内锚点不在本文范围
       const withoutAnchor = target.split('#')[0];
       if (!withoutAnchor) continue;
       const resolved = resolve(dirname(file), decodeURIComponent(withoutAnchor));
