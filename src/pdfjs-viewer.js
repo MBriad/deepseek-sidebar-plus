@@ -4,6 +4,12 @@ const params = new URLSearchParams(location.search);
 const fileUrl = params.get('file') || '';
 const scale = Number(params.get('scale')) || 1.4;
 const initialPage = Math.max(1, Number(params.get('page')) || 1);
+const docKey = params.get('doc') || '';
+const POSITIONS_KEY = 'pdfReadingPositions';
+const MAX_POSITIONS = 80;
+let persistTimer = null;
+// 由宿主传进来的页码是"上次读到第几页";这里只负责在滚动/点目录时把当前位置写回去。
+let schedulePersist = () => {};
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('src/vendor/pdfjs/build/pdf.worker.mjs');
 
@@ -231,6 +237,52 @@ try {
 
   for (const pageElement of pageElements.values()) observer.observe(pageElement);
 
+  // 记住读到第几页。以"容器顶部上沿落在哪一页"为准,不存像素偏移——
+  // 换窗口宽度或缩放比例时,像素值会指向完全不同的地方。
+  if (docKey) {
+    const currentPageNumber = () => {
+      // 以"哪一页在视口里露得最多"为准,而不是"上沿落在哪一页"——
+      // scrollIntoView 之后上沿常常还差几十像素,按上沿判断会记成上一页。
+      const container = scrollContainer.getBoundingClientRect();
+      let current = 1;
+      let bestVisible = -1;
+      for (const [number, element] of pageElements) {
+        const rect = element.getBoundingClientRect();
+        if (rect.bottom <= container.top) continue;
+        if (rect.top >= container.bottom) break;
+        const visible = Math.min(rect.bottom, container.bottom) - Math.max(rect.top, container.top);
+        if (visible > bestVisible) {
+          bestVisible = visible;
+          current = number;
+        }
+      }
+      return current;
+    };
+
+    const persistPosition = () => {
+      const page = currentPageNumber();
+      chrome.storage.local.get(POSITIONS_KEY).then((stored) => {
+        const map = stored?.[POSITIONS_KEY] && typeof stored[POSITIONS_KEY] === 'object'
+          ? stored[POSITIONS_KEY]
+          : {};
+        map[docKey] = { page, ts: Date.now() };
+        const kept = Object.entries(map)
+          .sort((a, b) => Number(b[1]?.ts || 0) - Number(a[1]?.ts || 0))
+          .slice(0, MAX_POSITIONS);
+        return chrome.storage.local.set({ [POSITIONS_KEY]: Object.fromEntries(kept) });
+      }).catch(() => {});
+    };
+
+    schedulePersist = () => {
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(persistPosition, 400);
+    };
+    scrollContainer.addEventListener('scroll', schedulePersist, { passive: true });
+    window.addEventListener('pagehide', persistPosition);
+    // 打开就用上次的位置,顺便立刻记一次,免得"只读了一页就关掉"什么都不剩。
+    schedulePersist();
+  }
+
   // Build the directory before canvases/text layers; it is independent of page
   // rendering and should be available almost immediately.
   const outlineReady = renderOutline(pdfDocument);
@@ -279,7 +331,10 @@ async function renderOutline(pdfDocument) {
     button.className = `pdfjs-outline-depth-${Math.min(depth, 4)}`;
     if (pageNumber) {
       button.dataset.pageNumber = String(pageNumber);
-      button.addEventListener('click', () => scrollToPdfPage(pageNumber));
+      button.addEventListener('click', () => {
+        scrollToPdfPage(pageNumber);
+        schedulePersist();
+      });
     } else {
       button.disabled = true;
     }

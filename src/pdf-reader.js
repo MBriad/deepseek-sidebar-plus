@@ -12,6 +12,9 @@
   const fileUrl = params.get('file') || '';
   const fileName = params.get('name') || deriveName(fileUrl);
   const initialPage = Math.max(1, Number(params.get('page')) || 1);
+  // 显式给了 page 就听它的;没给才回落到"上次读到第几页"。
+  const hasExplicitPage = params.has('page');
+  const POSITIONS_KEY = 'pdfReadingPositions';
 
   const viewer = document.getElementById('viewer');
   const pdfJsFrame = document.getElementById('pdfjs-frame');
@@ -377,10 +380,12 @@
     if (cancel) showToast('已撤回自动填入');
   }
 
-  function startPdfJs(blobUrl) {
+  function startPdfJs(blobUrl, startPage, docKey) {
     pdfJsFrame.hidden = false;
     outlineButton.hidden = false;
-    pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}&page=${initialPage}`;
+    pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`
+      + `&page=${startPage}`
+      + `&doc=${encodeURIComponent(docKey)}`;
     overlay.classList.add('hidden');
     status.textContent = '选中文字会自动填入';
 
@@ -395,6 +400,26 @@
         // The frame may not be ready yet.
       }
     }, { once: true });
+  }
+
+  // FNV-1a:只为把地址折成一个短键,不做安全用途。
+  function hashDocKey(input) {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < input.length; index += 1) {
+      hash ^= input.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(16).padStart(8, '0');
+  }
+
+  async function readSavedPage(docKey) {
+    try {
+      const stored = await chrome.storage.local.get(POSITIONS_KEY);
+      const page = Number(stored?.[POSITIONS_KEY]?.[docKey]?.page);
+      return Number.isFinite(page) && page > 0 ? page : 0;
+    } catch {
+      return 0;
+    }
   }
 
   async function loadPdf() {
@@ -420,15 +445,21 @@
       }
 
       objectUrl = URL.createObjectURL(blob);
+      // 文档身份:原始地址 + 字节数,只存哈希——不把用户的本机路径原样写进 storage。
+      // blob: URL 每次加载都不同,不能拿它当 key。
+      const docKey = `${hashDocKey(fileUrl)}-${blob.size}`;
+      const savedPage = hasExplicitPage ? 0 : await readSavedPage(docKey);
+      const startPage = savedPage || initialPage;
+
       const stored = await chrome.storage.local.get('settings').catch(() => ({}));
       if (stored.settings?.pdfJsFollow !== false) {
-        startPdfJs(objectUrl);
+        startPdfJs(objectUrl, startPage, docKey);
         return;
       }
 
       embed = document.createElement('embed');
       embed.type = 'application/pdf';
-      embed.src = `${objectUrl}#page=${initialPage}`;
+      embed.src = `${objectUrl}#page=${startPage}`;
       embed.title = fileName;
       viewer.appendChild(embed);
 
