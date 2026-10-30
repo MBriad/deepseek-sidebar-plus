@@ -191,15 +191,16 @@ async function callModel(system, user, { jsonMode = true } = {}) {
     signal: AbortSignal.timeout(300000),
   });
 
-  if (res.status === 400 && jsonMode) {
-    // 400 的措辞不保证提到 response_format(可能是 "invalid parameter"、也可能本地化),
-    // 所以只要带了 JSON 模式就先退回普通模式重试一次;重试失败再把两次原因一起抛。
+  // 拒绝 response_format 的不一定回 400(也可能是 422/415)。除鉴权/限流外,
+  // 任何 4xx 都先退回普通模式重试一次;重试再失败就把两次原因一起抛。
+  const retryable = res.status >= 400 && res.status < 500 && ![401, 403, 429].includes(res.status);
+  if (retryable && jsonMode) {
     const detail = await res.text();
-    console.log(`模型拒绝带 response_format 的请求,回退普通模式重试:${detail.slice(0, 160)}`);
+    console.log(`模型拒绝带 response_format 的请求(${res.status}),回退普通模式重试:${detail.slice(0, 160)}`);
     try {
       return await callModel(system, user, { jsonMode: false });
     } catch (error) {
-      throw new Error(`API 400(with response_format): ${detail.slice(0, 300)} / retry: ${error.message}`);
+      throw new Error(`API ${res.status} (with response_format): ${detail.slice(0, 300)} / retry: ${error.message}`);
     }
   }
 
