@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 
 const TIER_ORDER = ['low', 'medium', 'high'];
 const maxTier = (...tiers) =>
-  tiers.reduce((a, b) => (TIER_ORDER.indexOf(b) > TIER_ORDER.indexOf(a) ? b : a), 'low');
+  tiers.reduce((a, b) => (TIER_ORDER.indexOf(b) < TIER_ORDER.indexOf(a) ? b : a), 'low');
 
 // 路径 → 模块 / 评审口径 / 基线档 / 是否送模型。顺序有意义:先匹配到的生效。
 const PATH_RULES = [
