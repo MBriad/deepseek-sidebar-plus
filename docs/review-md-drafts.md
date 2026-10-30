@@ -47,6 +47,8 @@ Covers: `src/sidebar.html`, `src/sidebar.css`, `src/sidebar.js`,
 - 侧边栏白屏或 iframe 不加载:`CHAT_URL` 与 `frame` 的源对不上。
 - 超过 50MB 的 PDF 直接失败且没有任何提示。
 - 页面正文或选区被写进 `chrome.storage`。
+- PDF的文章章节列表没有保存上次点开PDF的记录
+- 扫码登陆失效，只能重新在其他页面登陆才能使用插件里的页面
 
 ## Paths to skip
 - `DEFAULT_SETTINGS` 里已有键的默认值调整(键名不变就不算存储格式变更)。
@@ -104,6 +106,7 @@ Covers: `tests/`, `scripts/`
 - 用真实站点替换了 mock 站点(P-4):新用例必须另起一套,不许替换现有的。
 - 为了让测试变绿而改断言,而不是改行为。
 - 新增用例只有成功路径,没有任何失败路径。
+- 没有测我可以感受的测试，老是挑刺
 
 ## Paths to skip
 - `tests/fixtures/*.pdf`:二进制夹具。
