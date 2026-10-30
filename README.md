@@ -1,5 +1,6 @@
 # DeepSeek 侧边栏增强版（非官方）
 我在这乱写
+我又乱写了一行
 在 Microsoft Edge 侧边栏里使用 **DeepSeek 或 ChatGPT**，并补上原版缺少的几件事：
 
 - **双聊天服务切换**：顶部“聊天服务”可在 DeepSeek 和 ChatGPT 之间切换并记住选择；页面读取、划词、提示词、PDF 和网页标签工具共用。ChatGPT 需要能访问 `chatgpt.com` 的网络。
