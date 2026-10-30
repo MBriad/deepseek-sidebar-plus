@@ -207,6 +207,36 @@ function evidenceFor(tier) {
   return ['check', 'test', 'screenshot', 'owner-confirm'];
 }
 
+// 「下一步该干什么」——分类器的第三种输出。
+// 档位说"谁能合",evidence 说"要交什么",advice 说"这次最容易漏的是什么"。
+// 只写有成文依据的建议,不写泛泛的"请注意质量"。
+const ADVICE = [
+  {
+    when: ({ files }) => files.some((f) => f.path.startsWith('.github/workflows/')),
+    text: '工作流被改:旧 CI 的绿灯是旧工作流打出来的,不构成本次改动的证据。合并前必须在最新 main 上重跑(阶段 3),合并后用一个临时 PR 验证新工作流真的会触发。',
+  },
+  {
+    when: ({ files }) => files.some((f) => f.path.startsWith('.github/scripts/')),
+    text: '评审脚本被改:PR 上的评审仍用 base 版本执行(review.yml 会从 base 恢复),新脚本第一次真实运行在合并之后——本地先跑 REVIEW_DRY_RUN=1 验证输出。',
+  },
+  {
+    when: ({ escalators }) => escalators.some((e) => e.reason.includes('评审口径')),
+    text: '评审口径被改:本次按 base 版本的口径审,新口径从合并后的第一个 PR 起生效。',
+  },
+  {
+    when: ({ files }) => files.some((f) => f.module === 'vendor'),
+    text: 'vendored 代码不送模型评审:必须人工逐行看 diff,并确认没有引入远程代码。',
+  },
+  {
+    when: ({ tier }) => tier === 'low',
+    text: '低风险纯文本:Markdown 与链接检查绿即可合,不需要真人批准。',
+  },
+  {
+    when: ({ tier }) => tier === 'high',
+    text: '高风险:按 AGENTS.md 风险分级所有者逐条确认,不许合批。',
+  },
+];
+
 export function classify({ base, head, range } = {}) {
   const baseRef = base || (range ? null : defaultBase());
   const span = range || `${baseRef}...${head || 'HEAD'}`;
@@ -222,6 +252,7 @@ export function classify({ base, head, range } = {}) {
       needsHuman: false,
       needsHumanReason: [],
       requiredEvidence: evidenceFor('low'),
+      advice: [],
       sendToModel: false,
     };
   }
@@ -292,6 +323,7 @@ export function classify({ base, head, range } = {}) {
     needsHuman: dedupedReasons.length > 0,
     needsHumanReason: dedupedReasons,
     requiredEvidence: evidenceFor(tier),
+    advice: ADVICE.filter((a) => a.when({ files, tier, escalators })).map((a) => a.text),
     sendToModel: files.some((f) => f.sendToModel),
   };
 }
@@ -322,6 +354,10 @@ function toMarkdown(result) {
   lines.push(
     `- Model review: ${result.sendToModel ? `需要(${result.files.filter((f) => f.sendToModel).length} 个文件)` : '不需要(全部在跳过清单)'}`,
   );
+  if (result.advice.length) {
+    lines.push('- Advice:');
+    for (const text of result.advice) lines.push(`  - ${text}`);
+  }
   return lines.join('\n');
 }
 
