@@ -408,8 +408,14 @@ async function testPdfRemembersPosition() {
 
   const explicitTops = [];
   for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
-    explicitTops.push(await candidate.evaluate(() => document.getElementById('pdfjs-container')?.scrollTop ?? 0).catch(() => 0));
+    explicitTops.push(await candidate.evaluate(() => {
+      const container = document.getElementById('pdfjs-container');
+      if (!container) throw new Error('pdfjs container missing');
+      return container.scrollTop;
+    }));
   }
+  // 没有可测的 frame 就等于什么都没证明——不能让空数组把断言"通过"掉。
+  assert.ok(explicitTops.length > 0, 'no pdfjs frame to measure');
   assert.ok(
     explicitTops.every((top) => top === 0),
     `explicit ?page=1 should beat the saved position (scrollTop=${explicitTops.join(',')})`
