@@ -1,81 +1,102 @@
 name: Agent review
 
+# 用 pull_request_target:workflow 定义来自 base 分支,PR 改不动它。
+# 代价是它跑在 base 上下文,拿得到写权限和 secrets —— 所以整份文件围绕一件事:
+# **不可信的东西不许和密钥出现在同一个 job 里。**
+#   Job prepare:读 PR(只用 git,不执行 PR 的代码),产出 artifact,无 secrets
+#   Job review :只跑 base 的代码,读 artifact(纯数据),持有 API key
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: agent-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  review:
-    name: Agent review
-    # 只在同仓库分支上跑:fork 来的 PR 拿不到 secret,也没必要在这里评。
+  prepare:
+    name: Prepare input (no secrets)
+    # 同仓库分支才评:fork 走 target 会拿到 secrets,但眼下先不把这条路打开。
     if: |
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
+      # 这里是唯一碰 PR 内容的地方。只读文件,不执行 PR 的代码。
+      - name: Checkout the PR (untrusted content)
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          path: pr
+
+      - name: Checkout the base branch (trusted tools)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          path: trusted
+
+      - name: Collect diff and file contents
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: node trusted/.github/scripts/collect-diff.mjs --pr pr --out "$RUNNER_TEMP/review"
+
+      - name: Upload the review input
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-input
+          path: ${{ runner.temp }}/review
+          retention-days: 1
+          if-no-files-found: error
+
+  review:
+    name: Agent review
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # 只 checkout base。**绝不**在这里 checkout PR 的代码。
+      - name: Checkout the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
 
-      # 业务代码保持 PR 版本(checkout 出来的就是 PR 的合并结果),
-      # 只有**工具脚本**换成 base 分支的版本。
-      # 不换的话,等于让 PR 作者执行任意代码 —— 这一步持有 DEEPSEEK_API_KEY
-      # 和 pull-requests: write 的 token。
-      #
-      # 取 base 分支的**当前 head**,不是 pull_request.base.sha:后者在 PR 存续期间
-      # 停在 PR 创建时的那个 commit,main 合了脚本修复它也不会动。
-      # diff 基准不动 —— 旧 PR 不需要为了这个去同步 main。
-      # 残余风险:workflow 文件本身仍来自 PR 的 ref,同仓库分支理论上也能改它;
-      # 这个岗位没有提交权限,只用于读 diff 和发评论。
-      - name: Use the trusted reviewer and its dependencies
-        # classify.mjs 必须一起换:它决定哪些文件送进模型。
-        # 留给 PR 版本的话,一个 PR 只要动它,就能把自己标成 sendToModel:false,
-        # 让评审直接跳过自己。
-        # 分支名从 env 进 shell,不直接拼进脚本正文:ref 名允许出现 $(、反引号、;,
-        # 直接内插等于把分支名当代码执行。变量展开不会再求值命令替换。
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          BASE="refs/remotes/origin/$BASE_REF"
-          for f in .github/scripts/review.mjs scripts/classify.mjs; do
-            if git cat-file -e "$BASE:$f" 2>/dev/null; then
-              mkdir -p "$(dirname "$f")"
-              git show "$BASE:$f" > "$f"
-              echo "trusted $f <- $BASE ($(git rev-parse --short "$BASE"))"
-            else
-              echo "::warning::trusted copy of $f does not exist on $BASE yet - the PR copy runs this once"
-            fi
-          done
+      - name: Download the review input
+        uses: actions/download-artifact@v4
+        with:
+          name: review-input
+          path: ${{ runner.temp }}/review
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      # 评审是建议性的:基础设施失败不应当把 PR 卡成红。
-      # 失败原因写进 step summary,不发 PR 评论,避免用噪音冒充发现。
       - name: Review
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          # diff 基准仍是 PR 自己的 base,不跟着 main 走:旧 PR 不需要同步 main。
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           EVENT_ACTION: ${{ github.event.action }}
           EVENT_BEFORE: ${{ github.event.before }}
+          # 输入来自 artifact;review.mjs 看到它就完全不读工作区。
+          REVIEW_ARTIFACT: ${{ runner.temp }}/review
           REVIEW_MODEL: deepseek-flash
           REVIEW_MAX_TOKENS: 32000
         run: node .github/scripts/review.mjs
