@@ -1001,8 +1001,16 @@
     const track = tracks.find((item) => /^(zh|en)/i.test(item.languageCode || '')) || tracks[0];
     if (!track?.baseUrl) return null;
 
-    const response = await fetch(track.baseUrl, { credentials: 'include' });
-    console.warn('[DS+ transcript] youtube fetch', { status: response.status });
+    let captionUrl = track.baseUrl;
+    try {
+      const parsed = new URL(captionUrl);
+      if (!parsed.searchParams.has('fmt')) parsed.searchParams.set('fmt', 'json3');
+      captionUrl = parsed.toString();
+    } catch {
+      // 保留原 URL。
+    }
+    const response = await fetch(captionUrl, { credentials: 'include' });
+    console.warn('[DS+ transcript] youtube fetch', { status: response.status, url: captionUrl.slice(0, 120) });
     if (!response.ok) return null;
     const body = await response.text();
     const cues = parseCaptionBody(body);
