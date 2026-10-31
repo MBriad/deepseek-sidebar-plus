@@ -156,6 +156,13 @@
       }
       case 'hr':
         return node('hr', '');
+      case 'image':
+        return renderImage(block, false);
+      case 'file': {
+        const line = node('div', 'pd-file');
+        line.textContent = `📎 ${block.name || '附件'}`;
+        return line;
+      }
       case 'table': {
         const table = node('table', 'pd-table');
         for (const row of Array.isArray(block.rows) ? block.rows : []) {
@@ -184,9 +191,47 @@
     if (!Array.isArray(block?.runs)) return false;
     for (const run of block.runs) {
       if (run.type === 'math') parent.appendChild(renderInlineMath(run));
+      else if (run.type === 'image') parent.appendChild(renderImage(run, true));
       else parent.appendChild(document.createTextNode(String(run.text || '')));
     }
     return true;
+  }
+
+  function renderImage(block, inline) {
+    if (!block?.src) {
+      const missing = document.createElement(inline ? 'span' : 'div');
+      missing.className = inline ? 'pd-image-missing pd-image-missing-inline' : 'pd-image-missing';
+      missing.textContent = `[图片${block?.alt ? `：${block.alt}` : ''}]`;
+      return missing;
+    }
+
+    const img = document.createElement('img');
+    img.src = block.src;
+    img.alt = block.alt || '';
+    img.loading = 'eager';
+
+    // 大图(截图、图表)单独成块;小图(表情、图标)留在文字里。
+    const big = Number(block.width) > 240;
+    if (inline && !big) {
+      img.className = 'pd-image-inline';
+      return img;
+    }
+
+    const figure = document.createElement('figure');
+    figure.className = 'pd-image';
+    img.addEventListener('error', () => {
+      img.remove();
+      figure.classList.add('pd-image-missing');
+      figure.textContent = `[图片${block.alt ? `：${block.alt}` : ''}]`;
+    });
+    figure.appendChild(img);
+    if (block.alt) {
+      const caption = document.createElement('figcaption');
+      caption.className = 'pd-image-alt';
+      caption.textContent = block.alt.slice(0, 200);
+      figure.appendChild(caption);
+    }
+    return figure;
   }
 
   function renderMathBlock(block) {

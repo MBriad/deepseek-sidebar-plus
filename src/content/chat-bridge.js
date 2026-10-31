@@ -2057,6 +2057,9 @@
     const turns = Array.from(merged.values()).filter((turn) => turn.blocks && turn.blocks.length);
     debug.collectedTurns = turns.length;
 
+    // 用户上传的图片/附件也要进 PDF:能取到字节就内联成 data URL,取不到保留原链接。
+    await inlineExportMedia(turns);
+
     if (!turns.length) {
       // 站点改版时不再猜结构:退回整页可见文本,至少给一份可读的 PDF。
       // 同时带上诊断计数,方便下一轮直接照着真实 DOM 修选择器。
@@ -2335,6 +2338,69 @@
       .trim();
   }
 
+  /* 图片内联:最多 12 张、单张 2MB、总计 6MB;超限或取不到就保留原链接。 */
+  const EXPORT_IMAGE_LIMIT = 12;
+  const EXPORT_IMAGE_BYTES = 2_000_000;
+  const EXPORT_IMAGE_TOTAL = 6_000_000;
+
+  async function inlineExportMedia(turns) {
+    const images = [];
+    for (const turn of turns) {
+      for (const block of turn.blocks || []) {
+        if (block.type === 'image') images.push(block);
+        for (const run of block.runs || []) {
+          if (run.type === 'image') images.push(run);
+        }
+      }
+    }
+
+    let count = 0;
+    let total = 0;
+    for (const image of images) {
+      if (!image.src || count >= EXPORT_IMAGE_LIMIT || total >= EXPORT_IMAGE_TOTAL) continue;
+      try {
+        const dataUrl = await imageToDataUrl(image.src);
+        if (!dataUrl || dataUrl.length > EXPORT_IMAGE_BYTES) continue;
+        image.src = dataUrl;
+        count += 1;
+        total += dataUrl.length;
+      } catch {
+        // 取不到就保留原链接;打印窗口还会再试一次,都失败则显示 [图片]。
+      }
+    }
+  }
+
+  async function imageToDataUrl(src) {
+    if (/^data:/i.test(src)) return src;
+    const response = await fetch(src, { credentials: 'include' });
+    if (!response.ok) throw new Error(`image ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) return '';
+
+    try {
+      // 大图先缩到 1400px,避免 PDF 体积失控。
+      const bitmap = await createImageBitmap(blob);
+      const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const type = blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      return canvas.toDataURL(type, 0.86);
+    } catch {
+      return blobToDataUrl(blob);
+    }
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('read failed'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
   function blocksOf(root) {
     const blocks = [];
     const pushText = (type, text, extra = {}) => {
@@ -2351,6 +2417,15 @@
           const math = mathOf(child);
           if (math) {
             blocks.push({ type: 'math', display: true, tex: math.tex, mathml: math.mathml });
+            continue;
+          }
+        }
+
+        if (tag === 'A') {
+          const href = child.getAttribute('href') || '';
+          const name = textOf(child).trim();
+          if (href && name && name.length <= 120 && /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|txt|md|csv|json|png|jpe?g|gif|webp|mp3|mp4|wav)$/i.test(name)) {
+            blocks.push({ type: 'file', name, href });
             continue;
           }
         }
@@ -2394,15 +2469,41 @@
           blocks.push({ type: 'hr' });
           continue;
         }
-        if (tag === 'IMG') continue; // 图片不进 PDF:外链会失效,还可能是防盗链
+        if (tag === 'FIGURE') {
+          const image = child.querySelector('img');
+          if (image) {
+            const caption = child.querySelector('figcaption');
+            blocks.push({
+              type: 'image',
+              src: image.currentSrc || image.src || '',
+              alt: (caption?.innerText || image.alt || '').trim(),
+              width: image.naturalWidth || 0,
+              height: image.naturalHeight || 0
+            });
+            continue;
+          }
+        }
+        if (tag === 'IMG') {
+          blocks.push({
+            type: 'image',
+            src: child.currentSrc || child.src || child.getAttribute('src') || '',
+            alt: (child.getAttribute('alt') || '').trim(),
+            width: child.naturalWidth || 0,
+            height: child.naturalHeight || 0
+          });
+          continue;
+        }
 
         const blockChildren = Array.from(child.children).some((node) =>
           /^(P|UL|OL|PRE|BLOCKQUOTE|TABLE|H[1-6]|DIV|SECTION|ARTICLE|DETAILS|SUMMARY)$/.test(node.tagName)
         );
         if (!blockChildren) {
           const runs = runsOf(child);
-          if (runs.some((run) => run.type === 'math')) blocks.push({ type: 'text', runs });
-          else pushText('text', textOf(child));
+          if (runs.some((run) => run.type === 'math' || run.type === 'image' || run.type === 'file')) {
+            blocks.push({ type: 'text', runs });
+          } else {
+            pushText('text', textOf(child));
+          }
           continue;
         }
         walk(child);
@@ -2464,6 +2565,17 @@
         }
         return;
       }
+      if (tag === 'IMG') {
+        flush();
+        runs.push({
+          type: 'image',
+          src: current.currentSrc || current.src || current.getAttribute('src') || '',
+          alt: (current.getAttribute('alt') || '').trim(),
+          width: current.naturalWidth || 0,
+          height: current.naturalHeight || 0
+        });
+        return;
+      }
       for (const child of current.childNodes) walk(child);
     };
 
@@ -2476,7 +2588,9 @@
       const last = runs[runs.length - 1];
       if (last.type === 'text') last.text = last.text.replace(/\s+$/, '');
     }
-    return runs.filter((run) => run.type === 'math' || String(run.text || '').trim());
+    return runs.filter(
+      (run) => run.type === 'math' || run.type === 'image' || run.type === 'file' || String(run.text || '').trim()
+    );
   }
 
   function conversationTitle() {

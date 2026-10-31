@@ -255,3 +255,38 @@ body.print-standalone #print-doc {
   margin: 0 auto;
   padding: 24px 28px 48px;
 }
+
+/* 用户上传的图片与文件附件 */
+#print-doc .pd-image {
+  margin: .8em 0;
+  text-align: center;
+  break-inside: avoid;
+}
+
+#print-doc .pd-image img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #d8d8de;
+  border-radius: 4px;
+}
+
+#print-doc .pd-image-inline {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+#print-doc .pd-image-alt {
+  margin-top: .3em;
+  color: #6b6f76;
+  font-size: .72em;
+}
+
+#print-doc .pd-image-missing {
+  color: #6b6f76;
+  font-size: .8em;
+}
+
+#print-doc .pd-file {
+  margin: .3em 0;
+  font-size: .9em;
+}

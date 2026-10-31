@@ -23,14 +23,14 @@ const chatHtml = `<!doctype html>
   <button data-testid="send-button" onclick="window.sent=document.querySelector('#chat-input').value">Send</button>
   <div id="chat-log">
     <!-- DeepSeek 真实结构:每条消息 .ds-message,助手内容再套 .ds-assistant-message-main-content -->
-    <div class="ds-message"><div class="ds-collapsible-text">请把这段对话导出成 PDF</div></div>
+    <div class="ds-message"><div class="ds-collapsible-text">请把这段对话导出成 PDF <img alt="示意图" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div><a href="https://example.com/notes.pdf">notes.pdf</a></div>
     <div class="ds-message">
       <div class="ds-assistant-message-main-content">
         <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li><li>计算 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 的值</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
       </div>
     </div>
     <!-- ChatGPT 真实结构:<user-query> / <model-response> -->
-    <user-query><div data-user-message-bubble>请把这段对话导出成 PDF</div></user-query>
+    <user-query><div data-user-message-bubble>请把这段对话导出成 PDF <img alt="示意图" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div></user-query>
     <model-response>
       <div data-chatgpt-selection-message-id>
         <div data-markdown-text-style="assistant-message">
@@ -361,6 +361,8 @@ async function testExportDialog() {
       displayMath: Boolean(root.querySelector('.pd-math math')),
       inlineMath: Boolean(root.querySelector('.pd-text math')),
       listMath: [...root.querySelectorAll('.pd-list-item')].some((item) => item.querySelector('math')),
+      image: Boolean(root.querySelector('.pd-image img, .pd-image-inline')),
+      file: (root.querySelector('.pd-file')?.textContent || '').includes('notes.pdf'),
       codeLang: root.querySelector('.pd-code-lang')?.textContent || ''
     };
   });
@@ -373,6 +375,8 @@ async function testExportDialog() {
   assert.equal(doc.font.trim(), '16pt', 'font size should follow the slider');
   assert.equal(doc.codeLang, 'JS', 'code blocks should keep their language label');
   assert.ok(doc.displayMath && doc.inlineMath && doc.listMath, 'math should render as MathML in every context');
+  assert.ok(doc.image, 'uploaded images should be included in the document');
+  assert.ok(doc.file, 'file attachments should be listed by name');
 
   await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
     message: 'native print invoked from the print window'
