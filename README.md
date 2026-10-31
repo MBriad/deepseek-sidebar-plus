@@ -109,7 +109,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 **PDF 没有目录按钮？**
 
 - 确认打开的是 **增强阅读器**，不是原生 PDF。
-- 增强阅读器标题栏应显示当前版本号（如 `v1.13.0`）。
+- 增强阅读器标题栏应显示当前版本号（如 `v1.13.1`）。
 - 点工具栏 **目录**；没有书签的 PDF 会显示页码目录。
 
 **Enter 不发送？**
@@ -266,7 +266,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.13.0-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.13.1-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -281,7 +281,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 
 ## Edge 商店提交材料
 
-**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.12.0 删除网页标签、收藏整理和工具栏剪贴板按钮，v1.13.0 新增对话导出 PDF，均暂不覆盖审核中的商店包，等审核结束后再提交。
+**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.12.0 删除网页标签、收藏整理和工具栏剪贴板按钮，v1.13.1 新增对话导出 PDF，均暂不覆盖审核中的商店包，等审核结束后再提交。
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
@@ -289,7 +289,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
 - 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)（六张都是 v1.11 工具栏；`store-05-page-tags.png` 还拍了 v1.12.0 已删除的网页标签，提交前重拍或裁掉工具栏）
 - 当前审核包：`deepseek-sidebar-plus-v1.9.3-store.zip`
-- v1.13.0 商店包：`deepseek-sidebar-plus-v1.13.0-store.zip`（审核结束后再提交）
+- v1.13.1 商店包：`deepseek-sidebar-plus-v1.13.1-store.zip`（审核结束后再提交）
 
 **商店提交前还需要：**
 
@@ -457,7 +457,7 @@ deepseek-sidebar-plus/
 
 ## 版本
 
-- **v1.13.0**：新增“导出对话为 PDF”工具栏按钮：把当前会话读成结构化打印页，经浏览器打印对话框“另存为 PDF”，文字可选中、代码块与表格保留；数据不落盘。
+- **v1.13.1**：新增“导出对话为 PDF”工具栏按钮：把当前会话读成结构化打印页，经浏览器打印对话框“另存为 PDF”，文字可选中、代码块与表格保留；数据不落盘。
 - **v1.12.0**：删除三个多余功能——网页标签（含本地语义搜索与自动分类）、收藏整理（书签移动）和工具栏“从剪贴板填入”按钮；`bookmarks` 权限随之移除。侧边栏只剩读本页、划词、提示词库、PDF 与设置。
 - **v1.11.36**：直接输入小窗支持按光标位置 Backspace/Delete 删字（网页 Shadow DOM 与 PDF 浮窗）；修复 PDF.js 6 文本层缺少 `--total-scale-factor` 导致高亮只到行中间；增强阅读器保留原生选区高亮并跟随滚动；原生 Edge PDF 不再启动浮窗；大 PDF 惰性渲染；新选区替换上一段自动填入；网页划词 40ms 重试；PDF 多行划词不中途打断；网页直接输入有页面级键盘兜底；目录并行解析；DeepSeek 与 ChatGPT 共用浮窗和发送。
 - **v1.9.3**：更换为原创图标（聊天气泡 + 侧边栏 + 命令符号），移除原版狐狸图标；图标和商店宣传图纳入 MIT，Logo/宣传图已重新生成。

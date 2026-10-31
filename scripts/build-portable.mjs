@@ -37,7 +37,8 @@ for (const item of INCLUDE) {
 }
 
 const portableDir = join(outRoot, 'portable');
-const zipPath = join(outRoot, 'deepseek-sidebar-plus-portable.zip');
+const packageVersion = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8')).version;
+const zipPath = join(outRoot, 'AI-Sidebar-Enhanced-v' + packageVersion + '-portable.zip');
 
 rmSync(portableDir, { recursive: true, force: true });
 mkdirSync(portableDir, { recursive: true });
