@@ -1199,7 +1199,7 @@
 
     const lines = video.cues.map((cue) => `[${formatStamp(cue.start)}] ${cue.text}`).join('\n');
     const head = `${video.title || result.title || ''}\n${video.platform}${video.duration ? ` · ${formatStamp(video.duration)}` : ''}\n\n[字幕]\n`;
-    const limited = limitText(`${head}${lines}`, maxChars);
+    const limited = limitText(`${head}${lines}`, Math.max(maxChars, 400000));
     return {
       ...result,
       text: limited.text,
