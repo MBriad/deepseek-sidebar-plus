@@ -63,10 +63,14 @@ const PROBES = [
   {
     id: 'manifest-surface',
     file: (f) => f === 'manifest.json',
+    // 两种写法都要抓:键名变化(`"permissions": [...]`),以及数组里的裸条目
+    // (`"bookmarks",` / `"storage", "bookmarks"` / `"https://example.com/*",`)。
+    // 只匹配键名会漏掉"加了一个权限"这种最常见的扩权;而带 `:` 的行(键值对)
+    // 不会命中,所以普通字段改动不会被误伤。
     line: (t) =>
       /"(permissions|optional_permissions|host_permissions|content_scripts|web_accessible_resources|externally_connectable|all_frames|matches|run_at)"/.test(
         t,
-      ),
+      ) || /^\s*"[^"]*"\s*(?:,\s*"[^"]*"\s*)*,?\s*$/.test(t),
     tier: 'high',
     reason: 'manifest 的权限 / 注入面发生变化',
   },
