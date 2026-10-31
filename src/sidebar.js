@@ -755,16 +755,13 @@ async function quoteInChat(text) {
   else showToast(response?.error || '引用失败', 'error', 4000);
 }
 
-// 导出在侧边栏自己的弹层里完成;打印走隐藏 iframe,不打开新标签页。
-// 对话只放内存,不进 chrome.storage(不新增存储键)。
+// 导出在侧边栏的弹层里完成:选格式/称呼/字号 → 直接在侧边栏页面里渲染一份
+// 只用于打印的文档 → 调浏览器原生打印。不打开新标签页,也不写 chrome.storage。
 let exportMeta = null;
 let exportTurns = [];
-let exportSelected = new Set();
 let exportBusy = false;
-let printFrame = null;
-let printTimer = 0;
+let exportPrintTimer = 0;
 const EXPORT_MAX_CHARS = 1500000;
-const EXTENSION_ORIGIN = new URL(chrome.runtime.getURL('')).origin;
 
 function capExportTurns(turns) {
   let total = 0;
@@ -786,11 +783,6 @@ function setExportStatus(text) {
 function resetExportSheet() {
   exportMeta = null;
   exportTurns = [];
-  exportSelected = new Set();
-  const list = $('#export-turns');
-  if (list) list.textContent = '';
-  const count = $('#export-count');
-  if (count) count.textContent = '已选择 0 条';
   const run = $('#btn-export-run');
   if (run) run.disabled = true;
 }
@@ -824,69 +816,20 @@ async function openExportSheet() {
 
   exportMeta = response.conversation;
   exportTurns = (exportMeta.turns || []).filter((turn) => turn.blocks?.length);
-  exportSelected = new Set(exportTurns.map((_, index) => index));
-  renderExportTurns();
-  updateExportSelection();
 
   if (exportMeta.degraded) {
     console.warn('[DS+] PDF 导出降级:没能识别对话结构', exportMeta.debug);
     setExportStatus('没能识别出对话结构，将按整页文本导出；诊断信息见控制台。');
   } else if (!exportTurns.length) {
     setExportStatus('没有读到可导出的消息。');
+    return;
   } else {
     const note = exportMeta.incomplete ? '（可能不完整：未能确认对话起点/终点）' : '';
-    setExportStatus(`选择导出格式：共 ${exportTurns.length} 条消息${note}`);
+    setExportStatus(`共 ${exportTurns.length} 条消息${note}`);
   }
-}
 
-function renderExportTurns() {
-  const list = $('#export-turns');
-  if (!list) return;
-  list.textContent = '';
-
-  exportTurns.forEach((turn, index) => {
-    const row = document.createElement('label');
-    row.className = 'export-turn';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = exportSelected.has(index);
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) exportSelected.add(index);
-      else exportSelected.delete(index);
-      updateExportSelection();
-    });
-
-    const role = document.createElement('span');
-    role.className = `export-turn-role role-${turn.role || 'unknown'}`;
-    role.textContent = turn.role === 'user' ? '你' : turn.role === 'assistant' ? 'AI' : '内容';
-
-    const preview = document.createElement('span');
-    preview.className = 'export-turn-text';
-    const firstText = (turn.blocks || []).find((block) => block.text)?.text || '';
-    preview.textContent = firstText.slice(0, 60) || '（无文字内容）';
-
-    row.append(checkbox, role, preview);
-    list.appendChild(row);
-  });
-}
-
-function updateExportSelection() {
-  const count = $('#export-count');
-  if (count) count.textContent = `已选择 ${exportSelected.size} / ${exportTurns.length} 条`;
   const run = $('#btn-export-run');
-  if (run) run.disabled = exportSelected.size === 0;
-}
-
-function applyExportPreset(mode) {
-  exportSelected = new Set();
-  exportTurns.forEach((turn, index) => {
-    if (mode === 'all') exportSelected.add(index);
-    if (mode === 'user' && turn.role === 'user') exportSelected.add(index);
-    if (mode === 'assistant' && turn.role === 'assistant') exportSelected.add(index);
-  });
-  renderExportTurns();
-  updateExportSelection();
+  if (run) run.disabled = exportTurns.length === 0;
 }
 
 function setExportFont(value) {
@@ -898,53 +841,59 @@ function setExportFont(value) {
 }
 
 function runExport() {
-  if (!exportMeta || !exportSelected.size) return;
-  const turns = capExportTurns(exportTurns.filter((_, index) => exportSelected.has(index)));
-  const payload = { ...exportMeta, turns, selectedCount: turns.length };
+  if (!exportMeta || !exportTurns.length) {
+    setExportStatus('还没有读到可导出的消息。');
+    return;
+  }
+
+  const payload = {
+    ...exportMeta,
+    turns: capExportTurns(exportTurns),
+    selectedCount: capExportTurns(exportTurns).length
+  };
   const options = {
     fontPt: Number($('#export-font')?.value) || 13,
     userLabel: String($('#export-user-label')?.value || '').trim() || '用户',
     aiLabel: String($('#export-ai-label')?.value || '').trim() || '助手'
   };
+
   closeSheet('#export-sheet');
-  printWithHiddenFrame(payload, options);
+  printConversation(payload, options);
 }
 
-function printWithHiddenFrame(payload, options) {
-  cleanupPrintFrame();
-
-  const frame = document.createElement('iframe');
-  frame.id = 'print-frame';
-  frame.className = 'print-frame';
-  frame.setAttribute('aria-hidden', 'true');
-  frame.src = chrome.runtime.getURL('src/print.html?embed=1');
-  document.body.appendChild(frame);
-  printFrame = frame;
-
-  frame.addEventListener(
-    'load',
-    () => {
-      try {
-        frame.contentWindow.postMessage({ type: 'DS_PRINT_PAYLOAD', payload, options }, EXTENSION_ORIGIN);
-      } catch (error) {
-        showToast(`打印失败：${error.message}`, 'error', 4000);
-        cleanupPrintFrame();
-      }
-    },
-    { once: true }
-  );
-
-  // 打印对话框可能被取消;兜底清理,避免 iframe 永远留着。
-  printTimer = setTimeout(cleanupPrintFrame, 90000);
-}
-
-function cleanupPrintFrame() {
-  clearTimeout(printTimer);
-  printTimer = 0;
-  if (printFrame) {
-    printFrame.remove();
-    printFrame = null;
+// 在侧边栏页面里渲染只用于打印的文档,然后调原生打印;打印完清掉,不留在 DOM 里。
+function printConversation(payload, options) {
+  const root = $('#print-doc');
+  if (!root || !window.DSPrintDoc) {
+    showToast('打印模块没有加载，请重新加载扩展。', 'error', 4000);
+    return;
   }
+
+  try {
+    window.DSPrintDoc.render(root, payload, options);
+  } catch (error) {
+    showToast(`生成打印文档失败：${error.message}`, 'error', 4000);
+    return;
+  }
+
+  const cleanup = () => {
+    clearTimeout(exportPrintTimer);
+    exportPrintTimer = 0;
+    root.textContent = '';
+  };
+  window.addEventListener('afterprint', cleanup, { once: true });
+  clearTimeout(exportPrintTimer);
+  exportPrintTimer = setTimeout(cleanup, 120000);
+
+  // 等一帧让排版生效再打印,否则可能打到空文档。
+  requestAnimationFrame(() => {
+    try {
+      window.print();
+    } catch (error) {
+      showToast(`打印失败：${error.message}`, 'error', 4000);
+      cleanup();
+    }
+  });
 }
 
 async function openSidebarInTab() {
@@ -2299,9 +2248,6 @@ function bindUI() {
   });
   $('#btn-export-cancel').addEventListener('click', () => closeSheet('#export-sheet'));
   $('#btn-export-run').addEventListener('click', runExport);
-  $('#export-select-all').addEventListener('click', () => applyExportPreset('all'));
-  $('#export-select-user').addEventListener('click', () => applyExportPreset('user'));
-  $('#export-select-ai').addEventListener('click', () => applyExportPreset('assistant'));
   $('#export-font').addEventListener('input', (event) => setExportFont(event.target.value));
   setExportFont($('#export-font').value);
   $('#btn-prompts').addEventListener('click', () => {
@@ -2399,13 +2345,6 @@ function bindUI() {
     } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
       finishTypeRelay(false).catch(() => {});
     }
-  });
-
-  // 隐藏打印 iframe 在 afterprint 后通知父页面清理自己。
-  window.addEventListener('message', (event) => {
-    if (event.origin !== EXTENSION_ORIGIN) return;
-    if (event.data?.type !== 'DS_PRINT_DONE') return;
-    cleanupPrintFrame();
   });
 }
 

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>AI 侧边栏增强版（非官方）</title>
   <link rel="stylesheet" href="sidebar.css">
+  <link rel="stylesheet" href="print-doc.css">
 </head>
 <body>
   <div id="app">
@@ -192,17 +193,6 @@
           </label>
         </div>
 
-        <div class="export-range">
-          <div class="export-range-head">
-            <span class="export-range-title">导出范围</span>
-            <button id="export-select-all" class="link-btn" type="button">全选</button>
-            <button id="export-select-user" class="link-btn" type="button">仅选用户</button>
-            <button id="export-select-ai" class="link-btn" type="button">仅选模型</button>
-            <span id="export-count" class="export-count">已选择 0 条</span>
-          </div>
-          <div id="export-turns" class="export-turns"></div>
-        </div>
-
         <div class="export-font">
           <div class="export-font-head">
             <span>字体大小</span>
@@ -358,6 +348,9 @@
     </div>
   </div>
 
+  <div id="print-doc" aria-hidden="true"></div>
+
+  <script src="print-doc.js"></script>
   <script src="sidebar.js"></script>
 </body>
 </html>

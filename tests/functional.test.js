@@ -8,6 +8,14 @@ const { chromium } = require('playwright');
 const extensionPath = path.resolve(__dirname, '..');
 const pdfFixture = path.join(__dirname, 'fixtures', 'text.pdf');
 
+const emptyChatHtml = `<!doctype html>
+<html><head><meta charset="utf-8"><title>DeepSeek</title></head>
+<body style="margin:0;padding:24px">
+  <textarea id="chat-input" style="width:100%;height:120px"></textarea>
+</body></html>`;
+
+let emptyChat = false;
+
 const chatHtml = `<!doctype html>
 <html><head><meta charset="utf-8"><title>DeepSeek</title></head>
 <body style="margin:0;padding:24px">
@@ -83,7 +91,7 @@ async function setup() {
       await route.fulfill({
         status: 200,
         contentType: 'text/html; charset=utf-8',
-        body: route.request().resourceType() === 'document' ? chatHtml : ''
+        body: route.request().resourceType() === 'document' ? (emptyChat ? emptyChatHtml : chatHtml) : ''
       });
     });
   }
@@ -283,15 +291,23 @@ async function testEnterSends() {
   console.log('PASS Enter sends composed message');
 }
 
-async function testExportWithoutSidebar() {
-  const page = await context.newPage();
-  await page.goto(`chrome-extension://${extensionId}/src/print.html`);
-  await waitFor(() => page.evaluate(() => document.body.innerText.includes('没有可打印的对话')), {
-    message: 'print page empty state'
-  });
-  assert.equal(await page.locator('#btn-print').isDisabled(), true, 'print button should be disabled without data');
-  await page.close();
-  console.log('PASS print page explains there is nothing to export');
+async function testExportEmptyChat() {
+  // 空会话(只有输入框、没有消息):弹层要明确说没读到内容,并禁用导出。
+  emptyChat = true;
+  const sidebar = await openSidebar();
+  await sidebar.click('#btn-export-pdf');
+  await waitFor(
+    () =>
+      sidebar.evaluate(() => {
+        const status = document.getElementById('export-status');
+        return Boolean(status) && !status.textContent.includes('正在读取对话');
+      }),
+    { message: 'export status settled for an empty chat' }
+  );
+  assert.equal(await sidebar.locator('#btn-export-run').isDisabled(), true, 'export must stay disabled without messages');
+  await sidebar.close();
+  emptyChat = false;
+  console.log('PASS export dialog explains there is nothing to export');
 }
 
 async function testExportDialog() {
@@ -299,18 +315,21 @@ async function testExportDialog() {
   // 第二个侧边栏实例(没有数据):不能影响导出。
   const secondSidebar = await openSidebar();
 
-  // 打印发生在隐藏 iframe 里;换掉原生打印,避免弹出打印对话框。
-  await context.addInitScript(() => {
+  // 打印在侧边栏页面里发生;换掉原生打印,避免弹出打印对话框。
+  await sidebar.evaluate(() => {
+    window.__dsPrintCalls = 0;
     window.print = () => {
-      window.__dsPrintCalls = (window.__dsPrintCalls || 0) + 1;
+      window.__dsPrintCalls += 1;
     };
   });
 
   const pagesBefore = context.pages().length;
   await sidebar.click('#btn-export-pdf');
-  await sidebar.waitForSelector('#export-turns .export-turn', { timeout: 30000 });
-  assert.equal(await sidebar.locator('#export-turns .export-turn').count(), 2);
-  assert.ok((await sidebar.locator('#export-count').textContent()).includes('已选择 2 / 2 条'));
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('export-status')?.textContent.includes('共 2 条消息')),
+    { message: 'export dialog shows the conversation size' }
+  );
+  assert.equal(await sidebar.locator('#btn-export-run').isDisabled(), false, 'export should be enabled with messages');
 
   // 角色称呼与字号
   await sidebar.fill('#export-user-label', '我');
@@ -323,38 +342,35 @@ async function testExportDialog() {
   assert.equal((await sidebar.locator('#export-font-value').textContent()).trim(), '16pt');
   assert.ok((await sidebar.locator('#export-font-preview').textContent()).includes('天地玄黄'));
 
-  // 仅选模型 → 只导出 AI 那条
-  await sidebar.click('#export-select-ai');
-  assert.equal(await sidebar.locator('#export-turns .export-turn input:checked').count(), 1);
-  assert.ok((await sidebar.locator('#export-count').textContent()).includes('已选择 1 / 2 条'));
-
   await sidebar.click('#btn-export-run');
 
-  // 不打开新标签页:导出在侧边栏自己的隐藏 iframe 里完成。
+  // 不打开新标签页:打印的是侧边栏页面里渲染好的文档。
   assert.equal(context.pages().length, pagesBefore, 'export must not open a new tab');
-
-  const frame = await waitFor(() => sidebar.frames().find((item) => item.url().includes('print.html')), {
-    message: 'hidden print iframe'
-  });
-  await frame.waitForFunction(() => document.body.innerText.includes('好的，代码会保留'), null, {
-    timeout: 20000
+  await waitFor(() => sidebar.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
+    message: 'native print invoked'
   });
 
-  const text = await frame.evaluate(() => document.body.innerText);
-  assert.ok(text.includes('模型'), 'the custom AI label should be used in the document');
-  assert.ok(!text.includes('请把这段对话导出成 PDF'), 'unselected user turn must not be exported');
-  assert.ok(/1\.\s*第一步/.test(text), 'ordered lists should keep their numbering');
-
-  const math = await frame.evaluate(() => ({
-    display: Boolean(document.querySelector('.block-math math')),
-    inline: Boolean(document.querySelector('.block-text math')),
-    listMath: [...document.querySelectorAll('.block-list-item')].some((item) => item.querySelector('math'))
-  }));
-  assert.ok(math.display && math.inline && math.listMath, 'math should render as MathML in every context');
-
-  await waitFor(() => frame.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
-    message: 'native print invoked from the hidden iframe'
+  const doc = await sidebar.evaluate(() => {
+    const root = document.getElementById('print-doc');
+    const text = root.textContent.replace(/\s+/g, ' ').trim();
+    return {
+      text,
+      font: root.style.getPropertyValue('--base-font'),
+      displayMath: Boolean(root.querySelector('.pd-math math')),
+      inlineMath: Boolean(root.querySelector('.pd-text math')),
+      listMath: [...root.querySelectorAll('.pd-list-item')].some((item) => item.querySelector('math')),
+      codeLang: root.querySelector('.pd-code-lang')?.textContent || ''
+    };
   });
+
+  assert.ok(doc.text.includes('我'), 'the custom user label should be used');
+  assert.ok(doc.text.includes('模型'), 'the custom AI label should be used');
+  assert.ok(doc.text.includes('好的，代码会保留'), 'assistant reply should be in the document');
+  assert.ok(doc.text.includes('const a = 1;'), 'code block should be kept');
+  assert.ok(/1\.\s*第一步/.test(doc.text), 'ordered lists should keep their numbering');
+  assert.equal(doc.font.trim(), '16pt', 'font size should follow the slider');
+  assert.equal(doc.codeLang, 'JS', 'code blocks should keep their language label');
+  assert.ok(doc.displayMath && doc.inlineMath && doc.listMath, 'math should render as MathML in every context');
 
   await secondSidebar.close();
   await sidebar.close();
@@ -558,8 +574,10 @@ async function testChatgptProvider() {
 
   // ChatGPT 的导出走 <user-query>/<model-response> 分支,和 DeepSeek 不同,单独验一次。
   await sidebar.click('#btn-export-pdf');
-  await sidebar.waitForSelector('#export-turns .export-turn', { timeout: 30000 });
-  assert.equal(await sidebar.locator('#export-turns .export-turn').count(), 2);
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('export-status')?.textContent.includes('共 2 条消息')),
+    { message: 'ChatGPT export dialog size' }
+  );
   await sidebar.click('#btn-export-cancel');
 
   await article.close();
@@ -570,7 +588,7 @@ async function testChatgptProvider() {
 (async () => {
   try {
     await setup();
-    await testExportWithoutSidebar();
+    await testExportEmptyChat();
     await testWebRelay();
     await testWebMouseSelection();
     await testEnterSends();
