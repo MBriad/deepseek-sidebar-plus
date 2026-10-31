@@ -367,8 +367,14 @@ main {
 
 .block-list-item {
   margin: .2em 0;
-  padding-left: 1.1em;
-  text-indent: -1.1em;
+  padding-left: 1.5em;
+  text-indent: -1.5em;
+}
+
+.list-marker {
+  display: inline-block;
+  min-width: 1.1em;
+  margin-right: .3em;
 }
 
 .block-quote {

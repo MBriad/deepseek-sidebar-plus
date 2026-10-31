@@ -307,12 +307,12 @@ function renderBlock(block) {
     return element;
   };
 
-  if (block?.runs) return renderRuns(block);
-
   switch (block?.type) {
     case 'heading': {
       const level = Math.min(6, Math.max(2, Number(block.level) + 1 || 2));
-      return node(`h${level}`, 'block-heading', block.text);
+      const heading = node(`h${level}`, 'block-heading');
+      if (!appendRuns(heading, block)) heading.textContent = block.text;
+      return heading;
     }
     case 'code': {
       const figure = node('figure', 'block-code');
@@ -329,10 +329,16 @@ function renderBlock(block) {
       return renderMathBlock(block);
     case 'list': {
       const marker = block.ordered ? `${Number(block.index) || 1}.` : '•';
-      return node('div', 'block-list-item', `${marker} ${block.text}`);
+      const item = node('div', 'block-list-item');
+      item.appendChild(node('span', 'list-marker', marker));
+      if (!appendRuns(item, block)) item.appendChild(document.createTextNode(block.text || ''));
+      return item;
     }
-    case 'quote':
-      return node('blockquote', 'block-quote', block.text);
+    case 'quote': {
+      const quote = node('blockquote', 'block-quote');
+      if (!appendRuns(quote, block)) quote.textContent = block.text;
+      return quote;
+    }
     case 'hr':
       return node('hr', '');
     case 'table': {
@@ -347,6 +353,7 @@ function renderBlock(block) {
       return table;
     }
     default:
+      if (Array.isArray(block?.runs)) return renderRuns(block);
       return node('p', 'block-text', block?.text);
   }
 }
@@ -354,11 +361,18 @@ function renderBlock(block) {
 function renderRuns(block) {
   const paragraph = document.createElement('p');
   paragraph.className = 'block-text';
-  for (const run of block.runs) {
-    if (run.type === 'math') paragraph.appendChild(renderInlineMath(run));
-    else paragraph.appendChild(document.createTextNode(String(run.text || '')));
-  }
+  appendRuns(paragraph, block);
   return paragraph;
+}
+
+// 把 text / inline math 的 runs 追加到任意容器;没有 runs 时返回 false,由调用方退回纯文本。
+function appendRuns(parent, block) {
+  if (!Array.isArray(block?.runs)) return false;
+  for (const run of block.runs) {
+    if (run.type === 'math') parent.appendChild(renderInlineMath(run));
+    else parent.appendChild(document.createTextNode(String(run.text || '')));
+  }
+  return true;
 }
 
 function renderMathBlock(block) {

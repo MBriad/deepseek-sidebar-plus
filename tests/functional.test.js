@@ -18,7 +18,7 @@ const chatHtml = `<!doctype html>
     <div class="ds-message"><div class="ds-collapsible-text">请把这段对话导出成 PDF</div></div>
     <div class="ds-message">
       <div class="ds-assistant-message-main-content">
-        <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
+        <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li><li>计算 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 的值</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
       </div>
     </div>
     <!-- ChatGPT 真实结构:<user-query> / <model-response> -->
@@ -26,7 +26,7 @@ const chatHtml = `<!doctype html>
     <model-response>
       <div data-chatgpt-selection-message-id>
         <div data-markdown-text-style="assistant-message">
-          <div class="markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
+          <div class="markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li><li>计算 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 的值</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
         </div>
       </div>
     </model-response>
@@ -320,7 +320,7 @@ async function testExportPdf() {
   const text = await printPage.evaluate(() => document.body.innerText);
   assert.ok(text.includes('好的，代码会保留'), 'assistant reply should be in the PDF page');
   assert.ok(text.includes('const a = 1;'), 'code block should be kept in the PDF page');
-  assert.ok(text.includes('1. 第一步') && text.includes('2. 第二步'), 'ordered lists should keep their numbering');
+  assert.ok(/1\.\s*第一步/.test(text) && /2\.\s*第二步/.test(text), 'ordered lists should keep their numbering');
   assert.ok(text.includes('用户') && text.includes('模型'), 'turns should be labelled by role');
   assert.ok(text.includes('已选择 2 / 2 条'), 'every turn should be selected by default');
 
@@ -337,6 +337,17 @@ async function testExportPdf() {
   assert.ok(mathInfo.hasMathElement, 'display math should render as MathML');
   assert.ok(mathInfo.blockText.includes('E=mc2'), `display math keeps its formula (got ${mathInfo.blockText})`);
   assert.ok(mathInfo.inlineText.includes('x2'), `inline math stays inside the paragraph (got ${mathInfo.inlineText})`);
+
+  // 列表项里的行内公式也必须渲染成 MathML,不能退化成 $...$ 源码。
+  const listMath = await printPage.evaluate(() => {
+    const items = [...document.querySelectorAll('.block-list-item')];
+    return {
+      hasMath: items.some((item) => item.querySelector('math') && item.textContent.includes('计算')),
+      rawTex: items.some((item) => item.textContent.includes('$'))
+    };
+  });
+  assert.ok(listMath.hasMath, 'inline math inside list items should render as MathML');
+  assert.ok(!listMath.rawTex, 'list items should not print raw $...$ TeX');
 
   // 字体大小:滑块改变正文字号,参考文本跟着变。
   const fontBefore = await printPage.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize));

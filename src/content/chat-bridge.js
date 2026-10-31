@@ -2363,7 +2363,7 @@
           continue;
         }
         if (EXPORT_HEADINGS[tag]) {
-          pushText('heading', textOf(child), { level: EXPORT_HEADINGS[tag] });
+          blocks.push(blockWithRuns('heading', child, { level: EXPORT_HEADINGS[tag] }));
           continue;
         }
         if (tag === 'UL' || tag === 'OL') {
@@ -2371,12 +2371,12 @@
           for (const item of Array.from(child.children)) {
             if (item.tagName !== 'LI') continue;
             index += 1;
-            pushText('list', textOf(item), { ordered: tag === 'OL', index });
+            blocks.push(blockWithRuns('list', item, { ordered: tag === 'OL', index }));
           }
           continue;
         }
         if (tag === 'BLOCKQUOTE') {
-          pushText('quote', textOf(child));
+          blocks.push(blockWithRuns('quote', child));
           continue;
         }
         if (tag === 'TABLE') {
@@ -2423,6 +2423,13 @@
     } catch {
       return false;
     }
+  }
+
+  // 标题 / 列表项 / 引用里也可能有行内公式:有公式就记 runs,没有就退回纯文本。
+  function blockWithRuns(type, element, extra = {}) {
+    const runs = runsOf(element);
+    if (runs.some((run) => run.type === 'math')) return { type, runs, ...extra };
+    return { type, text: textOf(element), ...extra };
   }
 
   // 段落里的行内公式:把文字与公式拆成 runs,打印页才能既保留文字又排版公式。
