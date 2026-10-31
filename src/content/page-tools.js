@@ -996,24 +996,47 @@
 
     button.click();
 
-    let segments = [];
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      await panelSleep(250);
-      segments = Array.from(document.querySelectorAll('ytd-transcript-segment-renderer'));
-      if (segments.length) break;
-    }
-    console.warn('[DS+ transcript] panel segments', segments.length);
-    if (!segments.length) return null;
-
-    const cues = segments
-      .map((segment) => {
+    const collected = new Map();
+    const readSegments = () => {
+      for (const segment of document.querySelectorAll('ytd-transcript-segment-renderer')) {
         const stamp = segment.querySelector('.segment-timestamp')?.textContent?.trim() || '0:00';
         const text = segment.querySelector('.segment-text')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-        const parts = stamp.split(':').map((value) => Number(value) || 0);
-        const start = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
-        return { start, text };
-      })
-      .filter((cue) => cue.text);
+        if (text) collected.set(`${stamp}|${text}`, { stamp, text });
+      }
+    };
+
+    let scroller = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await panelSleep(250);
+      readSegments();
+      scroller = document.querySelector('#segments-container') ||
+        document.querySelector('ytd-transcript-segment-list-renderer');
+      if (collected.size) break;
+    }
+    console.warn('[DS+ transcript] panel segments', collected.size, Boolean(scroller));
+
+    // 长视频面板是虚拟列表:边滚边收,直到滚到底或不再增长。
+    if (scroller) {
+      for (let step = 0; step < 200; step += 1) {
+        const before = collected.size;
+        readSegments();
+        const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        if (scroller.scrollTop >= max - 4) break;
+        scroller.scrollTop = Math.min(max, scroller.scrollTop + Math.max(240, scroller.clientHeight * 0.9));
+        await panelSleep(160);
+        if (collected.size === before && scroller.scrollTop >= max - 4) break;
+      }
+      readSegments();
+      scroller.scrollTop = 0;
+    }
+    console.warn('[DS+ transcript] panel segments total', collected.size);
+    if (!collected.size) return null;
+
+    const cues = [...collected.values()].map((entry) => {
+      const parts = entry.stamp.split(':').map((value) => Number(value) || 0);
+      const start = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+      return { start, text: entry.text };
+    });
 
     try {
       const panel = document.querySelector('ytd-transcript-segment-list-renderer')?.closest('ytd-engagement-panel-section-list-renderer');
