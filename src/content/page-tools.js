@@ -932,6 +932,30 @@
     }
     return null;
   }
+  let biliSubtitleCache = '';
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    const data = event.data;
+    if (!data || data.source !== 'ds-bili' || data.type !== 'subtitle') return;
+    if (typeof data.text === 'string' && data.text.length > 40) biliSubtitleCache = data.text;
+  });
+
+  function cuesFromBiliCache(text) {
+    if (!text) return [];
+    try {
+      const data = JSON.parse(text);
+      const body = data?.body || data?.data?.body;
+      if (Array.isArray(body)) {
+        return body
+          .map((item) => ({ start: Number(item.from) || 0, text: String(item.content || '').trim() }))
+          .filter((cue) => cue.text);
+      }
+    } catch {
+      // 不是字幕 JSON。
+    }
+    return [];
+  }
   function formatStamp(seconds) {
     const total = Math.max(0, Math.round(Number(seconds) || 0));
     const hours = Math.floor(total / 3600);
@@ -1202,6 +1226,25 @@
     };
   }
   async function readBilibiliTranscript() {
+    const cached = cuesFromBiliCache(biliSubtitleCache);
+    if (cached.length) {
+      return { platform: 'Bilibili', title: document.title, duration: 0, cues: cached };
+    }
+
+    // 没有缓存时,点一次字幕语言项触发播放器自己请求,再读一次缓存。
+    try {
+      const pick = document.querySelector('[data-lan="zh-CN"]') || document.querySelector('[data-lan="ai-zh"]');
+      if (pick) {
+        pick.click();
+        await panelSleep(1200);
+        const after = cuesFromBiliCache(biliSubtitleCache);
+        if (after.length) {
+          return { platform: 'Bilibili', title: document.title, duration: 0, cues: after };
+        }
+      }
+    } catch {
+      // 点不到就退回接口。
+    }
     const state = window.__INITIAL_STATE__ || readInlineState(['__INITIAL_STATE__', 'window.__INITIAL_STATE__']) || {};
     const hasState = Boolean(window.__INITIAL_STATE__ || Object.keys(state).length);
     const video = state.videoData || state.videoInfo || {};
