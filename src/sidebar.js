@@ -2256,22 +2256,6 @@ function bindUI() {
   });
 
   $('#btn-export-pdf').addEventListener('click', () => {
-  $('#btn-open-dsh').addEventListener('click', async () => {
-    openSheet('#dsh-sheet');
-    const frame = $('#dsh-frame');
-    const status = $('#dsh-status');
-    frame.hidden = true;
-    status.hidden = false;
-    status.textContent = '正在连接 DSH…';
-    try {
-      await fetch('http://127.0.0.1:3080/', { mode: 'no-cors', cache: 'no-store' });
-      frame.src = 'http://127.0.0.1:3080/';
-      frame.hidden = false;
-      status.hidden = true;
-    } catch {
-      status.textContent = 'DSH 没有在运行：先在终端执行 dsh web，然后回到这里重试。';
-    }
-  });
     openExportSheet().catch((error) => showToast(`读取对话失败：${error.message}`, 'error', 4000));
   });
   $('#btn-export-cancel').addEventListener('click', () => closeSheet('#export-sheet'));
