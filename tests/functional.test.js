@@ -321,43 +321,59 @@ async function testExportPdf() {
   assert.ok(text.includes('好的，代码会保留'), 'assistant reply should be in the PDF page');
   assert.ok(text.includes('const a = 1;'), 'code block should be kept in the PDF page');
   assert.ok(text.includes('1. 第一步') && text.includes('2. 第二步'), 'ordered lists should keep their numbering');
-  assert.ok(text.includes('用户') && text.includes('助手'), 'turns should be labelled by role');
+  assert.ok(text.includes('用户') && text.includes('模型'), 'turns should be labelled by role');
+  assert.ok(text.includes('已选择 2 / 2 条'), 'every turn should be selected by default');
 
-  // 导出范围:全部 / 只看用户 / 只看助手。
-  await printPage.click('#doc-filters [data-filter="assistant"]');
-  await waitFor(
-    () =>
-      printPage.evaluate(
-        () =>
-          !document.body.innerText.includes('请把这段对话导出成 PDF') &&
-          document.body.innerText.includes('好的，代码会保留')
-      ),
-    { message: 'assistant-only filter' }
-  );
-  await printPage.click('#doc-filters [data-filter="user"]');
-  await waitFor(
-    () =>
-      printPage.evaluate(
-        () =>
-          document.body.innerText.includes('请把这段对话导出成 PDF') &&
-          !document.body.innerText.includes('好的，代码会保留')
-      ),
-    { message: 'user-only filter' }
-  );
-  await printPage.click('#doc-filters [data-filter="all"]');
-  await waitFor(
-    () =>
-      printPage.evaluate(
-        () =>
-          document.body.innerText.includes('请把这段对话导出成 PDF') &&
-          document.body.innerText.includes('好的，代码会保留')
-      ),
-    { message: 'all turns after clearing the filter' }
-  );
-
+  // 打开后会自动调一次原生打印(后面改勾选时才算"没选就不打印")。
   await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
     message: 'native print invoked'
   });
+
+  // 导出范围:全选 / 仅选用户 / 仅选模型;一条都不选时导出按钮必须禁用。
+  await printPage.click('#sel-assistant');
+  await waitFor(
+    () =>
+      printPage.evaluate(() => {
+        const boxes = [...document.querySelectorAll('.turn-select')];
+        const checked = boxes.filter((box) => box.checked).length;
+        // 助手那条是 T2(第二块),勾选后应当只剩它。
+        return checked === 1 && boxes[1].checked && !boxes[0].checked &&
+          document.body.innerText.includes('已选择 1 / 2 条');
+      }),
+    { message: 'assistant-only selection' }
+  );
+  await printPage.click('#sel-user');
+  await waitFor(
+    () =>
+      printPage.evaluate(() => {
+        const boxes = [...document.querySelectorAll('.turn-select')];
+        const checked = boxes.filter((box) => box.checked).length;
+        return checked === 1 && boxes[0].checked && !boxes[1].checked &&
+          document.body.innerText.includes('已选择 1 / 2 条');
+      }),
+    { message: 'user-only selection' }
+  );
+  await printPage.click('#sel-all');
+  await waitFor(
+    () => printPage.evaluate(() => document.body.innerText.includes('已选择 2 / 2 条')),
+    { message: 'all turns after selecting all' }
+  );
+
+  // 取消勾选唯一一条 → 没有可导出的内容,按钮禁用。
+  await printPage.click('#sel-user');
+  await printPage.evaluate(() => {
+    const boxes = [...document.querySelectorAll('.turn-select')].filter((box) => box.checked);
+    for (const box of boxes) box.click();
+  });
+  await waitFor(
+    () =>
+      printPage.evaluate(
+        () =>
+          document.getElementById('btn-print').disabled &&
+          document.body.innerText.includes('还没有勾选任何消息')
+      ),
+    { message: 'print disabled without selection' }
+  );
 
   await printPage.close();
   await secondSidebar.close();

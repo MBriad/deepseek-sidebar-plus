@@ -1992,16 +1992,26 @@
     const scroller = findScroller();
     const restoreTop = scroller ? scroller.scrollTop : 0;
     const merged = new Map();
+    let incomplete = false;
 
     try {
       if (scroller && scroller.scrollHeight > scroller.clientHeight + 80) {
-        const max = scroller.scrollHeight - scroller.clientHeight;
         const steps = Math.min(60, Math.max(8, Math.ceil(scroller.scrollHeight / Math.max(240, scroller.clientHeight)) + 4));
+        let lastHeight = scroller.scrollHeight;
+        let grew = false;
         for (let step = 0; step < steps; step += 1) {
+          const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
           scroller.scrollTop = Math.round((max * step) / Math.max(1, steps - 1));
           await sleep(160);
           mergeTurns(merged, snapshotTurns());
+          if (scroller.scrollHeight !== lastHeight) {
+            grew = true;
+            lastHeight = scroller.scrollHeight;
+          }
         }
+        // 走完还有没加载出来的内容,或最后没真正到底:如实标记可能不完整。
+        const atBottom = scroller.scrollTop >= scroller.scrollHeight - scroller.clientHeight - 2;
+        incomplete = !atBottom || (grew && steps >= 60);
       } else {
         mergeTurns(merged, snapshotTurns());
       }
@@ -2023,6 +2033,7 @@
         provider: CHAT_NAME,
         turns: [{ role: 'unknown', blocks: [{ type: 'text', text }] }],
         degraded: true,
+        incomplete,
         debug
       };
     }
@@ -2033,6 +2044,7 @@
       provider: CHAT_NAME,
       turns,
       degraded: false,
+      incomplete,
       debug
     };
   }

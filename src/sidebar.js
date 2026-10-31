@@ -810,6 +810,10 @@ async function exportConversationPdf() {
       showToast('已打开打印页（没能识别对话结构，已按整页文本导出；诊断信息见控制台）', 'info', 6000);
       return;
     }
+    if (exportPayload.incomplete) {
+      showToast('已打开打印页（可能不完整：未能确认对话的起点、终点或顺序）', 'info', 6000);
+      return;
+    }
     const note = exportPayload.truncated ? '（过长已截断）' : '';
     showToast(`已打开打印页：${exportPayload.turns.length} 条消息${note}`);
   } catch (error) {

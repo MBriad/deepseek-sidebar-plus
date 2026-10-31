@@ -1,4 +1,4 @@
-/* 会话 PDF 打印页。
+/* 会话 PDF 打印页 —— 屏幕上是可勾选的预览,打印时是纸面文档。
  *
  * 数据来源:侧边栏把「导出 PDF」读到的对话放在内存里,经 runtime 消息交过来。
  * 不落盘,侧边栏关掉就取不到 —— 所以这里失败时要给人话,而不是白屏。
@@ -13,10 +13,13 @@ const metaEl = document.getElementById('doc-meta');
 const hintEl = document.getElementById('print-hint');
 const printButton = document.getElementById('btn-print');
 const closeButton = document.getElementById('btn-close');
-const filtersEl = document.getElementById('doc-filters');
+const countEl = document.getElementById('sel-count');
+const selAllButton = document.getElementById('sel-all');
+const selUserButton = document.getElementById('sel-user');
+const selAssistantButton = document.getElementById('sel-assistant');
 
 let payload = null;
-let filter = 'all';
+let selected = new Set();
 
 // 关闭按钮在**所有**状态下都要能用,包括失败页,所以放在模块级注册。
 closeButton.addEventListener('click', () => {
@@ -38,12 +41,18 @@ async function start() {
     return;
   }
 
+  const turns = payload.turns || [];
+  selected = new Set(turns.map((_, index) => index));
+
   render();
+  refreshSelectionUI();
+
   const title = payload.title || '对话';
-  // 文件名默认取会话标题;标题等于站点名时不再拼一遍。
   document.title = payload.provider && payload.provider !== title ? `${title} - ${payload.provider}` : title;
 
-  bindFilters();
+  selAllButton.addEventListener('click', () => applyPreset('all'));
+  selUserButton.addEventListener('click', () => applyPreset('user'));
+  selAssistantButton.addEventListener('click', () => applyPreset('assistant'));
   printButton.addEventListener('click', () => {
     try {
       window.print();
@@ -54,12 +63,44 @@ async function start() {
 
   // 打开即弹打印对话框;失败也不影响手动点按钮。
   setTimeout(() => {
+    if (!selected.size) return;
     try {
       window.print();
     } catch {
       // Ignore.
     }
   }, 350);
+}
+
+function applyPreset(mode) {
+  const turns = payload?.turns || [];
+  selected = new Set();
+  turns.forEach((turn, index) => {
+    if (mode === 'all') selected.add(index);
+    if (mode === 'user' && turn.role === 'user') selected.add(index);
+    if (mode === 'assistant' && turn.role === 'assistant') selected.add(index);
+  });
+  markPreset(mode);
+  render();
+  refreshSelectionUI();
+}
+
+function markPreset(mode) {
+  selAllButton.classList.toggle('active', mode === 'all');
+  selUserButton.classList.toggle('active', mode === 'user');
+  selAssistantButton.classList.toggle('active', mode === 'assistant');
+}
+
+function refreshSelectionUI() {
+  const turns = payload?.turns || [];
+  const count = selected.size;
+  countEl.textContent = `已选择 ${count} / ${turns.length} 条`;
+  printButton.disabled = count === 0;
+  printButton.title = count === 0 ? '先勾选至少一条消息' : '';
+  hintEl.textContent = count
+    ? '在打印对话框里选择“另存为 PDF”。取消勾选的消息不会出现在 PDF 里。'
+    : '还没有勾选任何消息。用上方的「全选 / 仅选用户 / 仅选模型」或逐条勾选。';
+  if (count === 0) markPreset('');
 }
 
 async function loadPayload() {
@@ -94,33 +135,12 @@ function showFailure(message) {
   metaEl.textContent = '';
   hintEl.textContent = message;
   printButton.disabled = true;
-  filtersEl.hidden = true;
-}
-
-function bindFilters() {
-  for (const button of filtersEl.querySelectorAll('[data-filter]')) {
-    button.addEventListener('click', () => {
-      filter = button.dataset.filter || 'all';
-      for (const other of filtersEl.querySelectorAll('[data-filter]')) {
-        other.classList.toggle('active', other === button);
-      }
-      render();
-    });
-  }
+  document.querySelector('.selection').hidden = true;
 }
 
 function render() {
-  const turns = Array.isArray(payload.turns) ? payload.turns : [];
-  const counts = {
-    all: turns.length,
-    user: turns.filter((turn) => turn.role === 'user').length,
-    assistant: turns.filter((turn) => turn.role === 'assistant').length
-  };
-  for (const button of filtersEl.querySelectorAll('[data-filter]')) {
-    const key = button.dataset.filter || 'all';
-    button.textContent = `${filterLabel(key)} ${counts[key] ?? 0}`;
-    button.classList.toggle('active', key === filter);
-  }
+  const turns = payload.turns || [];
+  const stats = summarize(turns);
 
   docEl.textContent = '';
   titleEl.textContent = payload.title || '对话';
@@ -128,69 +148,119 @@ function render() {
     .filter(Boolean)
     .join(' · ');
 
-  if (payload.degraded || payload.truncated) {
+  docEl.appendChild(renderCover(turns, stats));
+
+  if (payload.degraded || payload.truncated || payload.incomplete) {
     const notice = document.createElement('p');
     notice.className = 'notice';
     if (payload.degraded) {
       const debug = payload.debug || {};
       notice.textContent =
-        `没能识别出对话结构,已按整页文本导出;内容可能包含页面导航。` +
+        `未能识别出对话结构,已按整页文本导出;内容可能包含页面导航。` +
         `诊断:[data-message-author-role]=${debug.authorRoles ?? '?'}, ` +
         `.ds-message=${debug.dsMessages ?? '?'}, .ds-markdown=${debug.markdown ?? '?'}, ` +
-        `article=${debug.articles ?? '?'}。`;
+        `user-query=${debug.userQueries ?? '?'}, model-response=${debug.modelResponses ?? '?'}。`;
+    } else if (payload.incomplete) {
+      notice.textContent = '此次导出可能不完整:未能确认对话的起点、终点或消息顺序。';
     } else {
       notice.textContent = '对话过长,已截断到可打印范围。';
     }
     docEl.appendChild(notice);
   }
 
-  const cover = document.createElement('section');
-  cover.className = 'cover';
-  const heading = document.createElement('h1');
-  heading.textContent = payload.title || '对话';
-  const source = document.createElement('p');
-  source.className = 'cover-source';
-  source.textContent = [payload.provider, payload.url].filter(Boolean).join(' · ');
-  cover.append(heading, source);
-  docEl.appendChild(cover);
-
-  const visible = turns.filter((turn) => {
-    if (filter === 'all') return true;
-    // 降级导出的整页文本没有角色,不被筛选吞掉。
-    return turn.role === filter || turn.role === 'unknown';
+  const list = document.createElement('section');
+  list.className = 'turns';
+  turns.forEach((turn, index) => {
+    list.appendChild(renderTurn(turn, index));
   });
-
-  if (!visible.length) {
-    const empty = document.createElement('p');
-    empty.className = 'notice';
-    empty.textContent = '没有符合筛选的消息。';
-    docEl.appendChild(empty);
-    return;
-  }
-
-  for (const turn of visible) {
-    const section = document.createElement('section');
-    section.className = `turn turn-${turn.role || 'unknown'}`;
-    const label = document.createElement('div');
-    label.className = 'turn-label';
-    label.textContent = roleLabel(turn.role);
-    section.appendChild(label);
-    for (const block of Array.isArray(turn.blocks) ? turn.blocks : []) {
-      section.appendChild(renderBlock(block));
-    }
-    docEl.appendChild(section);
-  }
+  docEl.appendChild(list);
 }
 
-function filterLabel(key) {
-  if (key === 'user') return '只看用户';
-  if (key === 'assistant') return '只看助手';
-  return '全部';
+function summarize(turns) {
+  let users = 0;
+  let assistants = 0;
+  let codes = 0;
+  for (const turn of turns) {
+    if (turn.role === 'user') users += 1;
+    if (turn.role === 'assistant') assistants += 1;
+    for (const block of turn.blocks || []) {
+      if (block.type === 'code') codes += 1;
+    }
+  }
+  return { users, assistants, codes };
+}
+
+function renderCover(turns, stats) {
+  const cover = document.createElement('section');
+  cover.className = 'cover';
+
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'cover-eyebrow';
+  eyebrow.textContent = `${payload.provider || '对话'} · 对话导出`;
+
+  const heading = document.createElement('h1');
+  heading.textContent = payload.title || '对话';
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'cover-subtitle';
+  subtitle.textContent = `导出于 ${formatTime(payload.exportedAt)} · 共 ${turns.length} 条消息`;
+
+  const meta = document.createElement('dl');
+  meta.className = 'cover-meta';
+  const rows = [
+    ['来源', payload.provider || ''],
+    ['会话', payload.url || ''],
+    ['统计', `用户 ${stats.users} 条 · 模型 ${stats.assistants} 条 · 代码块 ${stats.codes} 个`]
+  ];
+  for (const [label, value] of rows) {
+    if (!value) continue;
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    meta.append(dt, dd);
+  }
+
+  cover.append(eyebrow, heading, subtitle, meta);
+  return cover;
+}
+
+function renderTurn(turn, index) {
+  const section = document.createElement('section');
+  section.className = `turn turn-${turn.role || 'unknown'}`;
+  section.dataset.index = String(index);
+
+  const label = document.createElement('div');
+  label.className = 'turn-label';
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'turn-select no-print';
+  checkbox.checked = selected.has(index);
+  checkbox.title = '勾选后才会出现在 PDF 里';
+  checkbox.addEventListener('change', () => {
+    if (checkbox.checked) selected.add(index);
+    else selected.delete(index);
+    section.classList.toggle('turn-off', !checkbox.checked);
+    refreshSelectionUI();
+  });
+  section.classList.toggle('turn-off', !checkbox.checked);
+
+  const text = document.createElement('span');
+  text.textContent = `T${index + 1} · ${roleLabel(turn.role)}`;
+
+  label.append(checkbox, text);
+  section.appendChild(label);
+
+  for (const block of Array.isArray(turn.blocks) ? turn.blocks : []) {
+    section.appendChild(renderBlock(block));
+  }
+  return section;
 }
 
 function roleLabel(role) {
   if (role === 'user') return '用户';
-  if (role === 'assistant') return '助手';
+  if (role === 'assistant') return '模型';
   return '内容';
 }
 
@@ -208,9 +278,15 @@ function renderBlock(block) {
       return node(`h${level}`, 'block-heading', block.text);
     }
     case 'code': {
-      const pre = node('pre', 'block-code');
+      const figure = node('figure', 'block-code');
+      if (block.language) {
+        const caption = node('figcaption', 'block-code-lang', String(block.language).toUpperCase());
+        figure.appendChild(caption);
+      }
+      const pre = node('pre', '');
       pre.appendChild(node('code', '', block.text));
-      return pre;
+      figure.appendChild(pre);
+      return figure;
     }
     case 'list': {
       const marker = block.ordered ? `${Number(block.index) || 1}.` : '•';
