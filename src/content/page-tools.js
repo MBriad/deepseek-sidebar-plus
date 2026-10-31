@@ -1144,7 +1144,66 @@
       cues
     };
   }
+  // B 站:点播放器「字幕」打开字幕面板,滚动读完面板里的行。
+  async function readBilibiliTranscriptViaPanel() {
+    const toggles = Array.from(document.querySelectorAll('button, [role="button"], .bpx-player-ctrl-btn, [class*="subtitle-btn"]'));
+    const toggle = toggles.find((element) => /字幕|subtitle|cc/i.test(`${element.textContent || ''} ${element.getAttribute('aria-label') || ''} ${element.className || ''}`));
+    if (!toggle) return null;
+    toggle.click();
+
+    const itemSelector = '.bpx-player-subtitle-panel-item, [class*="subtitle"][class*="item"], [class*="subtitle-panel"] li, [class*="subtitle-panel"] [class*="item"]';
+    const collected = new Map();
+    const readItems = () => {
+      for (const item of document.querySelectorAll(itemSelector)) {
+        const raw = (item.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!raw) continue;
+        const match = /^(\d{1,2}:\d{2}(?::\d{2})?)\s*(.+)$/.exec(raw);
+        if (!match) continue;
+        collected.set(`${match[1]}|${match[2]}`, { stamp: match[1], text: match[2] });
+      }
+    };
+
+    for (let attempt = 0; attempt < 40 && !collected.size; attempt += 1) {
+      await panelSleep(250);
+      readItems();
+    }
+    if (!collected.size) return null;
+
+    let lastSize = 0;
+    let stagnant = 0;
+    for (let step = 0; step < 400; step += 1) {
+      readItems();
+      if (collected.size === lastSize) stagnant += 1;
+      else {
+        stagnant = 0;
+        lastSize = collected.size;
+      }
+      if (stagnant >= 4) break;
+      const rows = document.querySelectorAll(itemSelector);
+      const last = rows[rows.length - 1];
+      if (!last) break;
+      last.scrollIntoView({ block: 'end' });
+      await panelSleep(140);
+    }
+    readItems();
+    if (!collected.size) return null;
+
+    const cues = [...collected.values()].map((entry) => {
+      const parts = entry.stamp.split(':').map((value) => Number(value) || 0);
+      const start = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+      return { start, text: entry.text };
+    });
+
+    return {
+      platform: 'Bilibili',
+      title: document.title.replace(/\s*[-_].*bilibili.*$/i, '').trim() || document.title,
+      duration: 0,
+      cues
+    };
+  }
   async function readBilibiliTranscript() {
+    const viaPanel = await readBilibiliTranscriptViaPanel().catch(() => null);
+    if (viaPanel?.cues?.length) return viaPanel;
     const state = window.__INITIAL_STATE__ || readInlineState(['__INITIAL_STATE__', 'window.__INITIAL_STATE__']) || {};
     const hasState = Boolean(window.__INITIAL_STATE__ || Object.keys(state).length);
     const video = state.videoData || state.videoInfo || {};
