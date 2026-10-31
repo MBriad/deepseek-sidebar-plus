@@ -2136,6 +2136,20 @@
         return [];
       }
     };
+    const mathMissing = (() => {
+      try {
+        const nodes = Array.from(document.querySelectorAll(EXPORT_MATH_SELECTOR));
+        return nodes.filter((node) => {
+          const math = node.matches?.('math') ? node : node.querySelector?.('math');
+          if (!math) return true;
+          const annotation = math.querySelector('annotation[encoding="application/x-tex"], annotation[encoding="TeX"]');
+          return !annotation && !math.getAttribute('alttext');
+        }).length;
+      } catch {
+        return 0;
+      }
+    })();
+
     return {
       provider: CHAT_NAME,
       url: location.href,
@@ -2145,6 +2159,7 @@
       dsMessages: count('.ds-message'),
       dsAssistant: count('.ds-assistant-message-main-content'),
       markdown: count('.ds-markdown'),
+      mathMissing,
       articles: count('article'),
       sample: sample('[data-message-author-role], .ds-message, user-query, model-response, article')
     };

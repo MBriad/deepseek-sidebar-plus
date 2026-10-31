@@ -192,6 +192,14 @@ function render() {
     docEl.appendChild(notice);
   }
 
+  // 取不到 TeX/MathML 的公式只可能显示成 [公式];如实提示,不静默糊弄。
+  if (payload.debug?.mathMissing) {
+    const mathNotice = document.createElement('p');
+    mathNotice.className = 'notice';
+    mathNotice.textContent = `有 ${payload.debug.mathMissing} 处公式没能取到 TeX/MathML,已标成 [公式]。`;
+    docEl.appendChild(mathNotice);
+  }
+
   const list = document.createElement('section');
   list.className = 'turns';
   turns.forEach((turn, index) => {
