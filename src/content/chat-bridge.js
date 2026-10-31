@@ -2011,17 +2011,59 @@
     if (element.tagName === 'CANVAS') {
       const dataUrl = canvasToDataUrl(element);
       if (!dataUrl) return null;
-      return { type: 'image', src: dataUrl, alt: '图表', width: element.width || 0, height: element.height || 0 };
+      const block = { type: 'image', src: dataUrl, alt: '图表', width: element.width || 0, height: element.height || 0 };
+      hideElement(block, element);
+      return block;
     }
     const src = imageSrcOf(element);
     if (!src) return null;
-    return {
+    const block = {
       type: 'image',
       src,
       alt: (element.getAttribute('alt') || '').trim(),
       width: element.naturalWidth || 0,
       height: element.naturalHeight || 0
     };
+    hideElement(block, element);
+    return block;
+  }
+
+  // 把 DOM 引用挂在块上(不可枚举,不会被 JSON/消息序列化带出去):
+  // 内联时可以直接从已渲染的元素画到 canvas,blob:/防盗链图片也能拿到像素。
+  function hideElement(block, element) {
+    Object.defineProperty(block, '_element', { value: element, enumerable: false, configurable: true });
+  }
+
+  // 从已渲染的图片元素取像素:blob: 已被 revoke、或 fetch 被 CORS 拒时,这条通常还能成。
+  async function imageFromElement(element) {
+    if (!element) return '';
+    if (element.tagName === 'CANVAS') return canvasToDataUrl(element);
+
+    // 懒加载占位图:先把 data-src 换上并等它解码,再取像素。
+    if ((element.naturalWidth || 0) <= 1) {
+      const lazy = element.getAttribute('data-src') || element.getAttribute('data-original') || '';
+      if (lazy && element.src !== lazy) {
+        try {
+          element.src = lazy;
+          await Promise.race([element.decode?.() || Promise.resolve(), sleep(1500)]);
+        } catch {
+          // 解码失败就继续往下试 fetch。
+        }
+      }
+    }
+
+    if (!element.complete || !element.naturalWidth) return '';
+    try {
+      const scale = Math.min(1, 1400 / Math.max(element.naturalWidth, element.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(element.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(element.naturalHeight * scale));
+      canvas.getContext('2d').drawImage(element, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    } catch {
+      // 跨域且没开 CORS 的图会把 canvas 污染,这里拿不到像素。
+      return '';
+    }
   }
 
   // 少数实现把图放在 CSS background-image 里(没有 <img>)。只认大块区域,避免把头像/图标当图。
@@ -2421,7 +2463,9 @@
         continue;
       }
       try {
-        const dataUrl = await imageToDataUrl(image.src);
+        // 先试"从已渲染元素画 canvas"(blob: / 防盗链也能成),不行再退回 fetch。
+        const fromElement = await imageFromElement(image._element);
+        const dataUrl = fromElement || (await imageToDataUrl(image.src));
         if (!dataUrl || dataUrl.length > EXPORT_IMAGE_BYTES) {
           stats.skipped += 1;
           continue;
@@ -2560,13 +2604,15 @@
           const rect = child.getBoundingClientRect();
           const background = backgroundImageOf(child);
           if (background && rect.width >= 140 && rect.height >= 90) {
-            blocks.push({
+            const block = {
               type: 'image',
               src: background,
               alt: '',
               width: Math.round(rect.width),
               height: Math.round(rect.height)
-            });
+            };
+            hideElement(block, child);
+            blocks.push(block);
             continue;
           }
         }
