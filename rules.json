@@ -61,5 +61,20 @@
       "urlFilter": "||chat.openai.com/*",
       "resourceTypes": ["sub_frame"]
     }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "x-frame-options", "operation": "remove" },
+        { "header": "content-security-policy", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||127.0.0.1:3080/*",
+      "resourceTypes": ["sub_frame"]
+    }
   }
 ]
