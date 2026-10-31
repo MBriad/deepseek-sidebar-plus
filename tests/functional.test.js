@@ -8,11 +8,37 @@ const { chromium } = require('playwright');
 const extensionPath = path.resolve(__dirname, '..');
 const pdfFixture = path.join(__dirname, 'fixtures', 'text.pdf');
 
+const emptyChatHtml = `<!doctype html>
+<html><head><meta charset="utf-8"><title>DeepSeek</title></head>
+<body style="margin:0;padding:24px">
+  <textarea id="chat-input" style="width:100%;height:120px"></textarea>
+</body></html>`;
+
+let emptyChat = false;
+
 const chatHtml = `<!doctype html>
 <html><head><meta charset="utf-8"><title>DeepSeek</title></head>
 <body style="margin:0;padding:24px">
   <textarea id="chat-input" style="width:100%;height:120px"></textarea>
   <button data-testid="send-button" onclick="window.sent=document.querySelector('#chat-input').value">Send</button>
+  <div id="chat-log">
+    <!-- DeepSeek 真实结构:每条消息 .ds-message,助手内容再套 .ds-assistant-message-main-content -->
+    <div class="ds-message"><div class="ds-collapsible-text">请把这段对话导出成 PDF <img alt="示意图" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"><img alt="懒加载图" data-src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div><a href="https://example.com/notes.pdf">notes.pdf</a></div>
+    <div class="ds-message">
+      <div class="ds-assistant-message-main-content">
+        <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li><li>计算 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 的值</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
+      </div>
+    </div>
+    <!-- ChatGPT 真实结构:<user-query> / <model-response> -->
+    <user-query><div data-user-message-bubble>请把这段对话导出成 PDF <img alt="示意图" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div></user-query>
+    <model-response>
+      <div data-chatgpt-selection-message-id>
+        <div data-markdown-text-style="assistant-message">
+          <div class="markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li><li>计算 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 的值</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
+        </div>
+      </div>
+    </model-response>
+  </div>
 </body></html>`;
 
 const articleHtml = `<!doctype html>
@@ -65,7 +91,7 @@ async function setup() {
       await route.fulfill({
         status: 200,
         contentType: 'text/html; charset=utf-8',
-        body: route.request().resourceType() === 'document' ? chatHtml : ''
+        body: route.request().resourceType() === 'document' ? (emptyChat ? emptyChatHtml : chatHtml) : ''
       });
     });
   }
@@ -265,6 +291,106 @@ async function testEnterSends() {
   console.log('PASS Enter sends composed message');
 }
 
+async function testExportEmptyChat() {
+  // 空会话(只有输入框、没有消息):弹层要明确说没读到内容,并禁用导出。
+  emptyChat = true;
+  const sidebar = await openSidebar();
+  await sidebar.click('#btn-export-pdf');
+  await waitFor(
+    () =>
+      sidebar.evaluate(() => {
+        const status = document.getElementById('export-status');
+        return Boolean(status) && !status.textContent.includes('正在读取对话');
+      }),
+    { message: 'export status settled for an empty chat' }
+  );
+  assert.equal(await sidebar.locator('#btn-export-run').isDisabled(), true, 'export must stay disabled without messages');
+  await sidebar.close();
+  emptyChat = false;
+  console.log('PASS export dialog explains there is nothing to export');
+}
+
+async function testExportDialog() {
+  const sidebar = await openSidebar();
+  // 第二个侧边栏实例(没有数据):打印窗口不能拿到空数据。
+  const secondSidebar = await openSidebar();
+
+  // 打印窗口会在打开后调 window.print();换掉它,避免弹出系统打印对话框。
+  await context.addInitScript(() => {
+    window.__dsPrintCalls = 0;
+    window.print = () => {
+      window.__dsPrintCalls += 1;
+    };
+  });
+
+  await sidebar.click('#btn-export-pdf');
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('export-status')?.textContent.includes('共 2 条消息')),
+    { message: 'export dialog shows the conversation size' }
+  );
+  assert.equal(await sidebar.locator('#btn-export-run').isDisabled(), false, 'export should be enabled with messages');
+
+  // 角色称呼与字号
+  await sidebar.fill('#export-user-label', '我');
+  await sidebar.fill('#export-ai-label', '模型');
+  await sidebar.evaluate(() => {
+    const input = document.getElementById('export-font');
+    input.value = '16';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  assert.equal((await sidebar.locator('#export-font-value').textContent()).trim(), '16pt');
+  assert.ok((await sidebar.locator('#export-font-preview').textContent()).includes('天地玄黄'));
+
+  // 侧边栏面板不能直接打印,所以导出会开一个自动关闭的打印窗口。
+  const [printPage] = await Promise.all([
+    context.waitForEvent('page'),
+    sidebar.click('#btn-export-run')
+  ]);
+  assert.ok(printPage.url().includes('print.html'), 'export should open the print window');
+
+  await printPage.waitForFunction(() => document.body.innerText.includes('好的，代码会保留'), null, {
+    timeout: 20000
+  });
+
+  const doc = await printPage.evaluate(() => {
+    const root = document.getElementById('print-doc');
+    const text = root.textContent.replace(/\s+/g, ' ').trim();
+    return {
+      text,
+      font: root.style.getPropertyValue('--base-font'),
+      displayMath: Boolean(root.querySelector('.pd-math math')),
+      inlineMath: Boolean(root.querySelector('.pd-text math')),
+      listItems: root.querySelectorAll('.pd-list li').length,
+      listOrdered: Boolean(root.querySelector('ol.pd-list')),
+      listMath: [...root.querySelectorAll('.pd-list li')].some((item) => item.querySelector('math')),
+      imageCount: root.querySelectorAll('.pd-image img, .pd-image-inline').length,
+      file: (root.querySelector('.pd-file')?.textContent || '').includes('notes.pdf'),
+      codeLang: root.querySelector('.pd-code-lang')?.textContent || ''
+    };
+  });
+
+  assert.ok(doc.text.includes('我'), 'the custom user label should be used');
+  assert.ok(doc.text.includes('模型'), 'the custom AI label should be used');
+  assert.ok(doc.text.includes('请把这段对话导出成 PDF'), 'user turn should be exported now that the picker is gone');
+  assert.ok(doc.text.includes('const a = 1;'), 'code block should be kept');
+  assert.ok(doc.listOrdered && doc.listItems === 3, 'ordered lists should be real <ol> with all three items');
+  assert.ok(!doc.text.includes('第一步 第二步'), 'list items should not be flattened into one paragraph');
+  assert.equal(doc.font.trim(), '16pt', 'font size should follow the slider');
+  assert.equal(doc.codeLang, 'JS', 'code blocks should keep their language label');
+  assert.ok(doc.displayMath && doc.inlineMath && doc.listMath, 'math should render as MathML in every context');
+  assert.ok(doc.imageCount >= 2, `uploaded images (including lazy data-src) should be included (got ${doc.imageCount})`);
+  assert.ok(doc.file, 'file attachments should be listed by name');
+
+  await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
+    message: 'native print invoked from the print window'
+  });
+
+  await printPage.close();
+  await secondSidebar.close();
+  await sidebar.close();
+  console.log('PASS export dialog prints through an auto-closing window');
+}
+
 async function testPdfFollowAndSend() {
   const sidebar = await openSidebar();
   const reader = await context.newPage();
@@ -460,6 +586,14 @@ async function testChatgptProvider() {
     message: 'ChatGPT direct typing'
   });
 
+  // ChatGPT 的导出走 <user-query>/<model-response> 分支,和 DeepSeek 不同,单独验一次。
+  await sidebar.click('#btn-export-pdf');
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('export-status')?.textContent.includes('共 2 条消息')),
+    { message: 'ChatGPT export dialog size' }
+  );
+  await sidebar.click('#btn-export-cancel');
+
   await article.close();
   await sidebar.close();
   console.log('PASS ChatGPT provider selection, floating input and typing');
@@ -468,9 +602,11 @@ async function testChatgptProvider() {
 (async () => {
   try {
     await setup();
+    await testExportEmptyChat();
     await testWebRelay();
     await testWebMouseSelection();
     await testEnterSends();
+    await testExportDialog();
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
     await testChatgptProvider();

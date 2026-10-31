@@ -149,6 +149,25 @@
         break;
       }
 
+      case 'DS_EXPORT_PDF':
+        // 虚拟列表要边滚边收,所以这里是异步的;结果晚一点回。
+        (async () => {
+          try {
+            post('EXPORT_RESULT', {
+              requestId: data.requestId,
+              ok: true,
+              conversation: await collectConversation()
+            });
+          } catch (error) {
+            post('EXPORT_RESULT', {
+              requestId: data.requestId,
+              ok: false,
+              error: error?.message || '读取对话失败'
+            });
+          }
+        })();
+        break;
+
       case 'DS_RELAY_START': {
         const input = findInput();
         if (input) {
@@ -1951,6 +1970,769 @@
     } catch {
       // Ignore.
     }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* 对话导出(PDF 打印页用)                                             */
+  /* ---------------------------------------------------------------- */
+  //
+  // 只产出**纯数据**:标题、角色、文本/代码/表格块。不复制页面 HTML ——
+  // 打印页是扩展自己的页面,网页里的标记不能直接进去。
+  // DeepSeek 侧唯一稳定的锚点是 .ds-markdown(助手内容);用户消息按兄弟块推断,
+  // 推断失败就退回整页文本,宁可降级也不空手而归。
+
+  const EXPORT_SKIP_TAGS = new Set([
+    'BUTTON', 'SVG', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'NAV', 'FORM', 'IFRAME'
+  ]);
+  const EXPORT_HEADINGS = { H1: 1, H2: 2, H3: 3, H4: 4, H5: 5, H6: 6 };
+  // 公式容器:KaTeX / MathJax / DeepSeek 的 ds-markdown-math 都覆盖到。
+  const EXPORT_MATH_SELECTOR = '.ds-markdown-math, .ds-markdown-math-display, mjx-container, .katex, math';
+  const EXPORT_DISPLAY_MATH_SELECTOR = '.ds-markdown-math-display, .katex-display, mjx-container[display="true"]';
+
+  // 图片 src:懒加载站点常把真地址放 data-src,img.src 只是 1px 占位图。
+  function imageSrcOf(image) {
+    const lazy = image.getAttribute('data-src') || image.getAttribute('data-original') || '';
+    const src = image.currentSrc || image.src || image.getAttribute('src') || '';
+    const placeholder = (image.naturalWidth || 0) <= 1 && (image.naturalHeight || 0) <= 1;
+    if (placeholder && lazy) return lazy;
+    return src || lazy;
+  }
+
+  // 代码生成图有时画在 canvas 上;导出成 data URL 才能进 PDF。
+  function canvasToDataUrl(canvas) {
+    try {
+      return canvas.toDataURL('image/png');
+    } catch {
+      return '';
+    }
+  }
+
+  function imageBlockOf(element) {
+    if (element.tagName === 'CANVAS') {
+      const dataUrl = canvasToDataUrl(element);
+      if (!dataUrl) return null;
+      const block = { type: 'image', src: dataUrl, alt: '图表', width: element.width || 0, height: element.height || 0 };
+      hideElement(block, element);
+      return block;
+    }
+    const src = imageSrcOf(element);
+    if (!src) return null;
+    const block = {
+      type: 'image',
+      src,
+      alt: (element.getAttribute('alt') || '').trim(),
+      width: element.naturalWidth || 0,
+      height: element.naturalHeight || 0
+    };
+    hideElement(block, element);
+    return block;
+  }
+
+  // 把 DOM 引用挂在块上(不可枚举,不会被 JSON/消息序列化带出去):
+  // 内联时可以直接从已渲染的元素画到 canvas,blob:/防盗链图片也能拿到像素。
+  function hideElement(block, element) {
+    Object.defineProperty(block, '_element', { value: element, enumerable: false, configurable: true });
+  }
+
+  // 从已渲染的图片元素取像素:blob: 已被 revoke、或 fetch 被 CORS 拒时,这条通常还能成。
+  async function imageFromElement(element) {
+    if (!element) return '';
+    if (element.tagName === 'CANVAS') return canvasToDataUrl(element);
+
+    // 懒加载占位图:先把 data-src 换上并等它解码,再取像素。
+    if ((element.naturalWidth || 0) <= 1) {
+      const lazy = element.getAttribute('data-src') || element.getAttribute('data-original') || '';
+      if (lazy && element.src !== lazy) {
+        try {
+          element.src = lazy;
+          await Promise.race([element.decode?.() || Promise.resolve(), sleep(1500)]);
+        } catch {
+          // 解码失败就继续往下试 fetch。
+        }
+      }
+    }
+
+    // 还没加载完(虚拟列表里刚滚到)时,等一会儿再取,别把空图当成没图。
+    if (!element.complete && element.decode) {
+      try {
+        await Promise.race([element.decode(), sleep(1500)]);
+      } catch {
+        // Ignore.
+      }
+    }
+
+    if (!element.complete || !element.naturalWidth) return '';
+    try {
+      const scale = Math.min(1, 1400 / Math.max(element.naturalWidth, element.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(element.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(element.naturalHeight * scale));
+      canvas.getContext('2d').drawImage(element, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    } catch {
+      // 跨域且没开 CORS 的图会把 canvas 污染,这里拿不到像素。
+      return '';
+    }
+  }
+
+  // 少数实现把图放在 CSS background-image 里(没有 <img>)。只认大块区域,避免把头像/图标当图。
+  function backgroundImageOf(element) {
+    try {
+      const match = /url\(["']?(.*?)["']?\)/.exec(getComputedStyle(element).backgroundImage || '');
+      return match?.[1] || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function matchesMath(element) {
+    try {
+      return element.matches(EXPORT_MATH_SELECTOR);
+    } catch {
+      return false;
+    }
+  }
+
+  // 公式取两样东西:原始 TeX(annotation / alttext)和白名单内的 MathML。
+  // 取不到可视化 MathML 时,打印页退回显示 TeX 原文 —— 宁可显示源码,也不能乱码。
+  function mathOf(node) {
+    const container = node.matches?.('math') ? node : node.querySelector?.('math');
+    if (!container) {
+      const latex = String(node.getAttribute?.('data-latex') || '').trim();
+      return latex ? { tex: latex, mathml: '' } : null;
+    }
+
+    const annotation = container.querySelector(
+      'annotation[encoding="application/x-tex"], annotation[encoding="TeX"]'
+    );
+    const tex = String(annotation?.textContent || container.getAttribute('alttext') || '').trim();
+    const visual = container.querySelector(
+      'mi, mo, mn, mrow, mfrac, msqrt, mroot, msup, msub, mtext, mtable, mover, munder, menclose, mmultiscripts'
+    );
+    if (!tex && !visual) return null;
+
+    return {
+      tex,
+      mathml: visual ? String(container.outerHTML || '').slice(0, 60000) : ''
+    };
+  }
+
+  // 虚拟列表只渲染视口附近的几条消息,所以滚动扫一遍,按消息 key 去重合并。
+  async function collectConversation() {
+    const debug = exportDebug();
+    const scroller = findScroller();
+    const restoreTop = scroller ? scroller.scrollTop : 0;
+    const merged = new Map();
+    let incomplete = false;
+
+    try {
+      if (scroller && scroller.scrollHeight > scroller.clientHeight + 80) {
+        const steps = Math.min(60, Math.max(8, Math.ceil(scroller.scrollHeight / Math.max(240, scroller.clientHeight)) + 4));
+        let lastHeight = scroller.scrollHeight;
+        let grew = false;
+        for (let step = 0; step < steps; step += 1) {
+          const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          scroller.scrollTop = Math.round((max * step) / Math.max(1, steps - 1));
+          await sleep(160);
+          mergeTurns(merged, snapshotTurns());
+          if (scroller.scrollHeight !== lastHeight) {
+            grew = true;
+            lastHeight = scroller.scrollHeight;
+          }
+        }
+        // 走完还有没加载出来的内容,或最后没真正到底:如实标记可能不完整。
+        const atBottom = scroller.scrollTop >= scroller.scrollHeight - scroller.clientHeight - 2;
+        incomplete = !atBottom || (grew && steps >= 60);
+      } else {
+        mergeTurns(merged, snapshotTurns());
+      }
+    } finally {
+      if (scroller) scroller.scrollTop = restoreTop;
+    }
+
+    const turns = Array.from(merged.values()).filter((turn) => turn.blocks && turn.blocks.length);
+    debug.collectedTurns = turns.length;
+
+    // 用户上传的图片/附件也要进 PDF:能取到字节就内联成 data URL,取不到保留原链接。
+    debug.images = await inlineExportMedia(turns);
+
+    if (!turns.length) {
+      // 站点改版时不再猜结构:退回整页可见文本,至少给一份可读的 PDF。
+      // 同时带上诊断计数,方便下一轮直接照着真实 DOM 修选择器。
+      const text = textOf(document.body).slice(0, 200000);
+      if (!text) throw new Error('没有找到可导出的对话内容');
+      return {
+        title: conversationTitle(),
+        url: location.href,
+        provider: CHAT_NAME,
+        turns: [{ role: 'unknown', blocks: [{ type: 'text', text }] }],
+        degraded: true,
+        incomplete,
+        debug
+      };
+    }
+
+    return {
+      title: conversationTitle(),
+      url: location.href,
+      provider: CHAT_NAME,
+      turns,
+      degraded: false,
+      incomplete,
+      debug
+    };
+  }
+
+  function snapshotTurns() {
+    return CHAT_NAME === 'ChatGPT' ? collectChatGptTurns() : collectDeepSeekTurns();
+  }
+
+  function mergeTurns(target, turns) {
+    for (const turn of turns) {
+      const key = turnKey(turn);
+      if (!target.has(key)) target.set(key, turn);
+    }
+  }
+
+  function turnKey(turn) {
+    const first = turn.blocks[0];
+    const text = String((first && first.text) || first?.rows?.flat?.().join(' ') || '').slice(0, 120);
+    return `${turn.role}|${turn.id || ''}|${text}`;
+  }
+
+  function findScroller() {
+    const candidates =
+      CHAT_NAME === 'ChatGPT'
+        ? ['main', '[data-scroll-root]', '[class*="scroll"]']
+        : ['.ds-virtual-list.ds-scroll-area', '.ds-scroll-area', '[class*="virtual"]', '[class*="scroll"]'];
+
+    for (const selector of candidates) {
+      for (const element of Array.from(document.querySelectorAll(selector))) {
+        if (element.scrollHeight <= element.clientHeight + 40) continue;
+        const overflow = getComputedStyle(element).overflowY;
+        if (/(auto|scroll|overlay)/.test(overflow)) return element;
+      }
+    }
+    const fallback = document.scrollingElement;
+    return fallback && fallback.scrollHeight > fallback.clientHeight + 40 ? fallback : null;
+  }
+
+  // 结构识别的诊断计数。导出降级时由侧边栏打到控制台,不用再让用户翻 DOM。
+  function exportDebug() {
+    const count = (selector) => {
+      try {
+        return document.querySelectorAll(selector).length;
+      } catch {
+        return -1;
+      }
+    };
+    const sample = (selector, limit = 3) => {
+      try {
+        return Array.from(document.querySelectorAll(selector))
+          .slice(0, limit)
+          .map((element) => String(element.className || element.getAttribute('data-testid') || element.tagName).slice(0, 80));
+      } catch {
+        return [];
+      }
+    };
+    const mathMissing = (() => {
+      try {
+        const nodes = Array.from(document.querySelectorAll(EXPORT_MATH_SELECTOR));
+        return nodes.filter((node) => {
+          const math = node.matches?.('math') ? node : node.querySelector?.('math');
+          if (!math) return true;
+          const annotation = math.querySelector('annotation[encoding="application/x-tex"], annotation[encoding="TeX"]');
+          return !annotation && !math.getAttribute('alttext');
+        }).length;
+      } catch {
+        return 0;
+      }
+    })();
+
+    return {
+      provider: CHAT_NAME,
+      url: location.href,
+      authorRoles: count('[data-message-author-role]'),
+      userQueries: count('user-query'),
+      modelResponses: count('model-response'),
+      dsMessages: count('.ds-message'),
+      dsAssistant: count('.ds-assistant-message-main-content'),
+      markdown: count('.ds-markdown'),
+      mathMissing,
+      articles: count('article'),
+      sample: sample('[data-message-author-role], .ds-message, user-query, model-response, article')
+    };
+  }
+
+  // ChatGPT(2026 DOM):轮次是 <user-query> / <model-response>;老结构退回气泡/属性。
+  function collectChatGptTurns() {
+    let nodes = Array.from(document.querySelectorAll('user-query, model-response'));
+    if (!nodes.length) {
+      nodes = Array.from(
+        document.querySelectorAll('[data-user-message-bubble], [data-chatgpt-selection-message-id], [data-message-author-role]')
+      );
+    }
+
+    return nodes
+      .filter((element) => element.getClientRects().length)
+      .map((element) => {
+        const role = roleOfTurn(element);
+        const content =
+          role === 'assistant'
+            ? element.querySelector('[data-markdown-text-style="assistant-message"]') ||
+              element.querySelector('.markdown, .markdown-main-panel') ||
+              element
+            : element;
+        return {
+          id: element.getAttribute('data-message-id') || element.getAttribute('data-testid') || '',
+          role,
+          blocks: blocksOf(content)
+        };
+      })
+      .filter((turn) => turn.blocks.length);
+  }
+
+  function roleOfTurn(element) {
+    const tag = element.tagName.toLowerCase();
+    if (tag === 'user-query') return 'user';
+    if (tag === 'model-response') return 'assistant';
+    if (element.hasAttribute('data-user-message-bubble')) return 'user';
+    if (element.hasAttribute('data-chatgpt-selection-message-id')) return 'assistant';
+
+    const attribute = element.getAttribute('data-message-author-role');
+    if (attribute) return attribute === 'user' ? 'user' : 'assistant';
+
+    const inner = element.querySelector('[data-message-author-role]');
+    if (inner) return inner.getAttribute('data-message-author-role') === 'user' ? 'user' : 'assistant';
+
+    const heading = String(element.querySelector('h5, h6, h4')?.textContent || '').trim();
+    if (/you said|你说|用户/i.test(heading)) return 'user';
+    if (/chatgpt said|assistant|助手|deepseek/i.test(heading)) return 'assistant';
+
+    if (element.querySelector('[class*="user-turn"], [class*="user-message"], [data-testid*="user"]')) return 'user';
+    return 'assistant';
+  }
+
+  function collectDeepSeekTurns() {
+    // DeepSeek(2026 DOM):每条消息是 .ds-message;助手消息里再套
+    // .ds-assistant-message-main-content / .ds-think-content / .ds-markdown。
+    const messages = Array.from(document.querySelectorAll('.ds-message')).filter(
+      (element) => element.getClientRects().length
+    );
+    if (messages.length) {
+      return messages.map((element) => {
+        const assistantContent = element.querySelector(
+          '.ds-assistant-message-main-content, .ds-think-content'
+        );
+        const markdown =
+          element.querySelector('.ds-markdown') ||
+          element.querySelector('.ds-assistant-message-main-content') ||
+          element;
+        const blocks = blocksOf(markdown);
+
+        // 代码生成图常常渲染在 .ds-markdown 之外(工具结果卡片),单独补收一次。
+        if (assistantContent && assistantContent !== markdown) {
+          const extras = Array.from(assistantContent.querySelectorAll('img, canvas')).filter(
+            (media) => !markdown.contains(media)
+          );
+          for (const media of extras) {
+            const block = imageBlockOf(media);
+            if (block) blocks.push(block);
+          }
+        }
+
+        return {
+          id: element.getAttribute('data-message-id') || element.getAttribute('data-testid') || '',
+          role: assistantContent ? 'assistant' : 'user',
+          blocks
+        };
+      });
+    }
+
+    const marks = Array.from(document.querySelectorAll('.ds-markdown')).filter(
+      (element) => element.getClientRects().length
+    );
+    if (!marks.length) return [];
+
+    const root = marks.length > 1 ? commonAncestor(marks) : findDeepSeekRoot(marks[0]);
+    if (!root) return [];
+
+    const turns = [];
+    for (const child of Array.from(root.children)) {
+      if (child.querySelector('textarea, [contenteditable="true"], input')) continue;
+
+      if (child.querySelector('.ds-markdown')) {
+        const blocks = blocksOf(child);
+        if (blocks.length) turns.push({ role: 'assistant', blocks });
+        continue;
+      }
+
+      const text = textOf(child);
+      if (text) turns.push({ role: 'user', blocks: [{ type: 'text', text }] });
+    }
+
+    // 一层包装的结构会让上面的分类只拿到助手块;这时改成"每个助手块 + 它前面的兄弟文本"。
+    if (!turns.some((turn) => turn.role === 'user')) {
+      const rebuilt = [];
+      for (const mark of marks) {
+        let wrapper = mark;
+        while (wrapper.parentElement && wrapper.parentElement !== root) wrapper = wrapper.parentElement;
+        const previous = wrapper.previousElementSibling;
+        const previousText = previous ? textOf(previous) : '';
+        if (previousText && !previous.querySelector('.ds-markdown')) {
+          rebuilt.push({ role: 'user', blocks: [{ type: 'text', text: previousText }] });
+        }
+        const blocks = blocksOf(wrapper);
+        if (blocks.length) rebuilt.push({ role: 'assistant', blocks });
+      }
+      if (rebuilt.some((turn) => turn.role === 'user')) return rebuilt;
+    }
+
+    return turns;
+  }
+
+  function commonAncestor(nodes) {
+    let ancestor = nodes[0];
+    for (const node of nodes.slice(1)) {
+      while (ancestor && !ancestor.contains(node)) ancestor = ancestor.parentElement;
+      if (!ancestor) return document.body;
+    }
+    return ancestor;
+  }
+
+  // 单个助手块时,往上找到"同级里还有用户文字"的那一层作为对话容器。
+  function findDeepSeekRoot(mark) {
+    let node = mark;
+    while (node.parentElement && node.parentElement !== document.documentElement) {
+      const parent = node.parentElement;
+      const hasUserSibling = Array.from(parent.children).some(
+        (child) => child !== node && !child.contains(mark) && textOf(child)
+      );
+      if (hasUserSibling) return parent;
+      node = parent;
+    }
+    return mark.parentElement || document.body;
+  }
+
+  function textOf(node) {
+    let out = '';
+    const walk = (current) => {
+      if (current.nodeType === Node.TEXT_NODE) {
+        out += current.nodeValue;
+        return;
+      }
+      if (current.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = current.tagName;
+      if (EXPORT_SKIP_TAGS.has(tag)) return;
+      if (current.getAttribute('aria-hidden') === 'true') return;
+      if (current.getAttribute('role') === 'button') return;
+      if (matchesMath(current)) {
+        const math = mathOf(current);
+        if (math?.tex) out += ` $${math.tex}$ `;
+        else if (math) out += ' [公式] ';
+        return;
+      }
+      if (tag === 'BR') {
+        out += '\n';
+        return;
+      }
+      for (const child of current.childNodes) walk(child);
+    };
+    walk(node);
+    return out
+      .replace(/\r/g, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  /* 图片内联:最多 20 张、单张 3MB、总计 12MB;超限或取不到就保留原链接。 */
+  const EXPORT_IMAGE_LIMIT = 20;
+  const EXPORT_IMAGE_BYTES = 3_000_000;
+  const EXPORT_IMAGE_TOTAL = 12_000_000;
+
+  async function inlineExportMedia(turns) {
+    const images = [];
+    for (const turn of turns) {
+      for (const block of turn.blocks || []) {
+        if (block.type === 'image') images.push(block);
+        for (const run of block.runs || []) {
+          if (run.type === 'image') images.push(run);
+        }
+      }
+    }
+
+    let count = 0;
+    let total = 0;
+    const stats = { found: images.length, inlined: 0, skipped: 0 };
+    for (const image of images) {
+      if (!image.src || count >= EXPORT_IMAGE_LIMIT || total >= EXPORT_IMAGE_TOTAL) {
+        stats.skipped += 1;
+        image.failed = true;
+        continue;
+      }
+      try {
+        // 先试"从已渲染元素画 canvas"(blob: / 防盗链也能成),不行再退回 fetch。
+        const fromElement = await imageFromElement(image._element);
+        const dataUrl = fromElement || (await imageToDataUrl(image.src));
+        if (!dataUrl || dataUrl.length > EXPORT_IMAGE_BYTES) {
+          stats.skipped += 1;
+          image.failed = true;
+          continue;
+        }
+        image.src = dataUrl;
+        count += 1;
+        total += dataUrl.length;
+        stats.inlined += 1;
+      } catch {
+        // 取不到就保留原链接;打印窗口还会再试一次,都失败则显示 [图片]。
+        stats.skipped += 1;
+        image.failed = true;
+      }
+    }
+    return stats;
+  }
+
+  async function imageToDataUrl(src) {
+    if (/^data:/i.test(src)) return src;
+    const response = await fetch(src, { credentials: 'include' });
+    if (!response.ok) throw new Error(`image ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) return '';
+
+    try {
+      // 大图先缩到 1400px,避免 PDF 体积失控。
+      const bitmap = await createImageBitmap(blob);
+      const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const type = blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      return canvas.toDataURL(type, 0.86);
+    } catch {
+      return blobToDataUrl(blob);
+    }
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('read failed'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function blocksOf(root) {
+    const blocks = [];
+    const pushText = (type, text, extra = {}) => {
+      const value = String(text || '').trim();
+      if (value) blocks.push({ type, text: value, ...extra });
+    };
+
+    const walk = (container) => {
+      for (const child of Array.from(container.children)) {
+        const tag = child.tagName;
+        if (EXPORT_SKIP_TAGS.has(tag)) continue;
+
+        if (mathesDisplay(child)) {
+          const math = mathOf(child);
+          if (math) {
+            blocks.push({ type: 'math', display: true, tex: math.tex, mathml: math.mathml });
+            continue;
+          }
+        }
+
+        if (tag === 'A') {
+          const href = child.getAttribute('href') || '';
+          const name = textOf(child).trim();
+          if (href && name && name.length <= 120 && /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|txt|md|csv|json|png|jpe?g|gif|webp|mp3|mp4|wav)$/i.test(name)) {
+            blocks.push({ type: 'file', name, href });
+            continue;
+          }
+        }
+
+        if (tag === 'PRE') {
+          const code = child.querySelector('code') || child;
+          const className = `${code.className || ''} ${child.className || ''}`;
+          const language = (/(?:language|lang)-([\w+#.-]+)/.exec(className) || [])[1] || '';
+          pushText('code', code.innerText ?? code.textContent, { language });
+          continue;
+        }
+        if (EXPORT_HEADINGS[tag]) {
+          blocks.push(blockWithRuns('heading', child, { level: EXPORT_HEADINGS[tag] }));
+          continue;
+        }
+        if (tag === 'UL' || tag === 'OL') {
+          let index = 0;
+          for (const item of Array.from(child.children)) {
+            if (item.tagName !== 'LI') continue;
+            index += 1;
+            blocks.push(blockWithRuns('list', item, { ordered: tag === 'OL', index }));
+          }
+          continue;
+        }
+        if (tag === 'BLOCKQUOTE') {
+          blocks.push(blockWithRuns('quote', child));
+          continue;
+        }
+        if (tag === 'TABLE') {
+          const rows = [];
+          for (const row of Array.from(child.querySelectorAll('tr'))) {
+            const cells = Array.from(row.children)
+              .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
+              .map((cell) => textOf(cell).replace(/\n+/g, ' '));
+            if (cells.length) rows.push(cells);
+          }
+          if (rows.length) blocks.push({ type: 'table', rows });
+          continue;
+        }
+        if (tag === 'HR') {
+          blocks.push({ type: 'hr' });
+          continue;
+        }
+        if (tag === 'FIGURE') {
+          const image = child.querySelector('img, canvas');
+          if (image) {
+            const block = imageBlockOf(image);
+            if (block) {
+              const caption = child.querySelector('figcaption');
+              if (caption?.innerText) block.alt = caption.innerText.trim();
+              blocks.push(block);
+              continue;
+            }
+          }
+        }
+        if (tag === 'IMG' || tag === 'CANVAS') {
+          const block = imageBlockOf(child);
+          if (block) blocks.push(block);
+          continue;
+        }
+
+        // 没有 <img>、但用背景图画出来的大图(代码生成图有这种实现)。
+        if (!child.textContent.trim()) {
+          const rect = child.getBoundingClientRect();
+          const background = backgroundImageOf(child);
+          if (background && rect.width >= 140 && rect.height >= 90) {
+            const block = {
+              type: 'image',
+              src: background,
+              alt: '',
+              width: Math.round(rect.width),
+              height: Math.round(rect.height)
+            };
+            hideElement(block, child);
+            blocks.push(block);
+            continue;
+          }
+        }
+
+        const blockChildren = Array.from(child.children).some((node) =>
+          /^(P|UL|OL|PRE|BLOCKQUOTE|TABLE|H[1-6]|DIV|SECTION|ARTICLE|DETAILS|SUMMARY)$/.test(node.tagName)
+        );
+        if (!blockChildren) {
+          const runs = runsOf(child);
+          if (runs.some((run) => run.type === 'math' || run.type === 'image' || run.type === 'file')) {
+            blocks.push({ type: 'text', runs });
+          } else {
+            pushText('text', textOf(child));
+          }
+          continue;
+        }
+        walk(child);
+      }
+    };
+
+    walk(root);
+    if (!blocks.length) {
+      const text = textOf(root);
+      if (text) blocks.push({ type: 'text', text });
+    }
+    return blocks;
+  }
+
+  function mathesDisplay(element) {
+    try {
+      return element.matches(EXPORT_DISPLAY_MATH_SELECTOR);
+    } catch {
+      return false;
+    }
+  }
+
+  // 标题 / 列表项 / 引用里也可能有行内公式:有公式就记 runs,没有就退回纯文本。
+  function blockWithRuns(type, element, extra = {}) {
+    const runs = runsOf(element);
+    if (runs.some((run) => run.type === 'math')) return { type, runs, ...extra };
+    return { type, text: textOf(element), ...extra };
+  }
+
+  // 段落里的行内公式:把文字与公式拆成 runs,打印页才能既保留文字又排版公式。
+  function runsOf(node) {
+    const runs = [];
+    let buffer = '';
+    const flush = () => {
+      if (buffer.trim()) runs.push({ type: 'text', text: buffer });
+      buffer = '';
+    };
+
+    const walk = (current) => {
+      if (current.nodeType === Node.TEXT_NODE) {
+        buffer += current.nodeValue;
+        return;
+      }
+      if (current.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = current.tagName;
+      if (EXPORT_SKIP_TAGS.has(tag)) return;
+      if (current.getAttribute('aria-hidden') === 'true') return;
+      if (current.getAttribute('role') === 'button') return;
+      if (tag === 'BR') {
+        buffer += '\n';
+        return;
+      }
+      if (matchesMath(current)) {
+        const math = mathOf(current);
+        if (math) {
+          flush();
+          runs.push({ type: 'math', tex: math.tex, mathml: math.mathml });
+        }
+        return;
+      }
+      if (tag === 'IMG' || tag === 'CANVAS') {
+        const block = imageBlockOf(current);
+        if (block) {
+          flush();
+          runs.push({ type: 'image', ...block });
+        }
+        return;
+      }
+      for (const child of current.childNodes) walk(child);
+    };
+
+    walk(node);
+    flush();
+
+    if (runs.length) {
+      const first = runs[0];
+      if (first.type === 'text') first.text = first.text.replace(/^\s+/, '');
+      const last = runs[runs.length - 1];
+      if (last.type === 'text') last.text = last.text.replace(/\s+$/, '');
+    }
+    return runs.filter(
+      (run) => run.type === 'math' || run.type === 'image' || run.type === 'file' || String(run.text || '').trim()
+    );
+  }
+
+  function conversationTitle() {
+    const selectors = ['[data-testid="conversation-title"]', 'header h1', 'main h1', 'h1'];
+    for (const selector of selectors) {
+      const text = String(document.querySelector(selector)?.textContent || '').trim();
+      if (text && text.length <= 120) return text;
+    }
+    const fromDocument = String(document.title || '').split(/\s[|\-–—]\s/)[0].trim();
+    return fromDocument || CHAT_NAME;
   }
 
   function formatChars(count) {

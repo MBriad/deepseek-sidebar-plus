@@ -251,7 +251,8 @@ function onFrameMessage(event) {
     data.type === 'QUOTE_RESULT' ||
     data.type === 'INPUT_RESULT' ||
     data.type === 'RELAY_RESULT' ||
-    data.type === 'SEND_RESULT'
+    data.type === 'SEND_RESULT' ||
+    data.type === 'EXPORT_RESULT'
   ) {
     const resolve = pendingRequests.get(data.requestId);
     if (resolve) {
@@ -752,6 +753,137 @@ async function quoteInChat(text) {
   const response = await sendToFrame('DS_QUOTE_TEXT', { text: value }, 6000);
   if (response?.ok) showToast('已引用到输入框');
   else showToast(response?.error || '引用失败', 'error', 4000);
+}
+
+// 导出在侧边栏的弹层里选格式/称呼/字号,真正的打印交给独立打印窗口
+// (侧边栏面板不能直接调起打印)。对话只放内存,不写 chrome.storage。
+let exportMeta = null;
+let exportTurns = [];
+let exportBusy = false;
+const EXPORT_MAX_CHARS = 1500000;
+
+function capExportTurns(turns) {
+  let total = 0;
+  const kept = [];
+  for (const turn of turns) {
+    const size = JSON.stringify(turn).length;
+    if (total + size > EXPORT_MAX_CHARS) break;
+    kept.push(turn);
+    total += size;
+  }
+  return kept;
+}
+
+function setExportStatus(text) {
+  const status = $('#export-status');
+  if (status) status.textContent = text;
+}
+
+function resetExportSheet() {
+  exportMeta = null;
+  exportTurns = [];
+  const run = $('#btn-export-run');
+  if (run) run.disabled = true;
+}
+
+async function openExportSheet() {
+  if (exportBusy) return;
+  openSheet('#export-sheet');
+  resetExportSheet();
+  setExportStatus('正在读取对话…（长对话需要几秒）');
+
+  if (!bridgeReady) {
+    const ready = await waitForBridge(9000);
+    if (!ready) {
+      setExportStatus(`还没有连接到 ${providerName()}，无法读取对话。`);
+      return;
+    }
+  }
+
+  exportBusy = true;
+  let response = null;
+  try {
+    response = await sendToFrame('DS_EXPORT_PDF', {}, 45000);
+  } finally {
+    exportBusy = false;
+  }
+
+  if (!response?.ok || !response.conversation) {
+    setExportStatus(response?.error || '读取对话失败，请确认聊天已加载完成。');
+    return;
+  }
+
+  exportMeta = response.conversation;
+  exportTurns = (exportMeta.turns || []).filter((turn) => turn.blocks?.length);
+
+  if (exportMeta.degraded) {
+    console.warn('[DS+] PDF 导出降级:没能识别对话结构', exportMeta.debug);
+    setExportStatus('没能识别出对话结构，将按整页文本导出；诊断信息见控制台。');
+  } else if (!exportTurns.length) {
+    setExportStatus('没有读到可导出的消息。');
+    return;
+  } else {
+    const note = exportMeta.incomplete ? '（可能不完整：未能确认对话起点/终点）' : '';
+    const media = exportMeta.debug?.images;
+    const imageNote = media?.found
+      ? ` · 图片 ${media.found} 张${media.skipped ? `（${media.skipped} 张未内联，PDF 里会试原链接）` : ''}`
+      : '';
+    setExportStatus(`共 ${exportTurns.length} 条消息${imageNote}${note}`);
+  }
+
+  const run = $('#btn-export-run');
+  if (run) run.disabled = exportTurns.length === 0;
+}
+
+function setExportFont(value) {
+  const size = Math.min(18, Math.max(9, Number(value) || 13));
+  const label = $('#export-font-value');
+  if (label) label.textContent = `${size}pt`;
+  const preview = $('#export-font-preview');
+  if (preview) preview.style.fontSize = `${size}pt`;
+}
+
+function runExport() {
+  if (!exportMeta || !exportTurns.length) {
+    setExportStatus('还没有读到可导出的消息。');
+    return;
+  }
+
+  const payload = {
+    ...exportMeta,
+    turns: capExportTurns(exportTurns),
+    selectedCount: capExportTurns(exportTurns).length
+  };
+  const options = {
+    fontPt: Number($('#export-font')?.value) || 13,
+    userLabel: String($('#export-user-label')?.value || '').trim() || '用户',
+    aiLabel: String($('#export-ai-label')?.value || '').trim() || '助手'
+  };
+
+  closeSheet('#export-sheet');
+  openPrintWindow(payload, options);
+}
+
+// 侧边栏面板本身不能调起浏览器打印(Edge 会忽略),所以打印放在一个独立窗口里:
+// 弹出 → 渲染 → 弹打印 → 打印完自己关掉。数据只经 runtime 消息传内存,不落盘。
+let printPayload = null;
+
+function openPrintWindow(payload, options) {
+  printPayload = { payload, options };
+  const url = chrome.runtime.getURL('src/print.html');
+  try {
+    if (chrome.windows?.create) {
+      chrome.windows.create({ url, type: 'popup', width: 1000, height: 1200 }, () => {
+        void chrome.runtime.lastError;
+      });
+      return;
+    }
+    chrome.tabs.create({ url }).catch((error) => {
+      showToast(`打开打印窗口失败：${error.message}`, 'error', 4000);
+    });
+  } catch (error) {
+    showToast(`打开打印窗口失败：${error.message}`, 'error', 4000);
+  }
 }
 
 async function openSidebarInTab() {
@@ -2101,6 +2233,13 @@ function bindUI() {
     saveSettings();
   });
 
+  $('#btn-export-pdf').addEventListener('click', () => {
+    openExportSheet().catch((error) => showToast(`读取对话失败：${error.message}`, 'error', 4000));
+  });
+  $('#btn-export-cancel').addEventListener('click', () => closeSheet('#export-sheet'));
+  $('#btn-export-run').addEventListener('click', runExport);
+  $('#export-font').addEventListener('input', (event) => setExportFont(event.target.value));
+  setExportFont($('#export-font').value);
   $('#btn-prompts').addEventListener('click', () => {
     openPromptLibrary().catch((error) => showToast(`打开提示词库失败：${error.message}`, 'error', 4000));
   });
@@ -2160,7 +2299,9 @@ function bindUI() {
         ? '#page-sheet'
         : target === 'prompt'
           ? '#prompt-sheet'
-          : '#settings-sheet';
+          : target === 'export'
+            ? '#export-sheet'
+            : '#settings-sheet';
       closeSheet(selector);
     });
   });
@@ -2175,6 +2316,7 @@ function bindUI() {
     if (event.key !== 'Escape') return;
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');
+    else if (isSheetOpen('#export-sheet')) closeSheet('#export-sheet');
     else if (isSheetOpen('#settings-sheet')) closeSheet('#settings-sheet');
   });
 
@@ -2193,6 +2335,13 @@ function bindUI() {
     } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
       finishTypeRelay(false).catch(() => {});
     }
+  });
+
+  // 打印窗口来取数据。多个侧边栏实例时,没有数据的那个保持沉默,避免抢答。
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== 'DS_GET_PRINT_PAYLOAD') return;
+    if (!printPayload) return;
+    sendResponse({ ok: true, payload: printPayload.payload, options: printPayload.options });
   });
 }
 

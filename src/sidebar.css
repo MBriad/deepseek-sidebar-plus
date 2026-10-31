@@ -1281,3 +1281,115 @@ input:focus-visible + .slider {
   }
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Export conversation                                                 */
+/* ------------------------------------------------------------------ */
+
+.export-sheet-card {
+  max-height: 92%;
+}
+
+.export-formats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 16px 12px;
+}
+
+.export-format {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.export-format.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.export-format input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.export-format-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-format-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.export-format-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.export-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 16px 12px;
+}
+
+.export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.export-font {
+  margin: 0 16px 12px;
+}
+
+.export-font-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.export-font-head output {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.export-font input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.export-font-preview {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13pt;
+  line-height: 1.65;
+}
+
+/* 隐藏打印 iframe:保留 A4 比例的布局宽度,打印时才用得上 */
+.print-frame {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 794px;
+  height: 1123px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}

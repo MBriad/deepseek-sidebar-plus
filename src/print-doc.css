@@ -1,0 +1,325 @@
+/* 会话 PDF 的纸面样式。
+ *
+ * 作用域只到 #print-doc:屏幕上隐藏,打印时把侧边栏其它内容全部藏起来,
+ * 只输出这份文档。字体大小由 #print-doc 上的 --base-font 控制。
+ */
+
+#print-doc {
+  display: none;
+  color: #1b1b1f;
+  font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+  font-size: var(--base-font, 13pt);
+  line-height: 1.75;
+}
+
+#print-doc .pd-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 2.4em 0 2em;
+  text-align: center;
+  border-top: 6px solid #4d6bfe;
+}
+
+#print-doc .pd-eyebrow {
+  margin: 0 0 1.1em;
+  color: #6b6f76;
+  font: 600 .62em/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+}
+
+#print-doc h1 {
+  margin: 0;
+  color: #1f3fa3;
+  font-size: 2.9em;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .02em;
+}
+
+#print-doc .pd-cover-rule {
+  width: 4.5em;
+  height: 4px;
+  margin: .9em 0 1.5em;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4d6bfe, #8f6bff);
+}
+
+#print-doc .pd-subtitle {
+  margin: 0 0 .9em;
+  color: #4a505a;
+  font-size: .95em;
+}
+
+#print-doc .pd-cover-meta {
+  display: flex;
+  flex-direction: column;
+  gap: .18em;
+  align-items: center;
+}
+
+#print-doc .pd-cover-meta p {
+  margin: 0;
+  color: #2a2f38;
+  font-size: .92em;
+}
+
+#print-doc .pd-cover-url {
+  margin: 1.8em 0 0;
+  max-width: 90%;
+  color: #6b6f76;
+  font: .66em/1.5 "Cascadia Code", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+#print-doc .pd-notice {
+  padding: .7em 1.1em;
+  margin: 0 0 1.3em;
+  border: 1px solid #e3cf9a;
+  border-left: 4px solid #d9a53f;
+  background: #fdf7e8;
+  color: #5b470f;
+  font: .8em/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+#print-doc .pd-turn {
+  margin: 0 0 1.5em;
+  padding-left: .95em;
+  border-left: 4px solid transparent;
+}
+
+/* 竖线区分用户与 AI:用户暖色,AI 蓝色 */
+#print-doc .pd-turn-user {
+  border-left-color: #d9a53f;
+}
+
+#print-doc .pd-turn-assistant {
+  border-left-color: #2f4b8f;
+}
+
+#print-doc .pd-turn-label {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  margin-bottom: .35em;
+  color: #6b6f76;
+  font: 600 .66em/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+#print-doc .pd-turn-label::before {
+  content: '';
+  width: .55em;
+  height: .55em;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+#print-doc .pd-turn-user .pd-turn-label {
+  color: #8a6a2f;
+}
+
+#print-doc .pd-turn-assistant .pd-turn-label {
+  color: #2f4b8f;
+}
+
+#print-doc .pd-text {
+  margin: 0 0 .7em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#print-doc .pd-heading {
+  margin: 1.1em 0 .4em;
+  font-size: 1.15em;
+  line-height: 1.4;
+}
+
+#print-doc .pd-code {
+  margin: .7em 0 .9em;
+  border: 1px solid #d8d8de;
+  border-radius: 4px;
+  background: #fbfbfd;
+}
+
+#print-doc .pd-code-lang {
+  padding: .25em .8em;
+  border-bottom: 1px solid #d8d8de;
+  color: #6b6f76;
+  font: 600 .55em/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  letter-spacing: .16em;
+}
+
+#print-doc .pd-code pre {
+  margin: 0;
+  padding: .7em .9em;
+  font: .72em/1.55 "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#print-doc .pd-code code {
+  font: inherit;
+}
+
+#print-doc .pd-math {
+  margin: .8em 0;
+  padding: .8em 1em;
+  border: 1px solid #d8d8de;
+  border-radius: 4px;
+  background: #fbfbfd;
+  text-align: center;
+  overflow-x: auto;
+}
+
+#print-doc .pd-math math {
+  font-size: 1.1em;
+}
+
+#print-doc .pd-math-tex {
+  font-family: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+  font-size: .8em;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+#print-doc .pd-math-inline {
+  display: inline-block;
+  margin: 0 .15em;
+}
+
+#print-doc .pd-math-inline math {
+  font-size: 1.02em;
+}
+
+#print-doc .pd-list {
+  margin: .35em 0 .85em;
+  padding-left: 1.45em;
+}
+
+#print-doc .pd-list li {
+  margin: .22em 0;
+  padding-left: .1em;
+}
+
+#print-doc .pd-list li::marker {
+  color: #6b6f76;
+}
+
+#print-doc .pd-quote {
+  margin: .7em 0;
+  padding: .1em 0 .1em .8em;
+  border-left: 3px solid #d8d8de;
+  color: #3f444c;
+  font-style: italic;
+}
+
+#print-doc .pd-table {
+  width: 100%;
+  margin: .7em 0;
+  border-collapse: collapse;
+  font-size: .78em;
+}
+
+#print-doc .pd-table td {
+  padding: .4em .55em;
+  border: 1px solid #d8d8de;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+#print-doc .pd-table tr:first-child td {
+  background: #f6f7fa;
+  font-weight: 700;
+}
+
+#print-doc hr {
+  margin: 1.2em 0;
+  border: 0;
+  border-top: 1px solid #d8d8de;
+}
+
+@page {
+  size: A4;
+  margin: 20mm 18mm;
+}
+
+@media print {
+  html,
+  body {
+    height: auto !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
+
+  /* 只输出打印文档:侧边栏 UI、弹层、toast 全部隐藏。 */
+  body > * {
+    display: none !important;
+  }
+
+  #print-doc {
+    display: block !important;
+    position: static !important;
+  }
+
+  #print-doc .pd-cover {
+    break-after: page;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: 0;
+  }
+
+  #print-doc .pd-code,
+  #print-doc .pd-table,
+  #print-doc .pd-quote,
+  #print-doc .pd-math {
+    break-inside: avoid;
+  }
+}
+
+/* 独立打印窗口里直接显示预览(侧边栏里这份文档始终隐藏) */
+body.print-standalone #print-doc {
+  display: block;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+}
+
+/* 用户上传的图片与文件附件 */
+#print-doc .pd-image {
+  margin: .8em 0;
+  text-align: center;
+  break-inside: avoid;
+}
+
+#print-doc .pd-image img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #d8d8de;
+  border-radius: 4px;
+}
+
+#print-doc .pd-image-inline {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+#print-doc .pd-image-alt {
+  margin-top: .3em;
+  color: #6b6f76;
+  font-size: .72em;
+}
+
+#print-doc .pd-image-missing {
+  color: #6b6f76;
+  font-size: .8em;
+}
+
+#print-doc .pd-file {
+  margin: .3em 0;
+  font-size: .9em;
+}
