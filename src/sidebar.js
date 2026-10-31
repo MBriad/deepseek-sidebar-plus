@@ -2337,8 +2337,6 @@ function bindUI() {
         ? '#page-sheet'
         : target === 'prompt'
           ? '#prompt-sheet'
-          : target === 'dsh'
-            ? '#dsh-sheet'
             : target === 'export'
             ? '#export-sheet'
             : '#settings-sheet';
