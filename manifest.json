@@ -35,8 +35,7 @@
     "contextMenus",
     "clipboardRead",
     "clipboardWrite",
-    "declarativeNetRequestWithHostAccess",
-    "bookmarks"
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "<all_urls>"
