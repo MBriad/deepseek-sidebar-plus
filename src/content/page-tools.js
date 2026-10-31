@@ -984,6 +984,8 @@
       .filter((cue) => cue.text);
   }
   async function readYouTubeTranscript() {
+    const viaInnerTube = await readYouTubeTranscriptViaInnerTube().catch(() => null);
+    if (viaInnerTube?.cues?.length) return viaInnerTube;
     const player =
       window.ytInitialPlayerResponse ||
       readInlineState(['ytInitialPlayerResponse']) ||
@@ -1026,6 +1028,60 @@
     };
   }
 
+  function findTranscriptParams(node, depth = 0) {
+    if (!node || depth > 8 || typeof node !== 'object') return '';
+    if (node.getTranscriptEndpoint?.params) return node.getTranscriptEndpoint.params;
+    for (const value of Object.values(node)) {
+      const found = findTranscriptParams(value, depth + 1);
+      if (found) return found;
+    }
+    return '';
+  }
+
+  function collectTranscriptSegments(node, out = [], depth = 0) {
+    if (!node || depth > 14 || typeof node !== 'object') return out;
+    if (node.transcriptSegmentRenderer) {
+      const renderer = node.transcriptSegmentRenderer;
+      const start = Number(renderer.startMs) / 1000 || 0;
+      const text = (renderer.snippet?.runs || []).map((run) => run.text || '').join('').replace(/\s+/g, ' ').trim();
+      if (text) out.push({ start, text });
+      return out;
+    }
+    for (const value of Object.values(node)) collectTranscriptSegments(value, out, depth + 1);
+    return out;
+  }
+
+  async function readYouTubeTranscriptViaInnerTube() {
+    const cfg = readInlineState(['ytcfg.set(']) || {};
+    const initialData = readInlineState(['ytInitialData']) || null;
+    const params = findTranscriptParams(initialData);
+    const key = cfg.INNERTUBE_API_KEY || '';
+    const version = cfg.INNERTUBE_CLIENT_VERSION || '';
+    console.warn('[DS+ transcript] get_transcript ready', { key: Boolean(key), version: Boolean(version), params: Boolean(params) });
+    if (!params || !key) return null;
+
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: { client: { clientName: 'WEB', clientVersion: version, hl: 'en', gl: 'US' } },
+        params
+      })
+    });
+    console.warn('[DS+ transcript] get_transcript status', response.status);
+    if (!response.ok) return null;
+    const data = await response.json();
+    const cues = collectTranscriptSegments(data);
+    console.warn('[DS+ transcript] get_transcript segments', cues.length);
+    if (!cues.length) return null;
+    return {
+      platform: 'YouTube',
+      title: document.title.replace(/\s*-\s*YouTube$/, ''),
+      duration: 0,
+      cues
+    };
+  }
   async function readBilibiliTranscript() {
     const state = window.__INITIAL_STATE__ || readInlineState(['__INITIAL_STATE__', 'window.__INITIAL_STATE__']) || {};
     const hasState = Boolean(window.__INITIAL_STATE__ || Object.keys(state).length);
