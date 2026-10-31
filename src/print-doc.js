@@ -259,7 +259,7 @@
     img.addEventListener('error', () => {
       img.remove();
       figure.classList.add('pd-image-missing');
-      figure.textContent = `[图片${block.alt ? `：${block.alt}` : ''}]`;
+      figure.textContent = describeMissingImage(block);
     });
     figure.appendChild(img);
     if (block.alt) {
@@ -269,6 +269,13 @@
       figure.appendChild(caption);
     }
     return figure;
+  }
+
+  // 图片没进 PDF 时给出可复制的线索:原链接。方便下一轮直接按真实地址定位。
+  function describeMissingImage(block) {
+    const src = String(block?.src || '');
+    if (!src || src.startsWith('data:')) return `[图片${block?.alt ? `：${block.alt}` : ''}]`;
+    return `[图片未能载入：${src.slice(0, 160)}]`;
   }
 
   function renderMathBlock(block) {

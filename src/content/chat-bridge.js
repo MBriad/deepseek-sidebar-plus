@@ -2469,6 +2469,7 @@
     for (const image of images) {
       if (!image.src || count >= EXPORT_IMAGE_LIMIT || total >= EXPORT_IMAGE_TOTAL) {
         stats.skipped += 1;
+        image.failed = true;
         continue;
       }
       try {
@@ -2477,6 +2478,7 @@
         const dataUrl = fromElement || (await imageToDataUrl(image.src));
         if (!dataUrl || dataUrl.length > EXPORT_IMAGE_BYTES) {
           stats.skipped += 1;
+          image.failed = true;
           continue;
         }
         image.src = dataUrl;
@@ -2486,6 +2488,7 @@
       } catch {
         // 取不到就保留原链接;打印窗口还会再试一次,都失败则显示 [图片]。
         stats.skipped += 1;
+        image.failed = true;
       }
     }
     return stats;
