@@ -953,7 +953,7 @@
   }
 
   async function readVideoTranscript() {
-    console.debug('[DS+ transcript] page', { host: location.hostname, video: isVideoPage() });
+    console.warn('[DS+ transcript] page', { host: location.hostname, video: isVideoPage() });
     if (!isVideoPage()) return null;
     try {
       if (/youtube\.com|youtu\.be/.test(location.hostname)) return await readYouTubeTranscript();
@@ -975,14 +975,14 @@
         }
       })();
     const tracks = player?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-    console.debug('[DS+ transcript] youtube tracks', { tracks: tracks.length, hasPlayer: Boolean(player), langs: tracks.map((item) => item.languageCode) });
+    console.warn('[DS+ transcript] youtube tracks', { tracks: tracks.length, hasPlayer: Boolean(player), langs: tracks.map((item) => item.languageCode) });
     if (!tracks.length) return null;
 
     const track = tracks.find((item) => /^(zh|en)/i.test(item.languageCode || '')) || tracks[0];
     if (!track?.baseUrl) return null;
 
     const response = await fetch(track.baseUrl, { credentials: 'include' });
-    console.debug('[DS+ transcript] youtube fetch', { status: response.status });
+    console.warn('[DS+ transcript] youtube fetch', { status: response.status });
     if (!response.ok) return null;
     const xml = await response.text();
     const cues = [...xml.matchAll(/<text[^>]*\bstart="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)]
@@ -1004,7 +1004,7 @@
     const video = state.videoData || state.videoInfo || {};
     const bvid = video.bvid || (/(BV[\w]+)/.exec(location.href) || [])[1] || '';
     const cid = video.cid || state.cid || 0;
-    console.debug('[DS+ transcript] bilibili state', { hasState: Boolean(Object.keys(state).length), bvid, cid });
+    console.warn('[DS+ transcript] bilibili state', { hasState: Boolean(Object.keys(state).length), bvid, cid });
     if (!bvid || !cid) return null;
 
     const response = await fetch(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`, {
@@ -1013,7 +1013,7 @@
     if (!response.ok) return null;
     const data = await response.json();
     const subtitles = data?.data?.subtitle?.subtitles || [];
-    console.debug('[DS+ transcript] bilibili api', { subtitles: subtitles.length, hosts: subtitles.map((item) => String(item.subtitle_url || '').slice(0, 40)) });
+    console.warn('[DS+ transcript] bilibili api', { subtitles: subtitles.length, hosts: subtitles.map((item) => String(item.subtitle_url || '').slice(0, 40)) });
     if (!subtitles.length) return null;
 
     const track = subtitles.find((item) => /zh/i.test(item.lan || '')) || subtitles[0];
