@@ -57,6 +57,13 @@
           </svg>
         </button>
 
+        <button id="btn-bookmarks" class="tool icon-only" type="button" title="收藏整理：勾选后移进文件夹" aria-label="收藏整理">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 7h5l1.5 2H20v9.5H4z"></path>
+            <path d="M4 7V5.5h5l1.5 2"></path>
+          </svg>
+        </button>
+
         <button id="btn-settings" class="tool icon-only" type="button" title="设置" aria-label="设置">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"></circle>
@@ -226,6 +233,37 @@
           <span id="page-tag-count" class="prompt-count"></span>
           <span class="page-tag-footer-hint">本地保存 · 语义搜索</span>
         </div>
+      </section>
+    </div>
+
+    <!-- 收藏整理 -->
+    <div id="bookmarks-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="bookmarks-title">
+      <div class="sheet-backdrop" data-close="bookmarks"></div>
+      <section class="sheet-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">Bookmarks</div>
+            <h2 id="bookmarks-title">收藏整理</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="bookmarks" title="关闭" aria-label="关闭">×</button>
+        </div>
+
+        <div class="bm-layout">
+          <div id="bm-folders" class="bm-folders" role="group" aria-label="收藏文件夹"></div>
+          <div id="bm-items" class="bm-items"></div>
+        </div>
+
+        <div class="bm-footer">
+          <label class="bm-selectall">
+            <input id="bm-all" type="checkbox">
+            <span>全选本文件夹</span>
+          </label>
+          <span id="bm-count" class="prompt-count">0 / 0 已选</span>
+          <select id="bm-target" class="select" aria-label="移动到哪个文件夹"></select>
+          <button id="btn-bm-move" class="btn primary" type="button" disabled>移动</button>
+        </div>
+
+        <p class="hint">勾选后选择目标文件夹并点“移动”。改的是浏览器真实的收藏，移完在收藏栏里就能看到。</p>
       </section>
     </div>
 

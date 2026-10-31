@@ -2896,6 +2896,183 @@ function sendBackground(message) {
 /* Sheets                                                             */
 /* ------------------------------------------------------------------ */
 
+// --- 收藏整理 ---------------------------------------------------------------
+// 只做一件事:把勾选的书签移动到目标文件夹。不自动分类、不做语义搜索。
+// 改的是浏览器真实的收藏,所以移动完收藏栏里立刻能看到。
+let bmNodes = new Map();
+let bmFolders = [];
+let bmFolderId = '';
+const bmSelected = new Set();
+let bmBusy = false;
+
+function bmCurrentBookmarks() {
+  const node = bmNodes.get(bmFolderId);
+  return (node?.children || []).filter((child) => child.url);
+}
+
+function bmIndex(nodes) {
+  for (const node of nodes || []) {
+    bmNodes.set(node.id, node);
+    bmIndex(node.children);
+  }
+}
+
+function bmFlattenFolders(nodes, depth = 0, out = []) {
+  for (const node of nodes || []) {
+    if (node.url || !node.children) continue;
+    out.push({ id: node.id, title: node.title || '未命名文件夹', depth });
+    bmFlattenFolders(node.children, depth + 1, out);
+  }
+  return out;
+}
+
+async function openBookmarks() {
+  openSheet('#bookmarks-sheet');
+  bmSelected.clear();
+  await refreshBookmarks();
+}
+
+async function refreshBookmarks() {
+  if (!chrome.bookmarks?.getTree) {
+    $('#bm-items').innerHTML = '<p class="hint">这个浏览器没有提供书签接口。</p>';
+    return;
+  }
+  try {
+    const [root] = await chrome.bookmarks.getTree();
+    bmNodes = new Map();
+    bmIndex(root?.children || []);
+    bmFolders = bmFlattenFolders(root?.children || []);
+    if (!bmFolders.some((folder) => folder.id === bmFolderId)) {
+      bmFolderId = bmFolders[0]?.id || '';
+    }
+    renderBmFolders();
+    renderBmTargets();
+    renderBmItems();
+  } catch {
+    $('#bm-items').innerHTML = '<p class="hint">读取书签失败。</p>';
+  }
+}
+
+function renderBmFolders() {
+  const box = $('#bm-folders');
+  box.textContent = '';
+  for (const folder of bmFolders) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `bm-folder${folder.id === bmFolderId ? ' active' : ''}`;
+    button.style.paddingLeft = `${8 + folder.depth * 12}px`;
+    button.textContent = folder.title;
+    button.addEventListener('click', () => {
+      bmFolderId = folder.id;
+      bmSelected.clear();
+      renderBmFolders();
+      renderBmItems();
+    });
+    box.appendChild(button);
+  }
+}
+
+function renderBmTargets() {
+  const select = $('#bm-target');
+  select.textContent = '';
+  for (const folder of bmFolders) {
+    const option = document.createElement('option');
+    option.value = folder.id;
+    option.textContent = `${'　'.repeat(folder.depth)}${folder.title}`;
+    select.appendChild(option);
+  }
+  const firstOther = bmFolders.find((folder) => folder.id !== bmFolderId);
+  select.value = firstOther?.id || bmFolders[0]?.id || '';
+  updateBmMoveState();
+}
+
+function renderBmItems() {
+  const list = $('#bm-items');
+  list.textContent = '';
+  const children = bmNodes.get(bmFolderId)?.children || [];
+  const subfolders = children.filter((child) => !child.url);
+  const bookmarks = children.filter((child) => child.url);
+
+  if (!children.length) {
+    list.innerHTML = '<p class="hint">这个文件夹是空的。</p>';
+  }
+
+  for (const folder of subfolders) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'bm-row bm-row-folder';
+    const title = document.createElement('span');
+    title.className = 'bm-title';
+    title.textContent = `📁 ${folder.title || '未命名文件夹'}`;
+    row.appendChild(title);
+    row.addEventListener('click', () => {
+      bmFolderId = folder.id;
+      bmSelected.clear();
+      renderBmFolders();
+      renderBmItems();
+    });
+    list.appendChild(row);
+  }
+
+  for (const item of bookmarks) {
+    const row = document.createElement('label');
+    row.className = 'bm-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.bookmarkId = item.id;
+    checkbox.checked = bmSelected.has(item.id);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) bmSelected.add(item.id);
+      else bmSelected.delete(item.id);
+      updateBmCount();
+    });
+    const title = document.createElement('span');
+    title.className = 'bm-title';
+    title.textContent = item.title || item.url;
+    const url = document.createElement('span');
+    url.className = 'bm-url';
+    url.textContent = item.url;
+    row.append(checkbox, title, url);
+    list.appendChild(row);
+  }
+
+  updateBmCount();
+}
+
+function updateBmCount() {
+  const bookmarks = bmCurrentBookmarks();
+  // 全选框由实际勾选状态推导 —— 取消一条之后它必须跟着变成未选中。
+  $('#bm-all').checked = bookmarks.length > 0 && bookmarks.every((item) => bmSelected.has(item.id));
+  $('#bm-count').textContent = `${bmSelected.size} / ${bookmarks.length} 已选`;
+  updateBmMoveState();
+}
+
+function updateBmMoveState() {
+  const ready = bmSelected.size > 0 && Boolean($('#bm-target').value) && !bmBusy;
+  $('#btn-bm-move').disabled = !ready;
+}
+
+async function moveBookmarks() {
+  const target = $('#bm-target').value;
+  const ids = [...bmSelected];
+  if (!ids.length || !target || bmBusy) return;
+  bmBusy = true;
+  updateBmMoveState();
+  let moved = 0;
+  for (const id of ids) {
+    try {
+      await chrome.bookmarks.move(id, { parentId: target });
+      moved += 1;
+    } catch {
+      // 单个失败(比如目标被删了)不影响其它的。
+    }
+  }
+  bmBusy = false;
+  bmSelected.clear();
+  await refreshBookmarks();
+  showToast(moved ? `已移动 ${moved} 条收藏` : '没有移动成功');
+}
+
 function openSheet(selector) {
   const sheet = $(selector);
   if (!sheet) return;
@@ -3193,6 +3370,17 @@ function bindUI() {
   $('#btn-prompt-export').addEventListener('click', exportPrompts);
 
   $('#btn-paste').addEventListener('click', pasteFromClipboard);
+  $('#btn-bookmarks').addEventListener('click', openBookmarks);
+  $('#btn-bm-move').addEventListener('click', moveBookmarks);
+  $('#bm-all').addEventListener('change', (event) => {
+    const checked = Boolean(event.target.checked);
+    bmSelected.clear();
+    if (checked) {
+      for (const item of bmCurrentBookmarks()) bmSelected.add(item.id);
+    }
+    renderBmItems();
+  });
+  $('#bm-target').addEventListener('change', updateBmMoveState);
   $('#btn-grab-selection').addEventListener('click', grabCurrentSelection);
   $('#btn-open-tab').addEventListener('click', openChatInTab);
   $('#btn-open-reader').addEventListener('click', openCurrentPdfReader);
@@ -3223,7 +3411,9 @@ function bindUI() {
           ? '#prompt-sheet'
           : target === 'page-tags'
             ? '#page-tags-sheet'
-            : '#settings-sheet';
+            : target === 'bookmarks'
+              ? '#bookmarks-sheet'
+              : '#settings-sheet';
       closeSheet(selector);
     });
   });
@@ -3239,6 +3429,7 @@ function bindUI() {
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');
     else if (isSheetOpen('#page-tags-sheet')) closeSheet('#page-tags-sheet');
+    else if (isSheetOpen('#bookmarks-sheet')) closeSheet('#bookmarks-sheet');
     else if (isSheetOpen('#settings-sheet')) closeSheet('#settings-sheet');
   });
 
