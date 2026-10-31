@@ -19,11 +19,17 @@
         <button id="sel-assistant" class="chip" type="button">仅选模型</button>
         <span id="sel-count" class="count">已选择 0 条</span>
       </div>
+      <label class="font-size" for="font-size">
+        <span>字体大小</span>
+        <input id="font-size" type="range" min="9" max="18" step="0.5" value="13">
+        <output id="font-size-value" for="font-size">13pt</output>
+      </label>
       <button id="btn-print" class="btn primary" type="button" disabled>导出 / 打印</button>
       <button id="btn-close" class="btn ghost" type="button">关闭</button>
     </div>
   </header>
   <p id="print-hint" class="hint no-print">在打印对话框里选择“另存为 PDF”。取消勾选的消息不会出现在 PDF 里。</p>
+  <p class="font-preview no-print">天地玄黄，宇宙洪荒。日月盈昃，辰宿列张。</p>
   <main id="doc"></main>
   <script src="print.js"></script>
 </body>

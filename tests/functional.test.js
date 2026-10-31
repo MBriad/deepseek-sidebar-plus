@@ -18,7 +18,7 @@ const chatHtml = `<!doctype html>
     <div class="ds-message"><div class="ds-collapsible-text">请把这段对话导出成 PDF</div></div>
     <div class="ds-message">
       <div class="ds-assistant-message-main-content">
-        <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol></div>
+        <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
       </div>
     </div>
     <!-- ChatGPT 真实结构:<user-query> / <model-response> -->
@@ -26,7 +26,7 @@ const chatHtml = `<!doctype html>
     <model-response>
       <div data-chatgpt-selection-message-id>
         <div data-markdown-text-style="assistant-message">
-          <div class="markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol></div>
+          <div class="markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol><p>行内公式 <span class="ds-markdown-math"><math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span> 结束。</p><div class="ds-markdown-math-display"><math><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></div></div>
         </div>
       </div>
     </model-response>
@@ -323,6 +323,28 @@ async function testExportPdf() {
   assert.ok(text.includes('1. 第一步') && text.includes('2. 第二步'), 'ordered lists should keep their numbering');
   assert.ok(text.includes('用户') && text.includes('模型'), 'turns should be labelled by role');
   assert.ok(text.includes('已选择 2 / 2 条'), 'every turn should be selected by default');
+
+  // 公式:显示公式单独成块,行内公式留在段落里,并且都不乱码。
+  const mathInfo = await printPage.evaluate(() => {
+    const block = document.querySelector('.block-math');
+    const inline = document.querySelector('.block-text math');
+    return {
+      blockText: (block?.textContent || '').replace(/\s+/g, ''),
+      inlineText: (inline?.textContent || '').replace(/\s+/g, ''),
+      hasMathElement: Boolean(block?.querySelector('math'))
+    };
+  });
+  assert.ok(mathInfo.hasMathElement, 'display math should render as MathML');
+  assert.ok(mathInfo.blockText.includes('E=mc2'), `display math keeps its formula (got ${mathInfo.blockText})`);
+  assert.ok(mathInfo.inlineText.includes('x2'), `inline math stays inside the paragraph (got ${mathInfo.inlineText})`);
+
+  // 字体大小:滑块改变正文字号,参考文本跟着变。
+  const fontBefore = await printPage.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize));
+  await printPage.locator('#font-size').fill('16');
+  const fontAfter = await printPage.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize));
+  assert.ok(fontAfter > fontBefore + 2, 'font size slider should scale the document');
+  assert.equal((await printPage.locator('#font-size-value').textContent()).trim(), '16pt');
+  assert.ok((await printPage.locator('.font-preview').textContent()).includes('天地玄黄'));
 
   // 打开后会自动调一次原生打印(后面改勾选时才算"没选就不打印")。
   await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {

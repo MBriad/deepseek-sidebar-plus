@@ -1985,6 +1985,41 @@
     'BUTTON', 'SVG', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'NAV', 'FORM', 'IFRAME'
   ]);
   const EXPORT_HEADINGS = { H1: 1, H2: 2, H3: 3, H4: 4, H5: 5, H6: 6 };
+  // 公式容器:KaTeX / MathJax / DeepSeek 的 ds-markdown-math 都覆盖到。
+  const EXPORT_MATH_SELECTOR = '.ds-markdown-math, .ds-markdown-math-display, mjx-container, .katex, math';
+  const EXPORT_DISPLAY_MATH_SELECTOR = '.ds-markdown-math-display, .katex-display, mjx-container[display="true"]';
+
+  function matchesMath(element) {
+    try {
+      return element.matches(EXPORT_MATH_SELECTOR);
+    } catch {
+      return false;
+    }
+  }
+
+  // 公式取两样东西:原始 TeX(annotation / alttext)和白名单内的 MathML。
+  // 取不到可视化 MathML 时,打印页退回显示 TeX 原文 —— 宁可显示源码,也不能乱码。
+  function mathOf(node) {
+    const container = node.matches?.('math') ? node : node.querySelector?.('math');
+    if (!container) {
+      const latex = String(node.getAttribute?.('data-latex') || '').trim();
+      return latex ? { tex: latex, mathml: '' } : null;
+    }
+
+    const annotation = container.querySelector(
+      'annotation[encoding="application/x-tex"], annotation[encoding="TeX"]'
+    );
+    const tex = String(annotation?.textContent || container.getAttribute('alttext') || '').trim();
+    const visual = container.querySelector(
+      'mi, mo, mn, mrow, mfrac, msqrt, mroot, msup, msub, mtext, mtable, mover, munder, menclose, mmultiscripts'
+    );
+    if (!tex && !visual) return null;
+
+    return {
+      tex,
+      mathml: visual ? String(container.outerHTML || '').slice(0, 60000) : ''
+    };
+  }
 
   // 虚拟列表只渲染视口附近的几条消息,所以滚动扫一遍,按消息 key 去重合并。
   async function collectConversation() {
@@ -2265,6 +2300,12 @@
       if (EXPORT_SKIP_TAGS.has(tag)) return;
       if (current.getAttribute('aria-hidden') === 'true') return;
       if (current.getAttribute('role') === 'button') return;
+      if (matchesMath(current)) {
+        const math = mathOf(current);
+        if (math?.tex) out += ` $${math.tex}$ `;
+        else if (math) out += ' [公式] ';
+        return;
+      }
       if (tag === 'BR') {
         out += '\n';
         return;
@@ -2290,6 +2331,14 @@
       for (const child of Array.from(container.children)) {
         const tag = child.tagName;
         if (EXPORT_SKIP_TAGS.has(tag)) continue;
+
+        if (mathesDisplay(child)) {
+          const math = mathOf(child);
+          if (math) {
+            blocks.push({ type: 'math', display: true, tex: math.tex, mathml: math.mathml });
+            continue;
+          }
+        }
 
         if (tag === 'PRE') {
           const code = child.querySelector('code') || child;
@@ -2336,7 +2385,9 @@
           /^(P|UL|OL|PRE|BLOCKQUOTE|TABLE|H[1-6]|DIV|SECTION|ARTICLE|DETAILS|SUMMARY)$/.test(node.tagName)
         );
         if (!blockChildren) {
-          pushText('text', textOf(child));
+          const runs = runsOf(child);
+          if (runs.some((run) => run.type === 'math')) blocks.push({ type: 'text', runs });
+          else pushText('text', textOf(child));
           continue;
         }
         walk(child);
@@ -2349,6 +2400,61 @@
       if (text) blocks.push({ type: 'text', text });
     }
     return blocks;
+  }
+
+  function mathesDisplay(element) {
+    try {
+      return element.matches(EXPORT_DISPLAY_MATH_SELECTOR);
+    } catch {
+      return false;
+    }
+  }
+
+  // 段落里的行内公式:把文字与公式拆成 runs,打印页才能既保留文字又排版公式。
+  function runsOf(node) {
+    const runs = [];
+    let buffer = '';
+    const flush = () => {
+      if (buffer.trim()) runs.push({ type: 'text', text: buffer });
+      buffer = '';
+    };
+
+    const walk = (current) => {
+      if (current.nodeType === Node.TEXT_NODE) {
+        buffer += current.nodeValue;
+        return;
+      }
+      if (current.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = current.tagName;
+      if (EXPORT_SKIP_TAGS.has(tag)) return;
+      if (current.getAttribute('aria-hidden') === 'true') return;
+      if (current.getAttribute('role') === 'button') return;
+      if (tag === 'BR') {
+        buffer += '\n';
+        return;
+      }
+      if (matchesMath(current)) {
+        const math = mathOf(current);
+        if (math) {
+          flush();
+          runs.push({ type: 'math', tex: math.tex, mathml: math.mathml });
+        }
+        return;
+      }
+      for (const child of current.childNodes) walk(child);
+    };
+
+    walk(node);
+    flush();
+
+    if (runs.length) {
+      const first = runs[0];
+      if (first.type === 'text') first.text = first.text.replace(/^\s+/, '');
+      const last = runs[runs.length - 1];
+      if (last.type === 'text') last.text = last.text.replace(/\s+$/, '');
+    }
+    return runs.filter((run) => run.type === 'math' || String(run.text || '').trim());
   }
 
   function conversationTitle() {

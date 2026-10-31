@@ -1,7 +1,7 @@
-/* 会话 PDF 打印页 —— 屏幕上可勾选,打印时是 A4 纸面文档。
+/* 会话 PDF 打印页 —— 屏幕上可勾选、可调字号;打印时是 A4 纸面文档。
  *
- * 参考的排版思路(不是代码):封面 → 元信息表 → 逐条正文 → 纸张友好的字号与分页。
- * Chrome 不支持 @page 页码,所以不做页脚页码;需要页码时用打印对话框自带页脚。
+ * 字号用 --base-font 控制(打印页滑块),正文内部尺寸全部用 em,调一处全篇跟着变。
+ * Chrome 不支持 @page 页码,所以不做页脚页码。
  */
 
 :root {
@@ -11,6 +11,7 @@
   --rule: #d8d8de;
   --accent: #2f4b8f;
   --wash: #f6f7fa;
+  --base-font: 13pt;
 }
 
 * {
@@ -27,7 +28,9 @@ body {
   padding: 24px 28px 72px;
   background: #fff;
   color: var(--ink);
-  font: 15px/1.75 Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+  font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+  font-size: var(--base-font);
+  line-height: 1.75;
 }
 
 /* ---------- 屏幕上的工具栏(打印时隐藏) ---------- */
@@ -41,11 +44,13 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: -24px -28px 18px;
+  margin: -24px -28px 16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--rule);
   background: var(--wash);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .toolbar-copy {
@@ -110,6 +115,31 @@ body {
   white-space: nowrap;
 }
 
+.font-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: #fff;
+  color: #3d4b5f;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.font-size input {
+  width: 108px;
+  accent-color: var(--accent);
+}
+
+.font-size output {
+  min-width: 38px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .btn {
   padding: 7px 12px;
   border: 1px solid #cfd9e6;
@@ -133,12 +163,27 @@ body {
   cursor: default;
 }
 
-.hint {
+.hint,
+.font-preview {
   max-width: 840px;
-  margin: 0 auto 20px;
-  color: var(--muted);
-  font-size: 12px;
+  margin: 0 auto 14px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+/* 字号参考:用和正文一样的字体与当前字号显示 */
+.font-preview {
+  padding: 10px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+  font-size: var(--base-font);
 }
 
 main {
@@ -149,84 +194,84 @@ main {
 /* ---------- 封面 ---------- */
 
 .cover {
-  padding-bottom: 18px;
-  margin-bottom: 22px;
+  padding-bottom: 1.2em;
+  margin-bottom: 1.6em;
   border-bottom: 2px solid var(--ink);
 }
 
 .cover-eyebrow {
-  margin: 0 0 14px;
+  margin: 0 0 1em;
   color: var(--muted);
-  font: 600 9px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 600 .62em/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   letter-spacing: .22em;
   text-transform: uppercase;
 }
 
 .cover h1 {
-  margin: 0 0 6px;
-  font-size: 34px;
+  margin: 0 0 .2em;
+  font-size: 2.4em;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   letter-spacing: -.01em;
 }
 
 .cover-subtitle {
-  margin: 0 0 22px;
+  margin: 0 0 1.4em;
   color: var(--muted);
-  font-size: 14px;
+  font-size: .92em;
   font-style: italic;
 }
 
 .cover-meta {
   display: grid;
-  grid-template-columns: 96px 1fr;
+  grid-template-columns: 7em 1fr;
   gap: 0;
   margin: 0;
   border-top: 1px solid var(--rule);
 }
 
 .cover-meta dt {
-  padding: 8px 0;
+  padding: .5em 0;
   border-bottom: 1px solid var(--rule);
   color: var(--muted);
-  font: 600 9px/1.9 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 600 .6em/1.9 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   letter-spacing: .16em;
   text-transform: uppercase;
 }
 
 .cover-meta dd {
   margin: 0;
-  padding: 8px 0;
+  padding: .5em 0;
   border-bottom: 1px solid var(--rule);
-  font-size: 13px;
+  font-size: .88em;
   overflow-wrap: anywhere;
 }
 
 /* ---------- 提示 ---------- */
 
 .notice {
-  padding: 10px 14px;
-  margin: 0 0 18px;
+  padding: .7em 1.1em;
+  margin: 0 0 1.3em;
   border: 1px solid #e3cf9a;
   border-left: 4px solid #d9a53f;
   background: #fdf7e8;
   color: #5b470f;
-  font: 12.5px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: .8em/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
 /* ---------- 正文 ---------- */
 
 .turn {
-  margin: 0 0 20px;
+  margin: 0 0 1.4em;
 }
 
 .turn-label {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: .6em;
+  margin-bottom: .35em;
   color: var(--muted);
-  font: 600 9.5px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 600 .66em/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   letter-spacing: .14em;
   text-transform: uppercase;
 }
@@ -249,19 +294,19 @@ main {
 }
 
 .block-text {
-  margin: 0 0 10px;
+  margin: 0 0 .7em;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .block-heading {
-  margin: 16px 0 6px;
-  font-size: 16px;
+  margin: 1.1em 0 .4em;
+  font-size: 1.15em;
   line-height: 1.4;
 }
 
 .block-code {
-  margin: 10px 0 12px;
+  margin: .7em 0 .9em;
   border: 1px solid var(--rule);
   border-radius: 4px;
   background: #fbfbfd;
@@ -269,17 +314,17 @@ main {
 }
 
 .block-code-lang {
-  padding: 4px 10px;
+  padding: .25em .8em;
   border-bottom: 1px solid var(--rule);
   color: var(--muted);
-  font: 600 8px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 600 .55em/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   letter-spacing: .16em;
 }
 
 .block-code pre {
   margin: 0;
-  padding: 10px 12px;
-  font: 10px/1.55 "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+  padding: .7em .9em;
+  font: .72em/1.55 "Cascadia Code", Consolas, "SFMono-Regular", monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -288,15 +333,47 @@ main {
   font: inherit;
 }
 
+/* 公式:优先渲染白名单内的 MathML;取不到时显示 TeX 原文。 */
+.block-math {
+  margin: .8em 0;
+  padding: .8em 1em;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: #fbfbfd;
+  text-align: center;
+  overflow-x: auto;
+  break-inside: avoid;
+}
+
+.block-math math {
+  font-size: 1.1em;
+}
+
+.block-math-tex {
+  font-family: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+  font-size: .8em;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.block-math-inline {
+  display: inline-block;
+  margin: 0 .15em;
+}
+
+.block-math-inline math {
+  font-size: 1.02em;
+}
+
 .block-list-item {
-  margin: 3px 0;
-  padding-left: 16px;
-  text-indent: -16px;
+  margin: .2em 0;
+  padding-left: 1.1em;
+  text-indent: -1.1em;
 }
 
 .block-quote {
-  margin: 10px 0;
-  padding: 2px 0 2px 12px;
+  margin: .7em 0;
+  padding: .1em 0 .1em .8em;
   border-left: 3px solid var(--rule);
   color: #3f444c;
   font-style: italic;
@@ -304,13 +381,13 @@ main {
 
 .block-table {
   width: 100%;
-  margin: 10px 0;
+  margin: .7em 0;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: .78em;
 }
 
 .block-table td {
-  padding: 5px 7px;
+  padding: .4em .55em;
   border: 1px solid var(--rule);
   vertical-align: top;
   overflow-wrap: anywhere;
@@ -322,7 +399,7 @@ main {
 }
 
 hr {
-  margin: 18px 0;
+  margin: 1.2em 0;
   border: 0;
   border-top: 1px solid var(--rule);
 }
@@ -340,7 +417,6 @@ hr {
 
   body {
     padding: 0;
-    font-size: 11.5pt;
   }
 
   main {
@@ -354,22 +430,10 @@ hr {
     border-bottom: 0;
   }
 
-  .cover h1 {
-    font-size: 26pt;
-  }
-
-  .cover-meta dd,
-  .cover-meta dt {
-    font-size: 9.5pt;
-  }
-
-  .block-code pre {
-    font-size: 9pt;
-  }
-
   .block-code,
   .block-table,
-  .block-quote {
+  .block-quote,
+  .block-math {
     break-inside: avoid;
   }
 

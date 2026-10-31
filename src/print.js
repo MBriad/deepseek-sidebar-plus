@@ -1,4 +1,4 @@
-/* 会话 PDF 打印页 —— 屏幕上是可勾选的预览,打印时是纸面文档。
+/* 会话 PDF 打印页 —— 屏幕上可勾选/调字号,打印时是纸面文档。
  *
  * 数据来源:侧边栏把「导出 PDF」读到的对话放在内存里,经 runtime 消息交过来。
  * 不落盘,侧边栏关掉就取不到 —— 所以这里失败时要给人话,而不是白屏。
@@ -17,6 +17,21 @@ const countEl = document.getElementById('sel-count');
 const selAllButton = document.getElementById('sel-all');
 const selUserButton = document.getElementById('sel-user');
 const selAssistantButton = document.getElementById('sel-assistant');
+const fontInput = document.getElementById('font-size');
+const fontValue = document.getElementById('font-size-value');
+
+const MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML';
+const MATHML_TAGS = new Set([
+  'math', 'mrow', 'mi', 'mo', 'mn', 'mtext', 'ms', 'mspace', 'msup', 'msub', 'msubsup', 'mfrac',
+  'msqrt', 'mroot', 'mstyle', 'mtable', 'mtr', 'mtd', 'munder', 'mover', 'munderover',
+  'mmultiscripts', 'mprescripts', 'none', 'mphantom', 'menclose', 'merror', 'semantics', 'annotation'
+]);
+const MATHML_ATTRS = new Set([
+  'display', 'mathvariant', 'scriptlevel', 'displaystyle', 'stretchy', 'fence', 'separator',
+  'lspace', 'rspace', 'columnalign', 'rowalign', 'columnspan', 'rowspan', 'linethickness',
+  'notation', 'encoding', 'mathsize', 'mathcolor', 'mathbackground', 'width', 'height', 'depth',
+  'voffset', 'movablelimits', 'largeop', 'accent', 'accentunder', 'form'
+]);
 
 let payload = null;
 let selected = new Set();
@@ -30,9 +45,18 @@ closeButton.addEventListener('click', () => {
   }
 });
 
+fontInput.addEventListener('input', applyFontSize);
+applyFontSize();
+
 start().catch((error) => {
   showFailure(`打印页出错:${error?.message || error}`);
 });
+
+function applyFontSize() {
+  const size = Math.min(20, Math.max(9, Number(fontInput.value) || 13));
+  document.documentElement.style.setProperty('--base-font', `${size}pt`);
+  fontValue.textContent = `${size}pt`;
+}
 
 async function start() {
   payload = await loadPayload();
@@ -180,14 +204,17 @@ function summarize(turns) {
   let users = 0;
   let assistants = 0;
   let codes = 0;
+  let math = 0;
   for (const turn of turns) {
     if (turn.role === 'user') users += 1;
     if (turn.role === 'assistant') assistants += 1;
     for (const block of turn.blocks || []) {
       if (block.type === 'code') codes += 1;
+      if (block.type === 'math') math += 1;
+      if (Array.isArray(block.runs)) math += block.runs.filter((run) => run.type === 'math').length;
     }
   }
-  return { users, assistants, codes };
+  return { users, assistants, codes, math };
 }
 
 function renderCover(turns, stats) {
@@ -210,7 +237,7 @@ function renderCover(turns, stats) {
   const rows = [
     ['来源', payload.provider || ''],
     ['会话', payload.url || ''],
-    ['统计', `用户 ${stats.users} 条 · 模型 ${stats.assistants} 条 · 代码块 ${stats.codes} 个`]
+    ['统计', `用户 ${stats.users} 条 · 模型 ${stats.assistants} 条 · 代码块 ${stats.codes} 个 · 公式 ${stats.math} 处`]
   ];
   for (const [label, value] of rows) {
     if (!value) continue;
@@ -272,6 +299,8 @@ function renderBlock(block) {
     return element;
   };
 
+  if (block?.runs) return renderRuns(block);
+
   switch (block?.type) {
     case 'heading': {
       const level = Math.min(6, Math.max(2, Number(block.level) + 1 || 2));
@@ -288,6 +317,8 @@ function renderBlock(block) {
       figure.appendChild(pre);
       return figure;
     }
+    case 'math':
+      return renderMathBlock(block);
     case 'list': {
       const marker = block.ordered ? `${Number(block.index) || 1}.` : '•';
       return node('div', 'block-list-item', `${marker} ${block.text}`);
@@ -309,6 +340,78 @@ function renderBlock(block) {
     }
     default:
       return node('p', 'block-text', block?.text);
+  }
+}
+
+function renderRuns(block) {
+  const paragraph = document.createElement('p');
+  paragraph.className = 'block-text';
+  for (const run of block.runs) {
+    if (run.type === 'math') paragraph.appendChild(renderInlineMath(run));
+    else paragraph.appendChild(document.createTextNode(String(run.text || '')));
+  }
+  return paragraph;
+}
+
+function renderMathBlock(block) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'block-math';
+  const math = sanitizeMathml(block.mathml);
+  if (math) {
+    math.setAttribute('display', 'block');
+    wrapper.appendChild(math);
+    return wrapper;
+  }
+  wrapper.classList.add('block-math-tex');
+  wrapper.textContent = block.tex ? `$${block.tex}$` : '[公式]';
+  return wrapper;
+}
+
+function renderInlineMath(block) {
+  const math = sanitizeMathml(block.mathml);
+  if (math) {
+    math.setAttribute('display', 'inline');
+    return math;
+  }
+  const span = document.createElement('span');
+  span.className = 'block-math-inline';
+  span.textContent = block.tex ? `$${block.tex}$` : '[公式]';
+  return span;
+}
+
+// MathML 来自网页,属于不可信输入:只保留白名单标签/属性,文字节点重建成文本。
+function sanitizeMathml(markup) {
+  if (!markup) return null;
+  let parsed;
+  try {
+    parsed = new DOMParser().parseFromString(markup, 'text/html');
+  } catch {
+    return null;
+  }
+  const source = parsed.querySelector('math');
+  if (!source) return null;
+  const root = document.createElementNS(MATHML_NAMESPACE, 'math');
+  copyMath(source, root);
+  return root.childNodes.length ? root : null;
+}
+
+function copyMath(from, to) {
+  for (const child of from.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      to.appendChild(document.createTextNode(child.nodeValue));
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+    const tag = child.tagName.toLowerCase();
+    if (!MATHML_TAGS.has(tag)) continue;
+    const element = document.createElementNS(MATHML_NAMESPACE, tag);
+    for (const attribute of child.attributes) {
+      if (MATHML_ATTRS.has(attribute.name.toLowerCase())) {
+        element.setAttribute(attribute.name, attribute.value);
+      }
+    }
+    copyMath(child, element);
+    to.appendChild(element);
   }
 }
 
