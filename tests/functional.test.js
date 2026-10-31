@@ -447,43 +447,48 @@ async function testBookmarkManager() {
   });
 
   await sidebar.click('#btn-bookmarks');
-  await waitFor(() => sidebar.evaluate(() => document.querySelectorAll('#bm-folders .bm-folder').length > 0), {
-    message: 'bookmark folders rendered'
-  });
+  // 夹具文件夹只在成功路径上删是不够的:断言一失败就会留下同名文件夹,
+  // 下一次运行先匹配到它们,于是永久失败。清理放进 finally。
+  try {
+    await waitFor(() => sidebar.evaluate(() => document.querySelectorAll('#bm-folders .bm-folder').length > 0), {
+      message: 'bookmark folders rendered'
+    });
 
-  await sidebar.evaluate(() => {
-    const folder = [...document.querySelectorAll('#bm-folders .bm-folder')]
-      .find((button) => button.textContent.includes('整理测试-来源'));
-    folder?.click();
-  });
-  await waitFor(() => sidebar.evaluate(() => document.querySelectorAll('#bm-items input[type=checkbox]').length === 1), {
-    message: 'bookmarks of the source folder'
-  });
-
-  await sidebar.click('#bm-items input[type=checkbox]');
-  await sidebar.evaluate((targetId) => {
-    const select = document.getElementById('bm-target');
-    select.value = targetId;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  }, setup.toId);
-
-  await waitFor(() => sidebar.evaluate(() => !document.getElementById('btn-bm-move').disabled), {
-    message: 'move button enabled'
-  });
-  await sidebar.click('#btn-bm-move');
-
-  await waitFor(async () => {
-    const titles = await sidebar.evaluate(
-      (id) => chrome.bookmarks.getChildren(id).then((nodes) => nodes.map((node) => node.title)),
-      setup.toId
+    await sidebar.evaluate(() => {
+      const folder = [...document.querySelectorAll('#bm-folders .bm-folder')]
+        .find((button) => button.textContent.includes('整理测试-来源'));
+      folder?.click();
+    });
+    await waitFor(
+      () => sidebar.evaluate(() => document.querySelectorAll('#bm-items input[type=checkbox]').length === 1),
+      { message: 'bookmarks of the source folder' }
     );
-    return titles.includes('待移动的收藏');
-  }, { message: 'bookmark moved into the target folder' });
 
-  await sidebar.evaluate(({ fromId, toId }) => Promise.all([
-    chrome.bookmarks.removeTree(fromId).catch(() => {}),
-    chrome.bookmarks.removeTree(toId).catch(() => {})
-  ]), setup);
+    await sidebar.click('#bm-items input[type=checkbox]');
+    await sidebar.evaluate((targetId) => {
+      const select = document.getElementById('bm-target');
+      select.value = targetId;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }, setup.toId);
+
+    await waitFor(() => sidebar.evaluate(() => !document.getElementById('btn-bm-move').disabled), {
+      message: 'move button enabled'
+    });
+    await sidebar.click('#btn-bm-move');
+
+    await waitFor(async () => {
+      const titles = await sidebar.evaluate(
+        (id) => chrome.bookmarks.getChildren(id).then((nodes) => nodes.map((node) => node.title)),
+        setup.toId
+      );
+      return titles.includes('待移动的收藏');
+    }, { message: 'bookmark moved into the target folder' });
+  } finally {
+    await sidebar.evaluate(({ fromId, toId }) => Promise.all([
+      chrome.bookmarks.removeTree(fromId).catch(() => {}),
+      chrome.bookmarks.removeTree(toId).catch(() => {})
+    ]), setup);
+  }
 
   await sidebar.close();
   console.log('PASS bookmark manager moves a selected bookmark into a folder');

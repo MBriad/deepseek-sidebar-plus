@@ -3036,12 +3036,14 @@ function renderBmItems() {
     list.appendChild(row);
   }
 
-  $('#bm-all').checked = bookmarks.length > 0 && bookmarks.every((item) => bmSelected.has(item.id));
   updateBmCount();
 }
 
 function updateBmCount() {
-  $('#bm-count').textContent = `${bmSelected.size} / ${bmCurrentBookmarks().length} 已选`;
+  const bookmarks = bmCurrentBookmarks();
+  // 全选框由实际勾选状态推导 —— 取消一条之后它必须跟着变成未选中。
+  $('#bm-all').checked = bookmarks.length > 0 && bookmarks.every((item) => bmSelected.has(item.id));
+  $('#bm-count').textContent = `${bmSelected.size} / ${bookmarks.length} 已选`;
   updateBmMoveState();
 }
 
