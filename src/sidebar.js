@@ -162,6 +162,17 @@ function applyChatProvider(id, { persist = true, reload = true } = {}) {
   if (persist) {
     chrome.storage.local.set({ [PROVIDER_KEY]: provider.id }).catch(() => {});
   }
+  // DSH 是本地服务:不走 chat-bridge,直接把 iframe 指向它。
+  if (provider.id === 'dsh') {
+    if (reload && changed) {
+      try {
+        frame.src = provider.url;
+      } catch (error) {
+        showBanner(`无法加载 DSH：${error.message}`, '重试', reloadFrame, { type: 'error' });
+      }
+    }
+    return;
+  }
   if (!reload || !changed) return;
 
   bridgeReady = false;
