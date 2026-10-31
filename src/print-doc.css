@@ -196,16 +196,18 @@
   font-size: 1.02em;
 }
 
-#print-doc .pd-list-item {
-  margin: .2em 0;
-  padding-left: 1.5em;
-  text-indent: -1.5em;
+#print-doc .pd-list {
+  margin: .35em 0 .85em;
+  padding-left: 1.45em;
 }
 
-#print-doc .pd-list-marker {
-  display: inline-block;
-  min-width: 1.1em;
-  margin-right: .3em;
+#print-doc .pd-list li {
+  margin: .22em 0;
+  padding-left: .1em;
+}
+
+#print-doc .pd-list li::marker {
+  color: #6b6f76;
 }
 
 #print-doc .pd-quote {

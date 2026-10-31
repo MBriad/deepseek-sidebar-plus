@@ -121,10 +121,40 @@
     label.textContent = `T${index + 1} · ${role}`;
     section.appendChild(label);
 
-    for (const block of Array.isArray(turn.blocks) ? turn.blocks : []) {
+    const blocks = Array.isArray(turn.blocks) ? turn.blocks : [];
+    for (let position = 0; position < blocks.length; position += 1) {
+      const block = blocks[position];
+      if (block?.type === 'list') {
+        // 连续的列表项合并成一个真正的 <ol>/<ul>:让浏览器画标记和悬挂缩进。
+        const ordered = Boolean(block.ordered);
+        let end = position;
+        while (end + 1 < blocks.length) {
+          const next = blocks[end + 1];
+          if (next?.type !== 'list' || Boolean(next.ordered) !== ordered) break;
+          end += 1;
+        }
+        const list = document.createElement(ordered ? 'ol' : 'ul');
+        list.className = 'pd-list';
+        if (ordered) {
+          const start = Number(block.index) || 1;
+          if (start !== 1) list.setAttribute('start', String(start));
+        }
+        for (let cursor = position; cursor <= end; cursor += 1) {
+          list.appendChild(renderListItem(blocks[cursor]));
+        }
+        section.appendChild(list);
+        position = end;
+        continue;
+      }
       section.appendChild(renderBlock(block));
     }
     return section;
+  }
+
+  function renderListItem(block) {
+    const item = document.createElement('li');
+    if (!appendRuns(item, block)) item.textContent = block.text || '';
+    return item;
   }
 
   function renderBlock(block) {
@@ -154,13 +184,6 @@
       }
       case 'math':
         return renderMathBlock(block);
-      case 'list': {
-        const marker = block.ordered ? `${Number(block.index) || 1}.` : '•';
-        const item = node('div', 'pd-list-item');
-        item.appendChild(node('span', 'pd-list-marker', marker));
-        if (!appendRuns(item, block)) item.appendChild(document.createTextNode(block.text || ''));
-        return item;
-      }
       case 'quote': {
         const quote = node('blockquote', 'pd-quote');
         if (!appendRuns(quote, block)) quote.textContent = block.text;

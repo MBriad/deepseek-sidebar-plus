@@ -360,7 +360,9 @@ async function testExportDialog() {
       font: root.style.getPropertyValue('--base-font'),
       displayMath: Boolean(root.querySelector('.pd-math math')),
       inlineMath: Boolean(root.querySelector('.pd-text math')),
-      listMath: [...root.querySelectorAll('.pd-list-item')].some((item) => item.querySelector('math')),
+      listItems: root.querySelectorAll('.pd-list li').length,
+      listOrdered: Boolean(root.querySelector('ol.pd-list')),
+      listMath: [...root.querySelectorAll('.pd-list li')].some((item) => item.querySelector('math')),
       image: Boolean(root.querySelector('.pd-image img, .pd-image-inline')),
       file: (root.querySelector('.pd-file')?.textContent || '').includes('notes.pdf'),
       codeLang: root.querySelector('.pd-code-lang')?.textContent || ''
@@ -371,7 +373,8 @@ async function testExportDialog() {
   assert.ok(doc.text.includes('模型'), 'the custom AI label should be used');
   assert.ok(doc.text.includes('请把这段对话导出成 PDF'), 'user turn should be exported now that the picker is gone');
   assert.ok(doc.text.includes('const a = 1;'), 'code block should be kept');
-  assert.ok(/1\.\s*第一步/.test(doc.text), 'ordered lists should keep their numbering');
+  assert.ok(doc.listOrdered && doc.listItems === 3, 'ordered lists should be real <ol> with all three items');
+  assert.ok(!doc.text.includes('第一步 第二步'), 'list items should not be flattened into one paragraph');
   assert.equal(doc.font.trim(), '16pt', 'font size should follow the slider');
   assert.equal(doc.codeLang, 'JS', 'code blocks should keep their language label');
   assert.ok(doc.displayMath && doc.inlineMath && doc.listMath, 'math should render as MathML in every context');
