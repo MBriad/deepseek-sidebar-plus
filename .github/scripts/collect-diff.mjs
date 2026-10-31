@@ -8,12 +8,14 @@
 //   diff.txt           ← 已截断的 diff
 //   files.json         ← { 路径: 新侧内容 },只含送模型的文件、有单文件与总量上限
 //   classification.json← 分类器结果(哪些文件要送模型、用哪份 REVIEW.md)
+//   lock.json          ← 依赖锁摘要;只在本次改动包含 package-lock.json 时产出
 //   meta.json          ← 基准 sha、是否截断、文件数
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { classify } from '../../scripts/classify.mjs';
+import { isInstallAffecting, summarizeLockfile } from './lock-summary.mjs';
 
 const MAX_DIFF_CHARS = 60000;
 const MAX_FILE_CHARS = 120000;
@@ -100,10 +102,26 @@ for (const path of modelFiles) {
   total += text.length;
 }
 
+const changedPaths = classification.files.map((f) => f.path);
+let lock = null;
+if (changedPaths.includes('package-lock.json')) {
+  const installAffecting = changedPaths.filter(isInstallAffecting);
+  try {
+    lock = {
+      changed: true,
+      installAffecting,
+      ...summarizeLockfile(git(['show', `${headSha}:package-lock.json`])),
+    };
+  } catch (error) {
+    lock = { changed: true, installAffecting, error: String(error.message || error).slice(0, 200) };
+  }
+}
+
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, 'diff.txt'), diff);
 writeFileSync(join(outDir, 'files.json'), JSON.stringify(contents));
 writeFileSync(join(outDir, 'classification.json'), JSON.stringify(classification));
+if (lock) writeFileSync(join(outDir, 'lock.json'), JSON.stringify(lock));
 writeFileSync(
   join(outDir, 'meta.json'),
   JSON.stringify(
@@ -116,6 +134,7 @@ writeFileSync(
       included: Object.keys(contents).length,
       skippedLarge,
       chars: total,
+      lockfile: Boolean(lock),
     },
     null,
     2,
@@ -124,5 +143,6 @@ writeFileSync(
 
 console.log(
   `collect-diff: ${modelFiles.length} 个文件待评,diff ${diff.length} 字符` +
-    `(截断:${diffFull.length > MAX_DIFF_CHARS}),内容 ${Object.keys(contents).length} 份 / ${total} 字符`,
+    `(截断:${diffFull.length > MAX_DIFF_CHARS}),内容 ${Object.keys(contents).length} 份 / ${total} 字符` +
+    `,lockfile 摘要:${lock ? '有' : '无'}`,
 );
