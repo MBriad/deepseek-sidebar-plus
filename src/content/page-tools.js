@@ -884,6 +884,54 @@
   /* Video transcript (YouTube / Bilibili)                            */
   /* ---------------------------------------------------------------- */
 
+  // 播放器数据写在页面世界,隔离世界读不到;但它通常出现在页面内联 <script> 里。
+  function extractBalancedJson(text, start) {
+    let depth = 0;
+    let inString = false;
+    let quote = '';
+    let escape = false;
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+      if (inString) {
+        if (escape) escape = false;
+        else if (char === '\\') escape = true;
+        else if (char === quote) inString = false;
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        inString = true;
+        quote = char;
+        continue;
+      }
+      if (char === '{' || char === '[') depth += 1;
+      else if (char === '}' || char === ']') {
+        depth -= 1;
+        if (depth === 0) return text.slice(start, index + 1);
+      }
+    }
+    return '';
+  }
+
+  function readInlineState(keys) {
+    for (const script of Array.from(document.scripts)) {
+      const text = script.textContent || '';
+      if (!text) continue;
+      for (const key of keys) {
+        const at = text.indexOf(key);
+        if (at < 0) continue;
+        const brace = text.indexOf('{', at);
+        if (brace < 0) continue;
+        const json = extractBalancedJson(text, brace);
+        if (!json) continue;
+        try {
+          return JSON.parse(json);
+        } catch {
+          // 继续找下一段。
+        }
+      }
+    }
+    return null;
+  }
   function formatStamp(seconds) {
     const total = Math.max(0, Math.round(Number(seconds) || 0));
     const hours = Math.floor(total / 3600);
@@ -917,6 +965,7 @@
   async function readYouTubeTranscript() {
     const player =
       window.ytInitialPlayerResponse ||
+      readInlineState(['ytInitialPlayerResponse']) ||
       (() => {
         try {
           return JSON.parse(document.querySelector('#movie_player')?.getAttribute('data-player-response') || 'null');
@@ -947,7 +996,7 @@
   }
 
   async function readBilibiliTranscript() {
-    const state = window.__INITIAL_STATE__ || {};
+    const state = window.__INITIAL_STATE__ || readInlineState(['__INITIAL_STATE__', 'window.__INITIAL_STATE__']) || {};
     const video = state.videoData || state.videoInfo || {};
     const bvid = video.bvid || (/(BV[\w]+)/.exec(location.href) || [])[1] || '';
     const cid = video.cid || state.cid || 0;
