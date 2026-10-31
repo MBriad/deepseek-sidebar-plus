@@ -149,6 +149,23 @@
         break;
       }
 
+      case 'DS_EXPORT_PDF': {
+        try {
+          post('EXPORT_RESULT', {
+            requestId: data.requestId,
+            ok: true,
+            conversation: collectConversation()
+          });
+        } catch (error) {
+          post('EXPORT_RESULT', {
+            requestId: data.requestId,
+            ok: false,
+            error: error?.message || '读取对话失败'
+          });
+        }
+        break;
+      }
+
       case 'DS_RELAY_START': {
         const input = findInput();
         if (input) {
@@ -1951,6 +1968,229 @@
     } catch {
       // Ignore.
     }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* 对话导出(PDF 打印页用)                                             */
+  /* ---------------------------------------------------------------- */
+  //
+  // 只产出**纯数据**:标题、角色、文本/代码/表格块。不复制页面 HTML ——
+  // 打印页是扩展自己的页面,网页里的标记不能直接进去。
+  // DeepSeek 侧唯一稳定的锚点是 .ds-markdown(助手内容);用户消息按兄弟块推断,
+  // 推断失败就退回整页文本,宁可降级也不空手而归。
+
+  const EXPORT_SKIP_TAGS = new Set([
+    'BUTTON', 'SVG', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'NAV', 'FORM', 'IFRAME'
+  ]);
+  const EXPORT_HEADINGS = { H1: 1, H2: 2, H3: 3, H4: 4, H5: 5, H6: 6 };
+
+  function collectConversation() {
+    const raw = CHAT_NAME === 'ChatGPT' ? collectChatGptTurns() : collectDeepSeekTurns();
+    const turns = raw.filter((turn) => turn.blocks && turn.blocks.length);
+
+    if (!turns.length) {
+      // 站点改版时不再猜结构:退回整页可见文本,至少给一份可读的 PDF。
+      const text = textOf(document.body).slice(0, 200000);
+      if (!text) throw new Error('没有找到可导出的对话内容');
+      return {
+        title: conversationTitle(),
+        url: location.href,
+        provider: CHAT_NAME,
+        turns: [{ role: 'unknown', blocks: [{ type: 'text', text }] }],
+        degraded: true
+      };
+    }
+
+    return {
+      title: conversationTitle(),
+      url: location.href,
+      provider: CHAT_NAME,
+      turns,
+      degraded: false
+    };
+  }
+
+  // ChatGPT 有稳定的官方属性,直接按它取。
+  function collectChatGptTurns() {
+    return Array.from(document.querySelectorAll('[data-message-author-role]')).map((element) => ({
+      role: element.getAttribute('data-message-author-role') === 'user' ? 'user' : 'assistant',
+      blocks: blocksOf(element)
+    }));
+  }
+
+  function collectDeepSeekTurns() {
+    const marks = Array.from(document.querySelectorAll('.ds-markdown')).filter(
+      (element) => element.getClientRects().length
+    );
+    if (!marks.length) return [];
+
+    const root = marks.length > 1 ? commonAncestor(marks) : findDeepSeekRoot(marks[0]);
+    if (!root) return [];
+
+    const turns = [];
+    for (const child of Array.from(root.children)) {
+      if (child.querySelector('textarea, [contenteditable="true"], input')) continue;
+
+      if (child.querySelector('.ds-markdown')) {
+        const blocks = blocksOf(child);
+        if (blocks.length) turns.push({ role: 'assistant', blocks });
+        continue;
+      }
+
+      const text = textOf(child);
+      if (text) turns.push({ role: 'user', blocks: [{ type: 'text', text }] });
+    }
+
+    // 一层包装的结构会让上面的分类只拿到助手块;这时改成"每个助手块 + 它前面的兄弟文本"。
+    if (!turns.some((turn) => turn.role === 'user')) {
+      const rebuilt = [];
+      for (const mark of marks) {
+        let wrapper = mark;
+        while (wrapper.parentElement && wrapper.parentElement !== root) wrapper = wrapper.parentElement;
+        const previous = wrapper.previousElementSibling;
+        const previousText = previous ? textOf(previous) : '';
+        if (previousText && !previous.querySelector('.ds-markdown')) {
+          rebuilt.push({ role: 'user', blocks: [{ type: 'text', text: previousText }] });
+        }
+        const blocks = blocksOf(wrapper);
+        if (blocks.length) rebuilt.push({ role: 'assistant', blocks });
+      }
+      if (rebuilt.some((turn) => turn.role === 'user')) return rebuilt;
+    }
+
+    return turns;
+  }
+
+  function commonAncestor(nodes) {
+    let ancestor = nodes[0];
+    for (const node of nodes.slice(1)) {
+      while (ancestor && !ancestor.contains(node)) ancestor = ancestor.parentElement;
+      if (!ancestor) return document.body;
+    }
+    return ancestor;
+  }
+
+  // 单个助手块时,往上找到"同级里还有用户文字"的那一层作为对话容器。
+  function findDeepSeekRoot(mark) {
+    let node = mark;
+    while (node.parentElement && node.parentElement !== document.documentElement) {
+      const parent = node.parentElement;
+      const hasUserSibling = Array.from(parent.children).some(
+        (child) => child !== node && !child.contains(mark) && textOf(child)
+      );
+      if (hasUserSibling) return parent;
+      node = parent;
+    }
+    return mark.parentElement || document.body;
+  }
+
+  function textOf(node) {
+    let out = '';
+    const walk = (current) => {
+      if (current.nodeType === Node.TEXT_NODE) {
+        out += current.nodeValue;
+        return;
+      }
+      if (current.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = current.tagName;
+      if (EXPORT_SKIP_TAGS.has(tag)) return;
+      if (current.getAttribute('aria-hidden') === 'true') return;
+      if (current.getAttribute('role') === 'button') return;
+      if (tag === 'BR') {
+        out += '\n';
+        return;
+      }
+      for (const child of current.childNodes) walk(child);
+    };
+    walk(node);
+    return out
+      .replace(/\r/g, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function blocksOf(root) {
+    const blocks = [];
+    const pushText = (type, text, extra = {}) => {
+      const value = String(text || '').trim();
+      if (value) blocks.push({ type, text: value, ...extra });
+    };
+
+    const walk = (container) => {
+      for (const child of Array.from(container.children)) {
+        const tag = child.tagName;
+        if (EXPORT_SKIP_TAGS.has(tag)) continue;
+
+        if (tag === 'PRE') {
+          const code = child.querySelector('code') || child;
+          const className = `${code.className || ''} ${child.className || ''}`;
+          const language = (/(?:language|lang)-([\w+#.-]+)/.exec(className) || [])[1] || '';
+          pushText('code', code.innerText ?? code.textContent, { language });
+          continue;
+        }
+        if (EXPORT_HEADINGS[tag]) {
+          pushText('heading', textOf(child), { level: EXPORT_HEADINGS[tag] });
+          continue;
+        }
+        if (tag === 'UL' || tag === 'OL') {
+          let index = 0;
+          for (const item of Array.from(child.children)) {
+            if (item.tagName !== 'LI') continue;
+            index += 1;
+            pushText('list', textOf(item), { ordered: tag === 'OL', index });
+          }
+          continue;
+        }
+        if (tag === 'BLOCKQUOTE') {
+          pushText('quote', textOf(child));
+          continue;
+        }
+        if (tag === 'TABLE') {
+          const rows = [];
+          for (const row of Array.from(child.querySelectorAll('tr'))) {
+            const cells = Array.from(row.children)
+              .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
+              .map((cell) => textOf(cell).replace(/\n+/g, ' '));
+            if (cells.length) rows.push(cells);
+          }
+          if (rows.length) blocks.push({ type: 'table', rows });
+          continue;
+        }
+        if (tag === 'HR') {
+          blocks.push({ type: 'hr' });
+          continue;
+        }
+        if (tag === 'IMG') continue; // 图片不进 PDF:外链会失效,还可能是防盗链
+
+        const blockChildren = Array.from(child.children).some((node) =>
+          /^(P|UL|OL|PRE|BLOCKQUOTE|TABLE|H[1-6]|DIV|SECTION|ARTICLE|DETAILS|SUMMARY)$/.test(node.tagName)
+        );
+        if (!blockChildren) {
+          pushText('text', textOf(child));
+          continue;
+        }
+        walk(child);
+      }
+    };
+
+    walk(root);
+    if (!blocks.length) {
+      const text = textOf(root);
+      if (text) blocks.push({ type: 'text', text });
+    }
+    return blocks;
+  }
+
+  function conversationTitle() {
+    const selectors = ['[data-testid="conversation-title"]', 'header h1', 'main h1', 'h1'];
+    for (const selector of selectors) {
+      const text = String(document.querySelector(selector)?.textContent || '').trim();
+      if (text && text.length <= 120) return text;
+    }
+    const fromDocument = String(document.title || '').split(/\s[|\-–—]\s/)[0].trim();
+    return fromDocument || CHAT_NAME;
   }
 
   function formatChars(count) {

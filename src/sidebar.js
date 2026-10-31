@@ -251,7 +251,8 @@ function onFrameMessage(event) {
     data.type === 'QUOTE_RESULT' ||
     data.type === 'INPUT_RESULT' ||
     data.type === 'RELAY_RESULT' ||
-    data.type === 'SEND_RESULT'
+    data.type === 'SEND_RESULT' ||
+    data.type === 'EXPORT_RESULT'
   ) {
     const resolve = pendingRequests.get(data.requestId);
     if (resolve) {
@@ -752,6 +753,62 @@ async function quoteInChat(text) {
   const response = await sendToFrame('DS_QUOTE_TEXT', { text: value }, 6000);
   if (response?.ok) showToast('已引用到输入框');
   else showToast(response?.error || '引用失败', 'error', 4000);
+}
+
+// 打印页走 runtime 消息取数据,不进 chrome.storage:对话可能很大,而且它只是
+// 这一次打印的临时内容,没有理由落盘(也就不用新增存储键)。
+let exportPayload = null;
+const EXPORT_MAX_CHARS = 1500000;
+
+function capExportConversation(conversation) {
+  let total = 0;
+  const turns = [];
+  let truncated = false;
+  for (const turn of conversation.turns || []) {
+    const size = JSON.stringify(turn).length;
+    if (total + size > EXPORT_MAX_CHARS) {
+      truncated = true;
+      break;
+    }
+    turns.push(turn);
+    total += size;
+  }
+  return { ...conversation, turns, truncated };
+}
+
+async function exportConversationPdf() {
+  if (!bridgeReady) {
+    const ready = await waitForBridge(9000);
+    if (!ready) {
+      showBanner(
+        `还没有连接到 ${providerName()}，无法读取对话。`,
+        '重新加载',
+        reloadFrame,
+        { type: 'error', kind: 'connection' }
+      );
+      return;
+    }
+  }
+
+  showToast('正在读取对话…', 'info', 2000);
+  const response = await sendToFrame('DS_EXPORT_PDF', {}, 25000);
+  if (!response?.ok || !response.conversation) {
+    showToast(response?.error || '读取对话失败', 'error', 4000);
+    return;
+  }
+
+  exportPayload = {
+    ...capExportConversation(response.conversation),
+    exportedAt: Date.now()
+  };
+
+  try {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('src/print.html') });
+    const note = exportPayload.truncated ? '（过长已截断）' : '';
+    showToast(`已打开打印页：${exportPayload.turns.length} 条消息${note}`);
+  } catch (error) {
+    showToast(`打开打印页失败：${error.message}`, 'error', 4000);
+  }
 }
 
 async function openSidebarInTab() {
@@ -2101,6 +2158,7 @@ function bindUI() {
     saveSettings();
   });
 
+  $('#btn-export-pdf').addEventListener('click', exportConversationPdf);
   $('#btn-prompts').addEventListener('click', () => {
     openPromptLibrary().catch((error) => showToast(`打开提示词库失败：${error.message}`, 'error', 4000));
   });
@@ -2193,6 +2251,15 @@ function bindUI() {
     } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
       finishTypeRelay(false).catch(() => {});
     }
+  });
+
+  // 打印页启动后向本页要数据;不落盘,侧边栏关掉就失效。
+  // 同时开着两个侧边栏实例时,没有数据的那个必须保持沉默,否则会抢答 ok:false,
+  // 让打印页随机显示"没有可打印的对话"。
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== 'DS_GET_PRINT_PAYLOAD') return;
+    if (!exportPayload) return;
+    sendResponse({ ok: true, payload: exportPayload });
   });
 }
 

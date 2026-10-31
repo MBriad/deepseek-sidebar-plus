@@ -13,6 +13,12 @@ const chatHtml = `<!doctype html>
 <body style="margin:0;padding:24px">
   <textarea id="chat-input" style="width:100%;height:120px"></textarea>
   <button data-testid="send-button" onclick="window.sent=document.querySelector('#chat-input').value">Send</button>
+  <div id="chat-log">
+    <div data-message-author-role="user">请把这段对话导出成 PDF</div>
+    <div data-message-author-role="assistant">
+      <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol></div>
+    </div>
+  </div>
 </body></html>`;
 
 const articleHtml = `<!doctype html>
@@ -265,6 +271,56 @@ async function testEnterSends() {
   console.log('PASS Enter sends composed message');
 }
 
+async function testExportWithoutSidebar() {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/src/print.html`);
+  await waitFor(() => page.evaluate(() => document.body.innerText.includes('没有可打印的对话')), {
+    message: 'print page empty state'
+  });
+  assert.equal(await page.locator('#btn-print').isDisabled(), true, 'print button should be disabled without data');
+  await page.close();
+  console.log('PASS print page explains there is nothing to export');
+}
+
+async function testExportPdf() {
+  const sidebar = await openSidebar();
+  // 同时开着第二个侧边栏实例(没有数据):它不能抢答,否则打印页会误报没有数据。
+  const secondSidebar = await openSidebar();
+
+  // 打印页会在打开后自己调 window.print();这里把它换掉,才能断言"真的去打印了"。
+  await context.addInitScript(() => {
+    window.__dsPrintCalls = 0;
+    window.print = () => {
+      window.__dsPrintCalls += 1;
+    };
+  });
+
+  const [printPage] = await Promise.all([
+    context.waitForEvent('page'),
+    sidebar.click('#btn-export-pdf')
+  ]);
+  await printPage.waitForLoadState('domcontentloaded');
+
+  await waitFor(
+    () => printPage.evaluate(() => document.body.innerText.includes('请把这段对话导出成 PDF')),
+    { message: 'exported user message' }
+  );
+  const text = await printPage.evaluate(() => document.body.innerText);
+  assert.ok(text.includes('好的，代码会保留'), 'assistant reply should be in the PDF page');
+  assert.ok(text.includes('const a = 1;'), 'code block should be kept in the PDF page');
+  assert.ok(text.includes('1. 第一步') && text.includes('2. 第二步'), 'ordered lists should keep their numbering');
+  assert.ok(text.includes('用户') && text.includes('助手'), 'turns should be labelled by role');
+
+  await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
+    message: 'native print invoked'
+  });
+
+  await printPage.close();
+  await secondSidebar.close();
+  await sidebar.close();
+  console.log('PASS export conversation opens a printable page with the dialogue');
+}
+
 async function testPdfFollowAndSend() {
   const sidebar = await openSidebar();
   const reader = await context.newPage();
@@ -460,6 +516,18 @@ async function testChatgptProvider() {
     message: 'ChatGPT direct typing'
   });
 
+  // ChatGPT 的导出走 [data-message-author-role] 分支,和 DeepSeek 的启发式不同,单独验一次。
+  const [printPage] = await Promise.all([
+    context.waitForEvent('page'),
+    sidebar.click('#btn-export-pdf')
+  ]);
+  await printPage.waitForLoadState('domcontentloaded');
+  await waitFor(
+    () => printPage.evaluate(() => document.body.innerText.includes('请把这段对话导出成 PDF')),
+    { message: 'ChatGPT export content' }
+  );
+  await printPage.close();
+
   await article.close();
   await sidebar.close();
   console.log('PASS ChatGPT provider selection, floating input and typing');
@@ -468,9 +536,11 @@ async function testChatgptProvider() {
 (async () => {
   try {
     await setup();
+    await testExportWithoutSidebar();
     await testWebRelay();
     await testWebMouseSelection();
     await testEnterSends();
+    await testExportPdf();
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
     await testChatgptProvider();

@@ -9,6 +9,7 @@
 - **@ 读取标签页**：在当前聊天输入框输入 `@`，当前页置顶，下面列出所有窗口的其他标签页；选择后把该页正文作为 `.txt` 文档附加，输入框保留你自己写的内容。
 - **引用对话**：在聊天回复里选中文字，点浮出的“引用”按钮（或右键“引用到输入框”），会以 `>` 引用格式插入输入框。
 - **提示词库**：保存当前输入，或直接粘贴文本创建；支持自定义 `/命令`、搜索、编辑、置顶、删除和 JSON 导入/导出。在聊天输入框输入 `/` 会显示命令列表和对应提示词预览。
+- **导出对话为 PDF**：工具栏“导出 PDF”把当前会话读成结构化的打印页，在浏览器打印对话框里选“另存为 PDF”即可保存；输出是可选中的文字，代码块和表格保留。
 
 > 非官方扩展，与 DeepSeek 官方无关。基于你已安装的 **Deepseek Chat Sidebar (Unofficial) v1.0** 重写增强。  
 > GitHub: https://github.com/lllhcbjj/deepseek-sidebar-plus · 隐私政策: https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html
@@ -108,7 +109,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 **PDF 没有目录按钮？**
 
 - 确认打开的是 **增强阅读器**，不是原生 PDF。
-- 增强阅读器标题栏应显示当前版本号（如 `v1.12.0`）。
+- 增强阅读器标题栏应显示当前版本号（如 `v1.13.0`）。
 - 点工具栏 **目录**；没有书签的 PDF 会显示页码目录。
 
 **Enter 不发送？**
@@ -208,7 +209,16 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - **导入 / 导出 JSON**：参考 Voyager 的 Saved Library 数据模型（`id`、`name`、`text`、`tags`、`command`、`pinnedAt`、`createdAt`、`updatedAt`），方便备份和迁移。
 - 提示词保存在 `chrome.storage.local` 的 `promptLibrary` 键下。
 
-### 6. @ 读取标签页（含当前页）
+### 6. 导出对话为 PDF
+
+- 点工具栏的 **导出 PDF**，扩展会读取当前聊天里的对话，打开一个打印页。
+- 打印页会自动弹出浏览器打印对话框；选 **另存为 PDF** 保存。也可以稍后再点页面上的“打印 / 另存为 PDF”。
+- 输出是**可选中、可搜索的文字**（不是截图）；用户/助手按角色分段，代码块、表格、引用保留。
+- 不引入任何 PDF 库，所以必须经过一次打印对话框；文件名默认取会话标题。
+- 数据只在侧边栏内存里转一手，不写进 `chrome.storage`；侧边栏关掉后再打开打印页会提示重新导出。
+- 结构识别是按站点做的：ChatGPT 用官方的 `data-message-author-role`，DeepSeek 以 `.ds-markdown` 为锚点推断用户/助手；站点改版导致识别失败时会退回整页文本并提示。
+
+### 7. @ 读取标签页（含当前页）
 
 - 在 DeepSeek 输入框输入 `@`，会列出**所有窗口**的其他标签页；当前页（侧边栏所在页）会作为第一项 **“当前页”** 单独置顶，不会在普通列表里重复。
 - **直接读取当前页**：输入 `@` 后直接按 `Enter`（当前页默认第一项），就会把当前页正文作为 `.txt` 文档附加到 DeepSeek，不经过预览、不改输入框。
@@ -218,7 +228,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 如果选中的是 PDF 标签页，会附加 PDF 文件；本地 `file://` PDF 需要在扩展详细信息里允许访问文件 URL。
 - 标签页列表只读取标题/URL；正文只在你选中某个标签页后才读取。
 
-### 7. 设置
+### 8. 设置
 
 - 划词自动填入开关（工具栏上的“划词”按钮也可以快速开关）。
 - 填入方式：智能追加 / 覆盖 / 追加。
@@ -232,7 +242,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 小窗 Enter 直接发送：默认开启；关闭后 Enter 只完成并关闭小窗。
 - 填入当前选中文字、在标签页打开当前聊天、用增强阅读器打开当前 PDF、在标签页打开侧边栏（移动/分屏）、重新加载聊天页面、恢复默认设置。
 
-### 8. 切换 DeepSeek / ChatGPT
+### 9. 切换 DeepSeek / ChatGPT
 
 - 顶部“聊天服务”栏点 **DeepSeek** 或 **ChatGPT** 即可切换；选择会保存在本地，下次打开侧边栏继续使用。
 - 切换会重新加载对应网页；页面读取、划词填入、引用、`/` 提示词命令、`@` 标签页和 PDF 都作用于当前选择的服务。
@@ -253,7 +263,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.12.0-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.13.0-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -268,7 +278,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 
 ## Edge 商店提交材料
 
-**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.12.0 删除网页标签、收藏整理和工具栏剪贴板按钮，暂不覆盖审核中的商店包，等审核结束后再提交。
+**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.12.0 删除网页标签、收藏整理和工具栏剪贴板按钮，v1.13.0 新增对话导出 PDF，均暂不覆盖审核中的商店包，等审核结束后再提交。
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
@@ -276,7 +286,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
 - 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)（六张都是 v1.11 工具栏；`store-05-page-tags.png` 还拍了 v1.12.0 已删除的网页标签，提交前重拍或裁掉工具栏）
 - 当前审核包：`deepseek-sidebar-plus-v1.9.3-store.zip`
-- v1.12.0 商店包：`deepseek-sidebar-plus-v1.12.0-store.zip`（审核结束后再提交）
+- v1.13.0 商店包：`deepseek-sidebar-plus-v1.13.0-store.zip`（审核结束后再提交）
 
 **商店提交前还需要：**
 
@@ -330,6 +340,9 @@ deepseek-sidebar-plus/
 │  ├─ pdf-reader.html            本地 PDF 增强阅读器页面
 │  ├─ pdf-reader.css             阅读器 UI
 │  ├─ pdf-reader.js              读本地 PDF + 原生阅读器选区转发
+│  ├─ print.html                 会话打印页（PDF 导出）
+│  ├─ print.css                  打印页样式（屏幕预览 + @media print）
+│  ├─ print.js                   从侧边栏取会话数据、渲染、调原生打印
 │  └─ content/
 │     ├─ page-tools.js           普通网页内容脚本：划词捕获 + 正文提取 + PDF 桥接
 │     ├─ pdf-main.js             PDF 页面主世界脚本：读取 Edge PDF 阅读器选区
@@ -441,6 +454,7 @@ deepseek-sidebar-plus/
 
 ## 版本
 
+- **v1.13.0**：新增“导出对话为 PDF”工具栏按钮：把当前会话读成结构化打印页，经浏览器打印对话框“另存为 PDF”，文字可选中、代码块与表格保留；数据不落盘。
 - **v1.12.0**：删除三个多余功能——网页标签（含本地语义搜索与自动分类）、收藏整理（书签移动）和工具栏“从剪贴板填入”按钮；`bookmarks` 权限随之移除。侧边栏只剩读本页、划词、提示词库、PDF 与设置。
 - **v1.11.36**：直接输入小窗支持按光标位置 Backspace/Delete 删字（网页 Shadow DOM 与 PDF 浮窗）；修复 PDF.js 6 文本层缺少 `--total-scale-factor` 导致高亮只到行中间；增强阅读器保留原生选区高亮并跟随滚动；原生 Edge PDF 不再启动浮窗；大 PDF 惰性渲染；新选区替换上一段自动填入；网页划词 40ms 重试；PDF 多行划词不中途打断；网页直接输入有页面级键盘兜底；目录并行解析；DeepSeek 与 ChatGPT 共用浮窗和发送。
 - **v1.9.3**：更换为原创图标（聊天气泡 + 侧边栏 + 命令符号），移除原版狐狸图标；图标和商店宣传图纳入 MIT，Logo/宣传图已重新生成。

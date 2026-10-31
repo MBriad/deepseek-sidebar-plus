@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>导出对话</title>
+  <link rel="stylesheet" href="print.css">
+</head>
+<body>
+  <header class="toolbar no-print">
+    <div class="toolbar-copy">
+      <strong id="doc-title">对话</strong>
+      <span id="doc-meta"></span>
+    </div>
+    <div class="toolbar-actions">
+      <button id="btn-print" class="btn primary" type="button">打印 / 另存为 PDF</button>
+      <button id="btn-close" class="btn ghost" type="button">关闭</button>
+    </div>
+  </header>
+  <p id="print-hint" class="hint no-print">在打印对话框里选择“另存为 PDF”即可保存。输出的是可选中的文字，不是截图。</p>
+  <main id="doc"></main>
+  <script src="print.js"></script>
+</body>
+</html>
