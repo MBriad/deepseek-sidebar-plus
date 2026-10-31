@@ -16,8 +16,9 @@
   const hasExplicitPage = params.has('page');
   const POSITIONS_KEY = 'pdfReadingPositions';
   // 原来的硬上限是 200MB,扫描版教材/手册经常超过这个数,结果是"文件能打开却先被我们拒掉"。
-  // 现在只留一个防呆上限,并把体积显示出来 —— 大文件要等,用户至少知道它在动。
-  const MAX_PDF_BYTES = 2 * 1024 * 1024 * 1024;
+  // 但也不能放到 2GB:整份文件要先进内存再交给 pdf.js,放到 2GB 等于允许一个标签页自杀。
+  // 512MB 覆盖绝大多数教材/手册,同时给内存留了余地。
+  const MAX_PDF_BYTES = 512 * 1024 * 1024;
   const SLOW_NOTICE_BYTES = 80 * 1024 * 1024;
   const FETCH_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -438,12 +439,14 @@
       if (!response.ok) throw new Error(`无法下载 PDF（HTTP ${response.status}）。`);
 
       const length = Number(response.headers.get('content-length') || 0);
-      if (length > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)}。`);
+      if (length > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)},阅读器可能因此无响应。`);
       if (length > SLOW_NOTICE_BYTES) setOverlayText(`正在读取 PDF（${formatSize(length)}）…`);
 
       const blob = await response.blob();
       if (!blob.size) throw new Error('PDF 文件为空。');
-      if (blob.size > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)}。`);
+      if (blob.size > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)},阅读器可能因此无响应。`);
+      // 有些服务器不给 content-length(分块传输),这时按下载完的真实体积再提示一次。
+      if (blob.size > SLOW_NOTICE_BYTES) setOverlayText(`正在解析 PDF（${formatSize(blob.size)}）…`);
 
       const head = new TextDecoder().decode(await blob.slice(0, 1024).arrayBuffer());
       if (!head.includes('%PDF')) {
