@@ -1989,6 +1989,51 @@
   const EXPORT_MATH_SELECTOR = '.ds-markdown-math, .ds-markdown-math-display, mjx-container, .katex, math';
   const EXPORT_DISPLAY_MATH_SELECTOR = '.ds-markdown-math-display, .katex-display, mjx-container[display="true"]';
 
+  // 图片 src:懒加载站点常把真地址放 data-src,img.src 只是 1px 占位图。
+  function imageSrcOf(image) {
+    const lazy = image.getAttribute('data-src') || image.getAttribute('data-original') || '';
+    const src = image.currentSrc || image.src || image.getAttribute('src') || '';
+    const placeholder = (image.naturalWidth || 0) <= 1 && (image.naturalHeight || 0) <= 1;
+    if (placeholder && lazy) return lazy;
+    return src || lazy;
+  }
+
+  // 代码生成图有时画在 canvas 上;导出成 data URL 才能进 PDF。
+  function canvasToDataUrl(canvas) {
+    try {
+      return canvas.toDataURL('image/png');
+    } catch {
+      return '';
+    }
+  }
+
+  function imageBlockOf(element) {
+    if (element.tagName === 'CANVAS') {
+      const dataUrl = canvasToDataUrl(element);
+      if (!dataUrl) return null;
+      return { type: 'image', src: dataUrl, alt: '图表', width: element.width || 0, height: element.height || 0 };
+    }
+    const src = imageSrcOf(element);
+    if (!src) return null;
+    return {
+      type: 'image',
+      src,
+      alt: (element.getAttribute('alt') || '').trim(),
+      width: element.naturalWidth || 0,
+      height: element.naturalHeight || 0
+    };
+  }
+
+  // 少数实现把图放在 CSS background-image 里(没有 <img>)。只认大块区域,避免把头像/图标当图。
+  function backgroundImageOf(element) {
+    try {
+      const match = /url\(["']?(.*?)["']?\)/.exec(getComputedStyle(element).backgroundImage || '');
+      return match?.[1] || '';
+    } catch {
+      return '';
+    }
+  }
+
   function matchesMath(element) {
     try {
       return element.matches(EXPORT_MATH_SELECTOR);
@@ -2232,10 +2277,23 @@
           element.querySelector('.ds-markdown') ||
           element.querySelector('.ds-assistant-message-main-content') ||
           element;
+        const blocks = blocksOf(markdown);
+
+        // 代码生成图常常渲染在 .ds-markdown 之外(工具结果卡片),单独补收一次。
+        if (assistantContent && assistantContent !== markdown) {
+          const extras = Array.from(assistantContent.querySelectorAll('img, canvas')).filter(
+            (media) => !markdown.contains(media)
+          );
+          for (const media of extras) {
+            const block = imageBlockOf(media);
+            if (block) blocks.push(block);
+          }
+        }
+
         return {
           id: element.getAttribute('data-message-id') || element.getAttribute('data-testid') || '',
           role: assistantContent ? 'assistant' : 'user',
-          blocks: blocksOf(markdown)
+          blocks
         };
       });
     }
@@ -2480,28 +2538,37 @@
           continue;
         }
         if (tag === 'FIGURE') {
-          const image = child.querySelector('img');
+          const image = child.querySelector('img, canvas');
           if (image) {
-            const caption = child.querySelector('figcaption');
+            const block = imageBlockOf(image);
+            if (block) {
+              const caption = child.querySelector('figcaption');
+              if (caption?.innerText) block.alt = caption.innerText.trim();
+              blocks.push(block);
+              continue;
+            }
+          }
+        }
+        if (tag === 'IMG' || tag === 'CANVAS') {
+          const block = imageBlockOf(child);
+          if (block) blocks.push(block);
+          continue;
+        }
+
+        // 没有 <img>、但用背景图画出来的大图(代码生成图有这种实现)。
+        if (!child.textContent.trim()) {
+          const rect = child.getBoundingClientRect();
+          const background = backgroundImageOf(child);
+          if (background && rect.width >= 140 && rect.height >= 90) {
             blocks.push({
               type: 'image',
-              src: image.currentSrc || image.src || '',
-              alt: (caption?.innerText || image.alt || '').trim(),
-              width: image.naturalWidth || 0,
-              height: image.naturalHeight || 0
+              src: background,
+              alt: '',
+              width: Math.round(rect.width),
+              height: Math.round(rect.height)
             });
             continue;
           }
-        }
-        if (tag === 'IMG') {
-          blocks.push({
-            type: 'image',
-            src: child.currentSrc || child.src || child.getAttribute('src') || '',
-            alt: (child.getAttribute('alt') || '').trim(),
-            width: child.naturalWidth || 0,
-            height: child.naturalHeight || 0
-          });
-          continue;
         }
 
         const blockChildren = Array.from(child.children).some((node) =>
@@ -2575,15 +2642,12 @@
         }
         return;
       }
-      if (tag === 'IMG') {
-        flush();
-        runs.push({
-          type: 'image',
-          src: current.currentSrc || current.src || current.getAttribute('src') || '',
-          alt: (current.getAttribute('alt') || '').trim(),
-          width: current.naturalWidth || 0,
-          height: current.naturalHeight || 0
-        });
+      if (tag === 'IMG' || tag === 'CANVAS') {
+        const block = imageBlockOf(current);
+        if (block) {
+          flush();
+          runs.push({ type: 'image', ...block });
+        }
         return;
       }
       for (const child of current.childNodes) walk(child);
