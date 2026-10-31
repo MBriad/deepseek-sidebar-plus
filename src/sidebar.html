@@ -208,6 +208,21 @@
       </section>
     </div>
 
+    <!-- DSH（实验） -->
+    <div id="dsh-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="dsh-title">
+      <div class="sheet-backdrop" data-close="dsh"></div>
+      <section class="sheet-card dsh-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">Local</div>
+            <h2 id="dsh-title">DSH</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="dsh" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <p id="dsh-status" class="hint">正在连接 DSH…</p>
+        <iframe id="dsh-frame" title="DSH" hidden></iframe>
+      </section>
+    </div>
     <!-- 设置 -->
     <div id="settings-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="sheet-backdrop" data-close="settings"></div>
@@ -336,7 +351,7 @@
             <button id="btn-open-tab" class="btn ghost" type="button">在标签页打开当前聊天</button>
             <button id="btn-open-reader" class="btn ghost" type="button">用增强阅读器打开当前 PDF</button>
             <button id="btn-open-sidebar-tab" class="btn ghost" type="button">在标签页打开侧边栏（移动/分屏）</button>
-            <a id="btn-open-dsh" class="btn ghost" href="dsh.html" target="_blank" rel="noopener">打开 DSH（实验）</a>
+            <button id="btn-open-dsh" class="btn ghost" type="button">打开 DSH（实验）</button>
             <button id="btn-reload-frame" class="btn ghost" type="button">重新加载聊天页面</button>
             <button id="btn-reset-settings" class="btn ghost danger" type="button">恢复默认设置</button>
           </div>
