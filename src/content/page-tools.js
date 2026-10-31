@@ -953,7 +953,6 @@
   }
 
   async function readVideoTranscript() {
-    console.warn('[DS+ transcript] page', { host: location.hostname, video: isVideoPage() });
     if (!isVideoPage()) return null;
     try {
       if (/youtube\.com|youtu\.be/.test(location.hostname)) return await readYouTubeTranscript();
@@ -991,7 +990,6 @@
   async function readYouTubeTranscriptViaPanel() {
     const toggles = Array.from(document.querySelectorAll('button, ytd-button-renderer, yt-button-shape'));
     const button = toggles.find((element) => /show transcript|显示转写|轉錄稿|转写|transcript/i.test(element.textContent || ''));
-    console.warn('[DS+ transcript] panel button', Boolean(button));
     if (!button) return null;
 
     button.click();
@@ -1013,7 +1011,6 @@
         document.querySelector('ytd-transcript-segment-list-renderer');
       if (collected.size) break;
     }
-    console.warn('[DS+ transcript] panel segments', collected.size, Boolean(scroller));
 
     // 长视频面板是虚拟列表:边滚边收,直到滚到底或不再增长。
     if (scroller) {
@@ -1029,7 +1026,6 @@
       readSegments();
       scroller.scrollTop = 0;
     }
-    console.warn('[DS+ transcript] panel segments total', collected.size);
     if (!collected.size) return null;
 
     const cues = [...collected.values()].map((entry) => {
@@ -1069,7 +1065,6 @@
         }
       })();
     const tracks = player?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-    console.warn('[DS+ transcript] youtube tracks', { tracks: tracks.length, hasPlayer: Boolean(player), langs: tracks.map((item) => item.languageCode) });
     if (!tracks.length) return null;
 
     const track = tracks.find((item) => /^(zh|en)/i.test(item.languageCode || '')) || tracks[0];
@@ -1084,11 +1079,9 @@
       // 保留原 URL。
     }
     const response = await fetch(captionUrl, { credentials: 'include' });
-    console.warn('[DS+ transcript] youtube fetch', { status: response.status, url: captionUrl.slice(0, 120) });
     if (!response.ok) return null;
     const body = await response.text();
     const cues = parseCaptionBody(body);
-    console.warn('[DS+ transcript] youtube cues', { cues: cues.length, head: body.slice(0, 60) });
 
     if (!cues.length) return null;
 
@@ -1129,7 +1122,6 @@
     const params = findTranscriptParams(initialData);
     const key = cfg.INNERTUBE_API_KEY || '';
     const version = cfg.INNERTUBE_CLIENT_VERSION || '';
-    console.warn('[DS+ transcript] get_transcript ready', { key: Boolean(key), version: Boolean(version), params: Boolean(params) });
     if (!params || !key) return null;
 
     const response = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${encodeURIComponent(key)}`, {
@@ -1141,11 +1133,9 @@
         params
       })
     });
-    console.warn('[DS+ transcript] get_transcript status', response.status);
     if (!response.ok) return null;
     const data = await response.json();
     const cues = collectTranscriptSegments(data);
-    console.warn('[DS+ transcript] get_transcript segments', cues.length);
     if (!cues.length) return null;
     return {
       platform: 'YouTube',
@@ -1160,7 +1150,6 @@
     const video = state.videoData || state.videoInfo || {};
     const bvid = video.bvid || (/(BV[\w]+)/.exec(location.href) || [])[1] || '';
     const cid = video.cid || state.cid || 0;
-    console.warn('[DS+ transcript] bilibili state', { hasState: Boolean(Object.keys(state).length), bvid, cid });
     if (!bvid || !cid) return null;
 
     const response = await fetch(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`, {
@@ -1169,7 +1158,6 @@
     if (!response.ok) return null;
     const data = await response.json();
     const subtitles = data?.data?.subtitle?.subtitles || [];
-    console.warn('[DS+ transcript] bilibili api', { subtitles: subtitles.length, hosts: subtitles.map((item) => String(item.subtitle_url || '').slice(0, 40)) });
     if (!subtitles.length) return null;
 
     const track = subtitles.find((item) => /zh/i.test(item.lan || '')) || subtitles[0];
