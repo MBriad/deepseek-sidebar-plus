@@ -2058,7 +2058,7 @@
     debug.collectedTurns = turns.length;
 
     // 用户上传的图片/附件也要进 PDF:能取到字节就内联成 data URL,取不到保留原链接。
-    await inlineExportMedia(turns);
+    debug.images = await inlineExportMedia(turns);
 
     if (!turns.length) {
       // 站点改版时不再猜结构:退回整页可见文本,至少给一份可读的 PDF。
@@ -2338,10 +2338,10 @@
       .trim();
   }
 
-  /* 图片内联:最多 12 张、单张 2MB、总计 6MB;超限或取不到就保留原链接。 */
-  const EXPORT_IMAGE_LIMIT = 12;
-  const EXPORT_IMAGE_BYTES = 2_000_000;
-  const EXPORT_IMAGE_TOTAL = 6_000_000;
+  /* 图片内联:最多 20 张、单张 3MB、总计 12MB;超限或取不到就保留原链接。 */
+  const EXPORT_IMAGE_LIMIT = 20;
+  const EXPORT_IMAGE_BYTES = 3_000_000;
+  const EXPORT_IMAGE_TOTAL = 12_000_000;
 
   async function inlineExportMedia(turns) {
     const images = [];
@@ -2356,18 +2356,28 @@
 
     let count = 0;
     let total = 0;
+    const stats = { found: images.length, inlined: 0, skipped: 0 };
     for (const image of images) {
-      if (!image.src || count >= EXPORT_IMAGE_LIMIT || total >= EXPORT_IMAGE_TOTAL) continue;
+      if (!image.src || count >= EXPORT_IMAGE_LIMIT || total >= EXPORT_IMAGE_TOTAL) {
+        stats.skipped += 1;
+        continue;
+      }
       try {
         const dataUrl = await imageToDataUrl(image.src);
-        if (!dataUrl || dataUrl.length > EXPORT_IMAGE_BYTES) continue;
+        if (!dataUrl || dataUrl.length > EXPORT_IMAGE_BYTES) {
+          stats.skipped += 1;
+          continue;
+        }
         image.src = dataUrl;
         count += 1;
         total += dataUrl.length;
+        stats.inlined += 1;
       } catch {
         // 取不到就保留原链接;打印窗口还会再试一次,都失败则显示 [图片]。
+        stats.skipped += 1;
       }
     }
+    return stats;
   }
 
   async function imageToDataUrl(src) {

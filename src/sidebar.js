@@ -824,7 +824,11 @@ async function openExportSheet() {
     return;
   } else {
     const note = exportMeta.incomplete ? '（可能不完整：未能确认对话起点/终点）' : '';
-    setExportStatus(`共 ${exportTurns.length} 条消息${note}`);
+    const media = exportMeta.debug?.images;
+    const imageNote = media?.found
+      ? ` · 图片 ${media.found} 张${media.skipped ? `（${media.skipped} 张未内联，PDF 里会试原链接）` : ''}`
+      : '';
+    setExportStatus(`共 ${exportTurns.length} 条消息${imageNote}${note}`);
   }
 
   const run = $('#btn-export-run');

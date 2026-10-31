@@ -52,16 +52,21 @@
     let assistants = 0;
     let codes = 0;
     let math = 0;
+    let images = 0;
     for (const turn of turns) {
       if (turn.role === 'user') users += 1;
       if (turn.role === 'assistant') assistants += 1;
       for (const block of turn.blocks || []) {
         if (block.type === 'code') codes += 1;
         if (block.type === 'math') math += 1;
-        if (Array.isArray(block.runs)) math += block.runs.filter((run) => run.type === 'math').length;
+        if (block.type === 'image') images += 1;
+        if (Array.isArray(block.runs)) {
+          math += block.runs.filter((run) => run.type === 'math').length;
+          images += block.runs.filter((run) => run.type === 'image').length;
+        }
       }
     }
-    return { users, assistants, codes, math };
+    return { users, assistants, codes, math, images };
   }
 
   function renderCover(payload, turns, stats, labels) {
@@ -75,27 +80,34 @@
     const heading = document.createElement('h1');
     heading.textContent = payload.title || '对话';
 
+    const rule = document.createElement('div');
+    rule.className = 'pd-cover-rule';
+
     const subtitle = document.createElement('p');
     subtitle.className = 'pd-subtitle';
-    subtitle.textContent = `导出于 ${formatTime(payload.exportedAt)} · 共 ${turns.length} 条消息`;
+    subtitle.textContent = formatTime(payload.exportedAt);
 
-    const meta = document.createElement('dl');
-    meta.className = 'pd-meta';
-    const rows = [
-      ['来源', payload.provider || ''],
-      ['会话', payload.url || ''],
-      ['统计', `${labels.user} ${stats.users} 条 · ${labels.assistant} ${stats.assistants} 条 · 代码块 ${stats.codes} 个 · 公式 ${stats.math} 处`]
-    ];
-    for (const [label, value] of rows) {
-      if (!value) continue;
-      const dt = document.createElement('dt');
-      dt.textContent = label;
-      const dd = document.createElement('dd');
-      dd.textContent = value;
-      meta.append(dt, dd);
+    const lines = [
+      `${turns.length} 条消息`,
+      `${labels.user} ${stats.users} · ${labels.assistant} ${stats.assistants}`,
+      [stats.codes ? `代码块 ${stats.codes}` : '', stats.math ? `公式 ${stats.math}` : '', stats.images ? `图片 ${stats.images}` : '']
+        .filter(Boolean)
+        .join(' · ')
+    ].filter(Boolean);
+
+    const meta = document.createElement('div');
+    meta.className = 'pd-cover-meta';
+    for (const line of lines) {
+      const item = document.createElement('p');
+      item.textContent = line;
+      meta.appendChild(item);
     }
 
-    cover.append(eyebrow, heading, subtitle, meta);
+    const url = document.createElement('p');
+    url.className = 'pd-cover-url';
+    url.textContent = payload.url || '';
+
+    cover.append(eyebrow, heading, rule, subtitle, meta, url);
     return cover;
   }
 
@@ -209,6 +221,8 @@
     img.src = block.src;
     img.alt = block.alt || '';
     img.loading = 'eager';
+    // 原链接兜底时避免被 Referer 防盗链拒绝。
+    img.referrerPolicy = 'no-referrer';
 
     // 大图(截图、图表)单独成块;小图(表情、图标)留在文字里。
     const big = Number(block.width) > 240;

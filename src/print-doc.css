@@ -13,56 +13,65 @@
 }
 
 #print-doc .pd-cover {
-  padding-bottom: 1.2em;
-  margin-bottom: 1.6em;
-  border-bottom: 2px solid #1b1b1f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 2.4em 0 2em;
+  text-align: center;
+  border-top: 6px solid #4d6bfe;
 }
 
 #print-doc .pd-eyebrow {
-  margin: 0 0 1em;
+  margin: 0 0 1.1em;
   color: #6b6f76;
   font: 600 .62em/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-  letter-spacing: .22em;
+  letter-spacing: .28em;
   text-transform: uppercase;
 }
 
 #print-doc h1 {
-  margin: 0 0 .2em;
-  font-size: 2.4em;
+  margin: 0;
+  color: #1f3fa3;
+  font-size: 2.9em;
   font-weight: 700;
   line-height: 1.2;
-  letter-spacing: -.01em;
+  letter-spacing: .02em;
+}
+
+#print-doc .pd-cover-rule {
+  width: 4.5em;
+  height: 4px;
+  margin: .9em 0 1.5em;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4d6bfe, #8f6bff);
 }
 
 #print-doc .pd-subtitle {
-  margin: 0 0 1.4em;
-  color: #6b6f76;
+  margin: 0 0 .9em;
+  color: #4a505a;
+  font-size: .95em;
+}
+
+#print-doc .pd-cover-meta {
+  display: flex;
+  flex-direction: column;
+  gap: .18em;
+  align-items: center;
+}
+
+#print-doc .pd-cover-meta p {
+  margin: 0;
+  color: #2a2f38;
   font-size: .92em;
-  font-style: italic;
 }
 
-#print-doc .pd-meta {
-  display: grid;
-  grid-template-columns: 7em 1fr;
-  gap: 0;
-  margin: 0;
-  border-top: 1px solid #d8d8de;
-}
-
-#print-doc .pd-meta dt {
-  padding: .5em 0;
-  border-bottom: 1px solid #d8d8de;
+#print-doc .pd-cover-url {
+  margin: 1.8em 0 0;
+  max-width: 90%;
   color: #6b6f76;
-  font: 600 .6em/1.9 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-}
-
-#print-doc .pd-meta dd {
-  margin: 0;
-  padding: .5em 0;
-  border-bottom: 1px solid #d8d8de;
-  font-size: .88em;
+  font: .66em/1.5 "Cascadia Code", Consolas, monospace;
   overflow-wrap: anywhere;
 }
 
@@ -77,15 +86,37 @@
 }
 
 #print-doc .pd-turn {
-  margin: 0 0 1.4em;
+  margin: 0 0 1.5em;
+  padding-left: .95em;
+  border-left: 4px solid transparent;
+}
+
+/* 竖线区分用户与 AI:用户暖色,AI 蓝色 */
+#print-doc .pd-turn-user {
+  border-left-color: #d9a53f;
+}
+
+#print-doc .pd-turn-assistant {
+  border-left-color: #2f4b8f;
 }
 
 #print-doc .pd-turn-label {
+  display: flex;
+  align-items: center;
+  gap: .5em;
   margin-bottom: .35em;
   color: #6b6f76;
   font: 600 .66em/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   letter-spacing: .14em;
   text-transform: uppercase;
+}
+
+#print-doc .pd-turn-label::before {
+  content: '';
+  width: .55em;
+  height: .55em;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 #print-doc .pd-turn-user .pd-turn-label {

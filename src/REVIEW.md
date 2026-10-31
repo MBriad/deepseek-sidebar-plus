@@ -13,6 +13,7 @@ Covers: `src/sidebar.html`, `src/sidebar.css`, `src/sidebar.js`,
 - 页面正文或选区被写进 `chrome.storage`。
 - PDF 的章节列表与上次打开的记录没有保存:重开一份 PDF 等于从头来。
 - 扫码登录在侧边栏里失效,必须先在普通标签页登录,插件里的页面才能用。
+- PDF导出功能不正常
 
 ## Paths to skip
 - `DEFAULT_SETTINGS` 里已有键的默认值调整(键名不变就不算存储格式变更)。
