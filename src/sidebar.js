@@ -170,6 +170,7 @@ function applyChatProvider(id, { persist = true, reload = true } = {}) {
   }
   // DSH 是本地服务:不走 chat-bridge,直接把 iframe 指向它。
   if (provider.id === 'dsh') {
+    setConnection('ready');
     if (reload && changed) {
       try {
         frame.src = provider.url;
