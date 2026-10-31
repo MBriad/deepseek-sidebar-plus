@@ -1202,8 +1202,6 @@
     };
   }
   async function readBilibiliTranscript() {
-    const viaPanel = await readBilibiliTranscriptViaPanel().catch(() => null);
-    if (viaPanel?.cues?.length) return viaPanel;
     const state = window.__INITIAL_STATE__ || readInlineState(['__INITIAL_STATE__', 'window.__INITIAL_STATE__']) || {};
     const hasState = Boolean(window.__INITIAL_STATE__ || Object.keys(state).length);
     const video = state.videoData || state.videoInfo || {};
