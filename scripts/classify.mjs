@@ -56,6 +56,9 @@ const PATH_RULES = [
   { files: ['background.js'], module: 'platform', spec: 'REVIEW.md', tier: 'medium' },
   { files: ['package.json'], module: 'platform', spec: 'REVIEW.md', tier: 'medium' },
   { files: ['package-lock.json'], module: 'platform', spec: null, tier: 'low', model: false },
+  // 环境/安装配置:改了会影响所有人的安装结果,不能当文档处理。
+  { files: ['.npmrc'], module: 'platform', spec: 'REVIEW.md', tier: 'medium' },
+  { files: ['.nvmrc'], module: 'platform', spec: 'REVIEW.md', tier: 'low' },
 ];
 
 // 只对新增行做内容探测。命中即升级,从不降级。

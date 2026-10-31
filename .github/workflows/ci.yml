@@ -28,10 +28,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # 与本地同一个来源:node 版本只在 .nvmrc 里写一次(D-10)。
+          node-version-file: '.nvmrc'
 
+      # npm ci 而不是 npm install:锁定 lockfile,本地与 CI 走同一棵依赖树(D-10)。
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Static checks
         run: npm run check
@@ -52,12 +54,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # 与本地同一条命令、同一份文件清单(D-10);不要再在 CI 里另写 cp/zip。
       - name: Build portable extension
-        run: |
-          rm -rf dist
-          mkdir -p dist/portable
-          cp -R manifest.json background.js rules.json INSTALL.md PRIVACY.md LICENSE NOTICE icons src _locales dist/portable/
-          (cd dist/portable && zip -qr ../deepseek-sidebar-plus-portable.zip .)
+        run: npm run build
 
       - name: Upload portable extension
         uses: actions/upload-artifact@v4
