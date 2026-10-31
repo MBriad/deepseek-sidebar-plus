@@ -963,6 +963,26 @@
     }
   }
 
+  function parseCaptionBody(body) {
+    const text = String(body || '').trim();
+    if (text.startsWith('{')) {
+      try {
+        const data = JSON.parse(text);
+        const cues = [];
+        for (const event of data?.events || []) {
+          const start = Number(event.tStartMs) / 1000;
+          const content = (event.segs || []).map((seg) => seg.utf8 || '').join('').replace(/\s+/g, ' ').trim();
+          if (content) cues.push({ start, text: content });
+        }
+        return cues;
+      } catch {
+        return [];
+      }
+    }
+    return [...text.matchAll(/<text[^>]*\bstart="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)]
+      .map((match) => ({ start: Number(match[1]), text: decodeEntities(match[2]).replace(/\s+/g, ' ').trim() }))
+      .filter((cue) => cue.text);
+  }
   async function readYouTubeTranscript() {
     const player =
       window.ytInitialPlayerResponse ||
@@ -984,10 +1004,10 @@
     const response = await fetch(track.baseUrl, { credentials: 'include' });
     console.warn('[DS+ transcript] youtube fetch', { status: response.status });
     if (!response.ok) return null;
-    const xml = await response.text();
-    const cues = [...xml.matchAll(/<text[^>]*\bstart="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)]
-      .map((match) => ({ start: Number(match[1]), text: decodeEntities(match[2]).replace(/\s+/g, ' ').trim() }))
-      .filter((cue) => cue.text);
+    const body = await response.text();
+    const cues = parseCaptionBody(body);
+    console.warn('[DS+ transcript] youtube cues', { cues: cues.length, head: body.slice(0, 60) });
+
     if (!cues.length) return null;
 
     return {
