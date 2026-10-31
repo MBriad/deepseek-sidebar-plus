@@ -34,33 +34,10 @@
           <span class="toggle-dot" aria-hidden="true"></span>
         </button>
 
-        <button id="btn-paste" class="tool icon-only" type="button" title="从剪贴板填入（本地 PDF 可用）" aria-label="从剪贴板填入">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="5" y="4" width="14" height="17" rx="2"></rect>
-            <path d="M9 4.5V3h6v1.5"></path>
-            <path d="M12 9v6"></path>
-            <path d="M9.5 12.5L12 15l2.5-2.5"></path>
-          </svg>
-        </button>
-
         <button id="btn-prompts" class="tool icon-only" type="button" title="提示词库" aria-label="提示词库">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6 4.5h12v16l-6-4-6 4z"></path>
             <path d="M9 8.5h6M9 12h6"></path>
-          </svg>
-        </button>
-
-        <button id="btn-page-tags" class="tool icon-only" type="button" title="网页标签：标记和搜索网页" aria-label="网页标签">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 4.5h7.5L20 13l-7.5 7.5H4z"></path>
-            <circle cx="8.5" cy="9" r="1.2"></circle>
-          </svg>
-        </button>
-
-        <button id="btn-bookmarks" class="tool icon-only" type="button" title="收藏整理：勾选后移进文件夹" aria-label="收藏整理">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 7h5l1.5 2H20v9.5H4z"></path>
-            <path d="M4 7V5.5h5l1.5 2"></path>
           </svg>
         </button>
 
@@ -168,102 +145,6 @@
             <input id="prompt-import-file" type="file" accept=".json,application/json" hidden>
           </div>
         </div>
-      </section>
-    </div>
-
-    <!-- 网页标签 -->
-    <div id="page-tags-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="page-tags-title">
-      <div class="sheet-backdrop" data-close="page-tags"></div>
-      <section class="sheet-card page-tags-sheet-card">
-        <div class="sheet-head">
-          <div class="sheet-heading">
-            <div class="eyebrow">Page Tags</div>
-            <h2 id="page-tags-title">网页标签</h2>
-          </div>
-          <button class="icon-btn" type="button" data-close="page-tags" title="关闭" aria-label="关闭">×</button>
-        </div>
-
-        <div id="page-tag-current-card" class="page-tag-current">
-          <div class="page-tag-current-head">
-            <div class="page-tag-favicon" aria-hidden="true">#</div>
-            <div class="page-tag-current-copy">
-              <strong id="page-tag-current-title">当前页</strong>
-              <small id="page-tag-current-domain"></small>
-            </div>
-            <span id="page-tag-current-status" class="page-tag-status">未标记</span>
-          </div>
-          <div class="page-tag-add-row">
-            <input id="page-tag-input" class="text-input" type="text" maxlength="60" placeholder="输入标签，Enter 保存当前页" autocomplete="off">
-            <button id="btn-page-tag-add" class="btn primary" type="button">加标签</button>
-          </div>
-          <div class="page-tag-auto-row">
-            <label class="page-tag-auto-toggle">
-              <input id="page-tag-auto-classify" type="checkbox" checked>
-              <span>保存时自动分类</span>
-            </label>
-            <button id="btn-page-tag-auto" class="link-btn" type="button">立即分类</button>
-          </div>
-          <div id="page-tag-current-tags" class="page-tag-current-tags"></div>
-          <div id="page-tag-suggestions" class="page-tag-suggestions"></div>
-          <p class="page-tag-hint">支持逗号分隔多个标签；切换标签页会自动识别当前页；自动分类只在本机识别技术/设计/研究等。标签只保存在本机，不会上传。</p>
-        </div>
-
-        <div class="page-tag-search-row">
-          <input id="page-tag-search" class="text-input" type="search" placeholder="搜索已标记网页，或描述用途" title="本地语义搜索，不联网">
-        </div>
-
-        <div id="page-tag-bar" class="tag-bar" role="toolbar" aria-label="网页标签筛选"></div>
-
-        <div id="page-tag-manager" class="tag-manager hidden">
-          <div class="tag-manager-head">
-            <span>标签管理</span>
-            <button id="btn-page-tag-manager-close" class="icon-btn" type="button" title="收起标签管理" aria-label="收起标签管理">×</button>
-          </div>
-          <div id="page-tag-manager-list" class="tag-manager-list"></div>
-          <div class="tag-manager-add">
-            <input id="page-tag-new-name" class="text-input" type="text" maxlength="20" placeholder="新标签，例如：待读" autocomplete="off">
-            <button id="btn-page-tag-registry-add" class="btn" type="button">添加</button>
-          </div>
-          <p class="tag-manager-hint">改名会同步到所有网页；改成已有标签会自动合并。删除标签不会删除网页记录（除非该网页没有其他标签）。</p>
-        </div>
-
-        <div id="page-tag-list" class="page-tag-list"></div>
-
-        <div class="prompt-footer">
-          <span id="page-tag-count" class="prompt-count"></span>
-          <span class="page-tag-footer-hint">本地保存 · 语义搜索</span>
-        </div>
-      </section>
-    </div>
-
-    <!-- 收藏整理 -->
-    <div id="bookmarks-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="bookmarks-title">
-      <div class="sheet-backdrop" data-close="bookmarks"></div>
-      <section class="sheet-card">
-        <div class="sheet-head">
-          <div class="sheet-heading">
-            <div class="eyebrow">Bookmarks</div>
-            <h2 id="bookmarks-title">收藏整理</h2>
-          </div>
-          <button class="icon-btn" type="button" data-close="bookmarks" title="关闭" aria-label="关闭">×</button>
-        </div>
-
-        <div class="bm-layout">
-          <div id="bm-folders" class="bm-folders" role="group" aria-label="收藏文件夹"></div>
-          <div id="bm-items" class="bm-items"></div>
-        </div>
-
-        <div class="bm-footer">
-          <label class="bm-selectall">
-            <input id="bm-all" type="checkbox">
-            <span>全选本文件夹</span>
-          </label>
-          <span id="bm-count" class="prompt-count">0 / 0 已选</span>
-          <select id="bm-target" class="select" aria-label="移动到哪个文件夹"></select>
-          <button id="btn-bm-move" class="btn primary" type="button" disabled>移动</button>
-        </div>
-
-        <p class="hint">勾选后选择目标文件夹并点“移动”。改的是浏览器真实的收藏，移完在收藏栏里就能看到。</p>
       </section>
     </div>
 
@@ -400,7 +281,7 @@
           </div>
 
           <p class="settings-note">仅在你主动读取网页或划词时访问页面内容；内容只会填入当前选择的聊天输入框。本扩展为非官方版本。</p>
-          <p class="settings-version">AI 侧边栏增强版（非官方） v1.11.36</p>
+          <p class="settings-version">AI 侧边栏增强版（非官方） v1.12.0</p>
         </div>
       </section>
     </div>

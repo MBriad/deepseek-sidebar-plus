@@ -10,9 +10,9 @@
   - `store-02-prompts.png`
   - `store-03-pdf.png`
   - `store-04-settings.png`
-  - `store-05-page-tags.png`
+  - `store-05-page-tags.png` (stale after v1.12.0: webpage tags were removed; re-shoot or drop)
   - `store-06-chatgpt.png`
 
-The screenshots show the actual extension UI with demo article/prompt/PDF/tagged-page content and a ChatGPT sign-in screen; no chat account is required. Do not replace them with fake chat text.
+The screenshots were captured before v1.12.0, so all six show the old toolbar (page-tag, bookmark and paste buttons). Re-shoot them, or crop the toolbar, before the next store submission. They show the actual extension UI with demo article/prompt/PDF content and a ChatGPT sign-in screen; no chat account is required. Do not replace them with fake chat text.
 
 The detailed listing copy, permission justifications, and certification notes are in [`../../STORE_SUBMISSION.md`](../../STORE_SUBMISSION.md).
