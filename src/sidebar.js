@@ -754,21 +754,6 @@ async function quoteInChat(text) {
   else showToast(response?.error || '引用失败', 'error', 4000);
 }
 
-async function pasteFromClipboard() {
-  try {
-    const text = String(await navigator.clipboard.readText() || '').trim();
-    if (!text) {
-      showToast('剪贴板里没有文字');
-      return;
-    }
-
-    const ok = await fillChat(text, settings.selectionMode);
-    if (ok) showToast('已从剪贴板填入');
-  } catch (error) {
-    showToast(`读取剪贴板失败：${error.message}`, 'error', 4000);
-  }
-}
-
 async function openSidebarInTab() {
   try {
     await chrome.tabs.create({ url: chrome.runtime.getURL('src/sidebar.html') });
@@ -2147,7 +2132,6 @@ function bindUI() {
   $('#prompt-import-file').addEventListener('change', importPrompts);
   $('#btn-prompt-export').addEventListener('click', exportPrompts);
 
-  $('#btn-paste').addEventListener('click', pasteFromClipboard);
   $('#btn-grab-selection').addEventListener('click', grabCurrentSelection);
   $('#btn-open-tab').addEventListener('click', openChatInTab);
   $('#btn-open-reader').addEventListener('click', openCurrentPdfReader);
