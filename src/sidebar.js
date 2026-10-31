@@ -168,15 +168,19 @@ function applyChatProvider(id, { persist = true, reload = true } = {}) {
   if (persist) {
     chrome.storage.local.set({ [PROVIDER_KEY]: provider.id }).catch(() => {});
   }
-  // DSH 是本地服务:不走 chat-bridge,直接把 iframe 指向它。
+  // DSH 是本地服务:先探测端口,通才加载；不通就显示扩展自带的引导页(dsh.html)。
   if (provider.id === 'dsh') {
-    setConnection('ready');
     if (reload && changed) {
-      try {
-        frame.src = provider.url;
-      } catch (error) {
-        showBanner(`无法加载 DSH：${error.message}`, '重试', reloadFrame, { type: 'error' });
-      }
+      setConnection('connecting');
+      fetch(provider.url, { mode: 'no-cors', cache: 'no-store' })
+        .then(() => {
+          frame.src = provider.url;
+          setConnection('ready');
+        })
+        .catch(() => {
+          frame.src = chrome.runtime.getURL('src/dsh.html');
+          setConnection('offline');
+        });
     }
     return;
   }
