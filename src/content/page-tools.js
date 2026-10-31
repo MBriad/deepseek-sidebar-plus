@@ -865,7 +865,10 @@
 
         const maxChars = clamp(Number(message.maxChars) || 12000, 1000, 50000);
         const mode = message.mode === 'full' ? 'full' : 'readable';
-        sendResponse(extractPage(maxChars, mode));
+        extractPageWithVideo(maxChars, mode)
+          .then((result) => sendResponse(result))
+          .catch((error) => sendResponse({ ok: false, error: error.message || '网页正文提取失败。' }));
+        return true;
       } catch (error) {
         sendResponse({ ok: false, error: error.message || '网页正文提取失败。' });
       }
@@ -876,6 +879,130 @@
   /* ---------------------------------------------------------------- */
   /* Page extraction                                                  */
   /* ---------------------------------------------------------------- */
+
+  /* ---------------------------------------------------------------- */
+  /* Video transcript (YouTube / Bilibili)                            */
+  /* ---------------------------------------------------------------- */
+
+  function formatStamp(seconds) {
+    const total = Math.max(0, Math.round(Number(seconds) || 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const rest = total % 60;
+    const pad = (value) => String(value).padStart(2, '0');
+    return hours ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`;
+  }
+
+  function decodeEntities(value) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = String(value || '');
+    return textarea.value;
+  }
+
+  function isVideoPage() {
+    return /(^|\.)youtube\.com\/(watch|shorts)|youtu\.be\//.test(location.href) ||
+      /(^|\.)bilibili\.com\/video\//.test(location.href);
+  }
+
+  async function readVideoTranscript() {
+    if (!isVideoPage()) return null;
+    try {
+      if (/youtube\.com|youtu\.be/.test(location.hostname)) return await readYouTubeTranscript();
+      return await readBilibiliTranscript();
+    } catch {
+      return null;
+    }
+  }
+
+  async function readYouTubeTranscript() {
+    const player =
+      window.ytInitialPlayerResponse ||
+      (() => {
+        try {
+          return JSON.parse(document.querySelector('#movie_player')?.getAttribute('data-player-response') || 'null');
+        } catch {
+          return null;
+        }
+      })();
+    const tracks = player?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    if (!tracks.length) return null;
+
+    const track = tracks.find((item) => /^(zh|en)/i.test(item.languageCode || '')) || tracks[0];
+    if (!track?.baseUrl) return null;
+
+    const response = await fetch(track.baseUrl, { credentials: 'include' });
+    if (!response.ok) return null;
+    const xml = await response.text();
+    const cues = [...xml.matchAll(/<text[^>]*\bstart="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)]
+      .map((match) => ({ start: Number(match[1]), text: decodeEntities(match[2]).replace(/\s+/g, ' ').trim() }))
+      .filter((cue) => cue.text);
+    if (!cues.length) return null;
+
+    return {
+      platform: 'YouTube',
+      title: player?.videoDetails?.title || document.title,
+      duration: Number(player?.videoDetails?.lengthSeconds) || 0,
+      cues
+    };
+  }
+
+  async function readBilibiliTranscript() {
+    const state = window.__INITIAL_STATE__ || {};
+    const video = state.videoData || state.videoInfo || {};
+    const bvid = video.bvid || (/(BV[\w]+)/.exec(location.href) || [])[1] || '';
+    const cid = video.cid || state.cid || 0;
+    if (!bvid || !cid) return null;
+
+    const response = await fetch(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`, {
+      credentials: 'include'
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const subtitles = data?.data?.subtitle?.subtitles || [];
+    if (!subtitles.length) return null;
+
+    const track = subtitles.find((item) => /zh/i.test(item.lan || '')) || subtitles[0];
+    const url = track?.subtitle_url ? `https:${track.subtitle_url}` : '';
+    if (!url) return null;
+
+    const subtitleResponse = await fetch(url, { credentials: 'include' });
+    if (!subtitleResponse.ok) return null;
+    const subtitle = await subtitleResponse.json();
+    const cues = (subtitle?.body || [])
+      .map((cue) => ({ start: Number(cue.from) || 0, text: String(cue.content || '').trim() }))
+      .filter((cue) => cue.text);
+    if (!cues.length) return null;
+
+    return {
+      platform: 'Bilibili',
+      title: video.title || document.title,
+      duration: Number(video.duration) || 0,
+      cues
+    };
+  }
+
+  async function extractPageWithVideo(maxChars, mode) {
+    const video = await readVideoTranscript();
+    const result = extractPage(maxChars, mode);
+    if (!video?.cues?.length) return { ...result, video: null };
+
+    const lines = video.cues.map((cue) => `[${formatStamp(cue.start)}] ${cue.text}`).join('\n');
+    const head = `${video.title || result.title || ''}\n${video.platform}${video.duration ? ` · ${formatStamp(video.duration)}` : ''}\n\n[字幕]\n`;
+    const limited = limitText(`${head}${lines}`, maxChars);
+    return {
+      ...result,
+      text: limited.text,
+      charCount: limited.text.length,
+      truncated: limited.truncated,
+      mode: 'transcript',
+      video: {
+        platform: video.platform,
+        title: video.title,
+        duration: video.duration,
+        cueCount: video.cues.length
+      }
+    };
+  }
 
   function extractPage(maxChars, mode) {
     const meta = readMetadata();
