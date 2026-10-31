@@ -109,6 +109,7 @@ Paste these into **Privacy → Permission justification**:
 | `clipboardRead` | Read clipboard text only when the user clicks the “Paste from clipboard” toolbar button. No background clipboard monitoring. |
 | `clipboardWrite` | Copy page text only when the user clicks the “Copy” button in the page preview. |
 | `declarativeNetRequestWithHostAccess` | Apply header rules only to the three chat services the extension embeds (`chat.deepseek.com`, `chatgpt.com`, `chat.openai.com`), and only to `sub_frame` requests, removing `X-Frame-Options` / CSP so they can render inside the side panel. No other domains are affected. |
+| `bookmarks` | Read the bookmark tree and move the bookmarks the user ticks into the folder they pick, in the side panel's “收藏整理” (bookmark organizer). No bookmark is created, deleted, or reordered automatically; nothing leaves the device. No background reading of bookmarks. |
 | `<all_urls>` host permission | Capture a user's text selection and extract the current page's body only when the user has enabled selection autofill or clicked “Read this page”. No automatic background collection or upload. |
 | `web_accessible_resources` (`pdf-main.js`) | Expose the PDF selection bridge script to PDF pages so the extension can read the Edge PDF viewer's selected text. |
 

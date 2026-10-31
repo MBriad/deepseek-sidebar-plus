@@ -430,6 +430,65 @@ const watchdog = setTimeout(() => {
   process.exit(1);
 }, 8 * 60 * 1000);
 
+async function testBookmarkManager() {
+  const sidebar = await openSidebar();
+
+  const setup = await sidebar.evaluate(async () => {
+    const [root] = await chrome.bookmarks.getTree();
+    const bar = (root.children || []).find((node) => !node.url);
+    const from = await chrome.bookmarks.create({ parentId: bar.id, title: '整理测试-来源' });
+    const to = await chrome.bookmarks.create({ parentId: bar.id, title: '整理测试-目标' });
+    const item = await chrome.bookmarks.create({
+      parentId: from.id,
+      title: '待移动的收藏',
+      url: 'https://example.com/move-me'
+    });
+    return { fromId: from.id, toId: to.id, itemId: item.id };
+  });
+
+  await sidebar.click('#btn-bookmarks');
+  await waitFor(() => sidebar.evaluate(() => document.querySelectorAll('#bm-folders .bm-folder').length > 0), {
+    message: 'bookmark folders rendered'
+  });
+
+  await sidebar.evaluate(() => {
+    const folder = [...document.querySelectorAll('#bm-folders .bm-folder')]
+      .find((button) => button.textContent.includes('整理测试-来源'));
+    folder?.click();
+  });
+  await waitFor(() => sidebar.evaluate(() => document.querySelectorAll('#bm-items input[type=checkbox]').length === 1), {
+    message: 'bookmarks of the source folder'
+  });
+
+  await sidebar.click('#bm-items input[type=checkbox]');
+  await sidebar.evaluate((targetId) => {
+    const select = document.getElementById('bm-target');
+    select.value = targetId;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }, setup.toId);
+
+  await waitFor(() => sidebar.evaluate(() => !document.getElementById('btn-bm-move').disabled), {
+    message: 'move button enabled'
+  });
+  await sidebar.click('#btn-bm-move');
+
+  await waitFor(async () => {
+    const titles = await sidebar.evaluate(
+      (id) => chrome.bookmarks.getChildren(id).then((nodes) => nodes.map((node) => node.title)),
+      setup.toId
+    );
+    return titles.includes('待移动的收藏');
+  }, { message: 'bookmark moved into the target folder' });
+
+  await sidebar.evaluate(({ fromId, toId }) => Promise.all([
+    chrome.bookmarks.removeTree(fromId).catch(() => {}),
+    chrome.bookmarks.removeTree(toId).catch(() => {})
+  ]), setup);
+
+  await sidebar.close();
+  console.log('PASS bookmark manager moves a selected bookmark into a folder');
+}
+
 async function testChatgptProvider() {
   const sidebar = await openSidebar();
   await sidebar.click('.provider-tab[data-provider="chatgpt"]');
@@ -473,6 +532,7 @@ async function testChatgptProvider() {
     await testEnterSends();
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
+    await testBookmarkManager();
     await testChatgptProvider();
     console.log('ALL FUNCTIONAL TESTS PASSED');
   } catch (error) {
