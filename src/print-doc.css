@@ -247,3 +247,11 @@
     break-inside: avoid;
   }
 }
+
+/* 独立打印窗口里直接显示预览(侧边栏里这份文档始终隐藏) */
+body.print-standalone #print-doc {
+  display: block;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+}

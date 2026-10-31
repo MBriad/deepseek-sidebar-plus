@@ -755,12 +755,11 @@ async function quoteInChat(text) {
   else showToast(response?.error || '引用失败', 'error', 4000);
 }
 
-// 导出在侧边栏的弹层里完成:选格式/称呼/字号 → 直接在侧边栏页面里渲染一份
-// 只用于打印的文档 → 调浏览器原生打印。不打开新标签页,也不写 chrome.storage。
+// 导出在侧边栏的弹层里选格式/称呼/字号,真正的打印交给独立打印窗口
+// (侧边栏面板不能直接调起打印)。对话只放内存,不写 chrome.storage。
 let exportMeta = null;
 let exportTurns = [];
 let exportBusy = false;
-let exportPrintTimer = 0;
 const EXPORT_MAX_CHARS = 1500000;
 
 function capExportTurns(turns) {
@@ -858,42 +857,29 @@ function runExport() {
   };
 
   closeSheet('#export-sheet');
-  printConversation(payload, options);
+  openPrintWindow(payload, options);
 }
 
-// 在侧边栏页面里渲染只用于打印的文档,然后调原生打印;打印完清掉,不留在 DOM 里。
-function printConversation(payload, options) {
-  const root = $('#print-doc');
-  if (!root || !window.DSPrintDoc) {
-    showToast('打印模块没有加载，请重新加载扩展。', 'error', 4000);
-    return;
-  }
+// 侧边栏面板本身不能调起浏览器打印(Edge 会忽略),所以打印放在一个独立窗口里:
+// 弹出 → 渲染 → 弹打印 → 打印完自己关掉。数据只经 runtime 消息传内存,不落盘。
+let printPayload = null;
 
+function openPrintWindow(payload, options) {
+  printPayload = { payload, options };
+  const url = chrome.runtime.getURL('src/print.html');
   try {
-    window.DSPrintDoc.render(root, payload, options);
-  } catch (error) {
-    showToast(`生成打印文档失败：${error.message}`, 'error', 4000);
-    return;
-  }
-
-  const cleanup = () => {
-    clearTimeout(exportPrintTimer);
-    exportPrintTimer = 0;
-    root.textContent = '';
-  };
-  window.addEventListener('afterprint', cleanup, { once: true });
-  clearTimeout(exportPrintTimer);
-  exportPrintTimer = setTimeout(cleanup, 120000);
-
-  // 等一帧让排版生效再打印,否则可能打到空文档。
-  requestAnimationFrame(() => {
-    try {
-      window.print();
-    } catch (error) {
-      showToast(`打印失败：${error.message}`, 'error', 4000);
-      cleanup();
+    if (chrome.windows?.create) {
+      chrome.windows.create({ url, type: 'popup', width: 1000, height: 1200 }, () => {
+        void chrome.runtime.lastError;
+      });
+      return;
     }
-  });
+    chrome.tabs.create({ url }).catch((error) => {
+      showToast(`打开打印窗口失败：${error.message}`, 'error', 4000);
+    });
+  } catch (error) {
+    showToast(`打开打印窗口失败：${error.message}`, 'error', 4000);
+  }
 }
 
 async function openSidebarInTab() {
@@ -2345,6 +2331,13 @@ function bindUI() {
     } else if (relay.type === 'DS_TYPE_RELAY_CANCEL') {
       finishTypeRelay(false).catch(() => {});
     }
+  });
+
+  // 打印窗口来取数据。多个侧边栏实例时,没有数据的那个保持沉默,避免抢答。
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== 'DS_GET_PRINT_PAYLOAD') return;
+    if (!printPayload) return;
+    sendResponse({ ok: true, payload: printPayload.payload, options: printPayload.options });
   });
 }
 

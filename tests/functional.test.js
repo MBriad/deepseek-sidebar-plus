@@ -312,18 +312,17 @@ async function testExportEmptyChat() {
 
 async function testExportDialog() {
   const sidebar = await openSidebar();
-  // 第二个侧边栏实例(没有数据):不能影响导出。
+  // 第二个侧边栏实例(没有数据):打印窗口不能拿到空数据。
   const secondSidebar = await openSidebar();
 
-  // 打印在侧边栏页面里发生;换掉原生打印,避免弹出打印对话框。
-  await sidebar.evaluate(() => {
+  // 打印窗口会在打开后调 window.print();换掉它,避免弹出系统打印对话框。
+  await context.addInitScript(() => {
     window.__dsPrintCalls = 0;
     window.print = () => {
       window.__dsPrintCalls += 1;
     };
   });
 
-  const pagesBefore = context.pages().length;
   await sidebar.click('#btn-export-pdf');
   await waitFor(
     () => sidebar.evaluate(() => document.getElementById('export-status')?.textContent.includes('共 2 条消息')),
@@ -342,15 +341,18 @@ async function testExportDialog() {
   assert.equal((await sidebar.locator('#export-font-value').textContent()).trim(), '16pt');
   assert.ok((await sidebar.locator('#export-font-preview').textContent()).includes('天地玄黄'));
 
-  await sidebar.click('#btn-export-run');
+  // 侧边栏面板不能直接打印,所以导出会开一个自动关闭的打印窗口。
+  const [printPage] = await Promise.all([
+    context.waitForEvent('page'),
+    sidebar.click('#btn-export-run')
+  ]);
+  assert.ok(printPage.url().includes('print.html'), 'export should open the print window');
 
-  // 不打开新标签页:打印的是侧边栏页面里渲染好的文档。
-  assert.equal(context.pages().length, pagesBefore, 'export must not open a new tab');
-  await waitFor(() => sidebar.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
-    message: 'native print invoked'
+  await printPage.waitForFunction(() => document.body.innerText.includes('好的，代码会保留'), null, {
+    timeout: 20000
   });
 
-  const doc = await sidebar.evaluate(() => {
+  const doc = await printPage.evaluate(() => {
     const root = document.getElementById('print-doc');
     const text = root.textContent.replace(/\s+/g, ' ').trim();
     return {
@@ -365,16 +367,21 @@ async function testExportDialog() {
 
   assert.ok(doc.text.includes('我'), 'the custom user label should be used');
   assert.ok(doc.text.includes('模型'), 'the custom AI label should be used');
-  assert.ok(doc.text.includes('好的，代码会保留'), 'assistant reply should be in the document');
+  assert.ok(doc.text.includes('请把这段对话导出成 PDF'), 'user turn should be exported now that the picker is gone');
   assert.ok(doc.text.includes('const a = 1;'), 'code block should be kept');
   assert.ok(/1\.\s*第一步/.test(doc.text), 'ordered lists should keep their numbering');
   assert.equal(doc.font.trim(), '16pt', 'font size should follow the slider');
   assert.equal(doc.codeLang, 'JS', 'code blocks should keep their language label');
   assert.ok(doc.displayMath && doc.inlineMath && doc.listMath, 'math should render as MathML in every context');
 
+  await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
+    message: 'native print invoked from the print window'
+  });
+
+  await printPage.close();
   await secondSidebar.close();
   await sidebar.close();
-  console.log('PASS export dialog lives in the side panel and prints without a new tab');
+  console.log('PASS export dialog prints through an auto-closing window');
 }
 
 async function testPdfFollowAndSend() {
