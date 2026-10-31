@@ -26,6 +26,17 @@
 
 没有 merge queue、没有多 agent 并行 review、不引入 lint——项目规模不需要。
 
+## 真实站点功能:先 dist 验证,再开 PR
+
+依赖真实站点 DOM / 接口的功能(视频字幕、站点改版适配等),CI 全绿只说明 mock 没坏(P-4)。交付顺序固定:
+
+1. 在功能分支上 `npm run build`,由所有者在 Edge 里加载 `dist\portable` 验证;
+2. PR 只以 **Draft** 打开;所有者验证通过后才 `gh pr ready` 转 Ready;
+3. 验证中发现的问题在**同一分支**修,保持 Draft,不另开 PR;
+4. 合并后在 `main` 上重建 `dist`;分支上的 `dist` 不算交付物。
+
+违反顺序(先开 Ready PR 再让所有者测)按流程错误处理:评审应直接要求转回 Draft。
+
 ## 风险分级(阶段 2 是否要人工)
 
 | 级别 | 范围 | 要求 |
