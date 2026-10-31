@@ -41,6 +41,11 @@
   };
   window.addEventListener('afterprint', () => setTimeout(closeSelf, 400), { once: true });
 
+  // 打印前把图片都等到位:远程图(CDN/带 cookie)常常 300ms 内还没加载完,
+  // 直接打印会印出 alt 文本。先尝试用本窗口重新抓一次,再等 decode。
+  await hydrateImages(root);
+  await waitForImages(root, 5000);
+
   // 等一帧让排版生效,再调打印。
   setTimeout(() => {
     try {
@@ -50,6 +55,34 @@
     }
   }, 300);
 })();
+
+// 远程图片在扩展页里可能因为 cookie/Referer 加载失败;用 fetch 重取一次换成 blob URL。
+async function hydrateImages(root) {
+  const images = Array.from(root.querySelectorAll('img')).filter((img) => !img.src.startsWith('data:'));
+  await Promise.all(
+    images.map(async (img) => {
+      try {
+        const response = await fetch(img.src, { credentials: 'include' });
+        if (!response.ok) return;
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/')) return;
+        img.src = URL.createObjectURL(blob);
+      } catch {
+        // 保持原链接,让浏览器再试一次。
+      }
+    })
+  );
+}
+
+async function waitForImages(root, timeoutMs) {
+  const images = Array.from(root.querySelectorAll('img'));
+  await Promise.all(
+    images.map((img) => {
+      const ready = img.complete && img.naturalWidth > 0 ? Promise.resolve() : img.decode?.().catch(() => {}) || Promise.resolve();
+      return Promise.race([ready, sleep(timeoutMs)]);
+    })
+  );
+}
 
 function askSidebar() {
   return new Promise((resolve) => {
@@ -62,4 +95,8 @@ function askSidebar() {
       resolve(null);
     }
   });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
