@@ -1,4 +1,4 @@
-# DeepSeek 侧边栏增强版（非官方）
+# AI 侧边栏增强版（非官方）
 
 在 Microsoft Edge 侧边栏里使用 **DeepSeek 或 ChatGPT**，并补上原版缺少的几件事：
 
@@ -264,7 +264,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 2. 打开 `edge://extensions/`。
 3. 打开左下角的 **开发人员模式**。
 4. 点击 **加载解压缩的扩展**，选择解压后包含 `manifest.json` 的文件夹。
-5. 在扩展列表里把 **DeepSeek 侧边栏增强版** 固定到工具栏。
+5. 在扩展列表里把 **AI 侧边栏增强版** 固定到工具栏。
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 

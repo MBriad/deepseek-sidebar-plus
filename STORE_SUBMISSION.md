@@ -1,6 +1,6 @@
 # Edge Add-ons Submission Pack — v1.9.3
 
-This is the submission worksheet for **DeepSeek Sidebar Enhanced (Unofficial)**.  
+This is the submission worksheet for **AI Sidebar Enhanced (Unofficial)**.  
 It is not a guarantee of approval; it prepares the package and the answers reviewers will look for.
 
 > **v1.9.3 is the version currently in Microsoft certification.** v1.11.0 adds webpage tags and a DeepSeek / ChatGPT provider switch; it is a local/GitHub update only. Do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.11.0 is ready for resubmission.
@@ -13,8 +13,8 @@ It is not a guarantee of approval; it prepares the package and the answers revie
 
 | Field | Value |
 | --- | --- |
-| Extension name (en) | `DeepSeek Sidebar Enhanced (Unofficial)` |
-| Extension name (zh-CN) | `DeepSeek 侧边栏增强版（非官方）` |
+| Extension name (en) | `AI Sidebar Enhanced (Unofficial)` |
+| Extension name (zh-CN) | `AI 侧边栏增强版（非官方）` |
 | Version | `1.9.3` |
 | Category | Productivity |
 | Languages | en-US, zh-CN (from `_locales`) |
@@ -31,7 +31,7 @@ The manifest uses `__MSG_extName__` / `__MSG_extDescription__`; Partner Center r
 
 ## 2. Detailed description (zh-CN)
 
-DeepSeek 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，把 DeepSeek 聊天放进浏览器侧边栏，并为阅读、写作和提示词工作流补上上下文工具。它不是 DeepSeek 官方产品，与 DeepSeek 官方无关联。
+AI 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，把 DeepSeek 聊天放进浏览器侧边栏，并为阅读、写作和提示词工作流补上上下文工具。它不是 DeepSeek 官方产品，与 DeepSeek 官方无关联。
 
 主要功能：
 
@@ -60,7 +60,7 @@ DeepSeek 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩�
 
 ## 3. Detailed description (en-US)
 
-DeepSeek Sidebar Enhanced (Unofficial) is an independent third-party Edge extension that puts DeepSeek chat in the browser sidebar and adds practical context tools for reading, writing, and prompt workflows. It is not an official DeepSeek product and is not affiliated with DeepSeek.
+AI Sidebar Enhanced (Unofficial) is an independent third-party Edge extension that puts DeepSeek chat in the browser sidebar and adds practical context tools for reading, writing, and prompt workflows. It is not an official DeepSeek product and is not affiliated with DeepSeek.
 
 Features:
 

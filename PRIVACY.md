@@ -1,6 +1,6 @@
 # Privacy Policy / 隐私政策
 
-**DeepSeek Sidebar Enhanced (Unofficial)**  
+**AI Sidebar Enhanced (Unofficial)**  
 Effective date / 生效日期：2026-10-25
 
 > **非官方声明 / Unofficial:** 本扩展是第三方工具，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。相关名称仅用于说明兼容性。  
