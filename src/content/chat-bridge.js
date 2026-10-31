@@ -2052,6 +2052,15 @@
       }
     }
 
+    // 还没加载完(虚拟列表里刚滚到)时,等一会儿再取,别把空图当成没图。
+    if (!element.complete && element.decode) {
+      try {
+        await Promise.race([element.decode(), sleep(1500)]);
+      } catch {
+        // Ignore.
+      }
+    }
+
     if (!element.complete || !element.naturalWidth) return '';
     try {
       const scale = Math.min(1, 1400 / Math.max(element.naturalWidth, element.naturalHeight));
