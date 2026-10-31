@@ -484,10 +484,11 @@ async function testBookmarkManager() {
       return titles.includes('待移动的收藏');
     }, { message: 'bookmark moved into the target folder' });
   } finally {
+    // 清理本身也可能抛(页面已关/正在导航);不能让它把真正的断言错误盖掉。
     await sidebar.evaluate(({ fromId, toId }) => Promise.all([
       chrome.bookmarks.removeTree(fromId).catch(() => {}),
       chrome.bookmarks.removeTree(toId).catch(() => {})
-    ]), setup);
+    ]), setup).catch(() => {});
   }
 
   await sidebar.close();
