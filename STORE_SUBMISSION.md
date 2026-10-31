@@ -5,6 +5,8 @@ It is not a guarantee of approval; it prepares the package and the answers revie
 
 > **v1.9.3 is the version currently in Microsoft certification.** v1.11.0 adds webpage tags and a DeepSeek / ChatGPT provider switch; it is a local/GitHub update only. Do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.11.0 is ready for resubmission.
 
+> **改名(D-1)从下一次提交起生效。** 显示名改为 `AI Sidebar Enhanced (Unofficial)` / `AI 侧边栏增强版（非官方）`;v1.9.3 在审包的商店元数据仍是旧名 `DeepSeek …`,不要在审核期间改它。
+
 **Screenshots are ready in `docs/store/screenshots/`. Remaining before submitting: decide how to handle DeepSeek login for reviewers (test account or a clear note) and complete the Partner Center upload. Privacy URL, publisher, and support contact are filled for `lllhcbjj`.**
 
 ---
@@ -13,8 +15,8 @@ It is not a guarantee of approval; it prepares the package and the answers revie
 
 | Field | Value |
 | --- | --- |
-| Extension name (en) | `AI Sidebar Enhanced (Unofficial)` |
-| Extension name (zh-CN) | `AI 侧边栏增强版（非官方）` |
+| Extension name (en) | v1.9.3(在审):`DeepSeek Sidebar Enhanced (Unofficial)` · 下次提交:`AI Sidebar Enhanced (Unofficial)` |
+| Extension name (zh-CN) | v1.9.3(在审):`DeepSeek 侧边栏增强版（非官方）` · 下次提交:`AI 侧边栏增强版（非官方）` |
 | Version | `1.9.3` |
 | Category | Productivity |
 | Languages | en-US, zh-CN (from `_locales`) |
@@ -31,7 +33,7 @@ The manifest uses `__MSG_extName__` / `__MSG_extDescription__`; Partner Center r
 
 ## 2. Detailed description (zh-CN)
 
-AI 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，把 DeepSeek 聊天放进浏览器侧边栏，并为阅读、写作和提示词工作流补上上下文工具。它不是 DeepSeek 官方产品，与 DeepSeek 官方无关联。
+AI 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，把 DeepSeek 或 ChatGPT 聊天放进浏览器侧边栏，并为阅读、写作和提示词工作流补上上下文工具。它不是 DeepSeek 官方产品，与 DeepSeek、OpenAI 官方均无关联。
 
 主要功能：
 
@@ -60,7 +62,7 @@ AI 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，�
 
 ## 3. Detailed description (en-US)
 
-AI Sidebar Enhanced (Unofficial) is an independent third-party Edge extension that puts DeepSeek chat in the browser sidebar and adds practical context tools for reading, writing, and prompt workflows. It is not an official DeepSeek product and is not affiliated with DeepSeek.
+AI Sidebar Enhanced (Unofficial) is an independent third-party Edge extension that puts DeepSeek or ChatGPT chat in the browser sidebar and adds practical context tools for reading, writing, and prompt workflows. It is not an official DeepSeek product and is not affiliated with DeepSeek or OpenAI.
 
 Features:
 
