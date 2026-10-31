@@ -14,6 +14,13 @@ const CHAT_PROVIDERS = {
     name: 'ChatGPT',
     url: 'https://chatgpt.com/',
     origin: 'https://chatgpt.com'
+  },
+  dsh: {
+    id: 'dsh',
+    name: 'DSH',
+    url: 'http://127.0.0.1:3080/',
+    origin: 'http://127.0.0.1:3080'
+  },
   }
 };
 const PROVIDER_KEY = 'chatProvider';
