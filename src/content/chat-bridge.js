@@ -50,6 +50,14 @@
   let rootsCacheAt = 0;
 
   window.addEventListener('message', onMessage);
+  // 原页打印:标签页里由侧边栏用 chrome.tabs.sendMessage 触发(runtime 通道,不走 postMessage)。
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== 'DS_PRINT_NATIVE') return;
+    printNativePage()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error?.message || '原页打印失败' }));
+    return true;
+  });
   installQuoteSelection();
   installCommandPalette();
   installMentionPalette();
@@ -148,6 +156,26 @@
         post('SEND_RESULT', { requestId: data.requestId, ok });
         break;
       }
+
+      case 'DS_GET_PAGE_URL':
+        post('PAGE_URL_RESULT', { requestId: data.requestId, ok: true, url: location.href });
+        break;
+
+      case 'DS_PRINT_NATIVE':
+        // 原页打印:在聊天页自己的源里打印,图片/cookie 都不跨域。
+        (async () => {
+          try {
+            await printNativePage();
+            post('PRINT_NATIVE_RESULT', { requestId: data.requestId, ok: true });
+          } catch (error) {
+            post('PRINT_NATIVE_RESULT', {
+              requestId: data.requestId,
+              ok: false,
+              error: error?.message || '原页打印失败'
+            });
+          }
+        })();
+        break;
 
       case 'DS_EXPORT_PDF':
         // 虚拟列表要边滚边收,所以这里是异步的;结果晚一点回。
@@ -2115,6 +2143,66 @@
       tex,
       mathml: visual ? String(container.outerHTML || '').slice(0, 60000) : ''
     };
+  }
+
+  // 原页打印:滚一遍把虚拟列表加载完 → 注入只打印消息的 CSS → window.print()。
+  // 打印发生在聊天页自己的源里,所以需要登录态的图片也能出来。
+  async function printNativePage() {
+    // 新标签页刚打开时 React 还没挂载消息,先等它出现再滚。
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (document.querySelector('.ds-message, [data-message-author-role], user-query, model-response, article')) break;
+      await sleep(200);
+    }
+
+    const scroller = findScroller();
+    const restore = scroller ? scroller.scrollTop : 0;
+
+    try {
+      if (scroller && scroller.scrollHeight > scroller.clientHeight + 80) {
+        const steps = 24;
+        for (let step = 0; step < steps; step += 1) {
+          const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          scroller.scrollTop = Math.round((max * step) / (steps - 1));
+          await sleep(120);
+        }
+      }
+    } finally {
+      if (scroller) scroller.scrollTop = restore;
+    }
+
+    await Promise.all(
+      Array.from(document.querySelectorAll('img')).map((image) =>
+        Promise.race([image.decode?.().catch(() => {}) || Promise.resolve(), sleep(1500)])
+      )
+    );
+
+    const style = document.createElement('style');
+    style.id = 'ds-plus-native-print';
+    style.textContent = `
+      @media print {
+        @page { size: A4; margin: 14mm 12mm; }
+        body * { visibility: hidden !important; }
+        .ds-message, .ds-message *,
+        [data-message-author-role], [data-message-author-role] *,
+        user-query, user-query *, model-response, model-response * { visibility: visible !important; }
+        .ds-message, [data-message-author-role], user-query, model-response { break-inside: avoid; }
+        .ds-virtual-list, .ds-scroll-area { overflow: visible !important; height: auto !important; }
+      }
+    `;
+    document.documentElement.appendChild(style);
+
+    await sleep(200);
+    window.print();
+
+    // 打印对话框关闭后收尾:移除样式,并让 side panel 把这个临时标签页关掉。
+    setTimeout(() => {
+      style.remove();
+      try {
+        chrome.runtime.sendMessage({ type: 'DS_PRINT_NATIVE_DONE' });
+      } catch {
+        // Ignore.
+      }
+    }, 800);
   }
 
   // 虚拟列表只渲染视口附近的几条消息,所以滚动扫一遍,按消息 key 去重合并。

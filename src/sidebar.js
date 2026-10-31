@@ -252,7 +252,9 @@ function onFrameMessage(event) {
     data.type === 'INPUT_RESULT' ||
     data.type === 'RELAY_RESULT' ||
     data.type === 'SEND_RESULT' ||
-    data.type === 'EXPORT_RESULT'
+    data.type === 'EXPORT_RESULT' ||
+    data.type === 'PAGE_URL_RESULT' ||
+    data.type === 'PRINT_NATIVE_RESULT'
   ) {
     const resolve = pendingRequests.get(data.requestId);
     if (resolve) {
@@ -867,6 +869,37 @@ function runExport() {
 // 侧边栏面板本身不能调起浏览器打印(Edge 会忽略),所以打印放在一个独立窗口里:
 // 弹出 → 渲染 → 弹打印 → 打印完自己关掉。数据只经 runtime 消息传内存,不落盘。
 let printPayload = null;
+// 原页打印用的临时标签页:打印完成后由 content script 通知,这里负责关掉。
+const nativePrintTabs = new Set();
+
+// 原页打印:在聊天页自己的标签页里打印,图片走站点同源加载,不受扩展源限制。
+async function printNativeFromTab() {
+  closeSheet('#export-sheet');
+  const response = await sendToFrame('DS_GET_PAGE_URL', {}, 5000);
+  const url = response?.url;
+  if (!url) {
+    showToast('拿不到当前会话地址，无法原页打印。', 'error', 4000);
+    return;
+  }
+
+  const tab = await chrome.tabs.create({ url, active: true });
+  nativePrintTabs.add(tab.id);
+
+  // 标签页会重新打开会话:轮询到加载完成再触发,避免错过 onUpdated 的 complete 事件。
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const current = await chrome.tabs.get(tab.id).catch(() => null);
+    if (!current) break;
+    if (current.status !== 'complete') continue;
+    const result = await chrome.tabs
+      .sendMessage(tab.id, { type: 'DS_PRINT_NATIVE' })
+      .catch(() => null);
+    if (result?.ok) break;
+  }
+
+  setTimeout(() => nativePrintTabs.delete(tab.id), 120000);
+  showToast('已在标签页里打开原页打印，打印完自动关闭。', 'info', 5000);
+}
 
 function openPrintWindow(payload, options) {
   printPayload = { payload, options };
@@ -2238,6 +2271,9 @@ function bindUI() {
   });
   $('#btn-export-cancel').addEventListener('click', () => closeSheet('#export-sheet'));
   $('#btn-export-run').addEventListener('click', runExport);
+  $('#btn-native-print').addEventListener('click', () => {
+    printNativeFromTab().catch((error) => showToast(`原页打印失败：${error.message}`, 'error', 4000));
+  });
   $('#export-font').addEventListener('input', (event) => setExportFont(event.target.value));
   setExportFont($('#export-font').value);
   $('#btn-prompts').addEventListener('click', () => {
@@ -2339,6 +2375,14 @@ function bindUI() {
 
   // 打印窗口来取数据。多个侧边栏实例时,没有数据的那个保持沉默,避免抢答。
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'DS_PRINT_NATIVE_DONE') {
+      const tabId = sender.tab?.id;
+      if (tabId && nativePrintTabs.has(tabId)) {
+        nativePrintTabs.delete(tabId);
+        chrome.tabs.remove(tabId).catch(() => {});
+      }
+      return;
+    }
     if (message?.type !== 'DS_GET_PRINT_PAYLOAD') return;
     if (!printPayload) return;
     sendResponse({ ok: true, payload: printPayload.payload, options: printPayload.options });
