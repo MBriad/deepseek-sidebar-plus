@@ -448,3 +448,16 @@ hr {
     text-decoration: none;
   }
 }
+
+/* ---------- 嵌入侧边栏(隐藏 iframe):只留文档本身 ---------- */
+
+body.embed {
+  padding: 0;
+}
+
+body.embed .toolbar,
+body.embed .hint,
+body.embed .font-preview,
+body.embed .turn-select {
+  display: none !important;
+}

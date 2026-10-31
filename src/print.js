@@ -20,6 +20,10 @@ const selAssistantButton = document.getElementById('sel-assistant');
 const fontInput = document.getElementById('font-size');
 const fontValue = document.getElementById('font-size-value');
 
+// 侧边栏用隐藏 iframe 加载本页(embed=1):数据从父页面 postMessage 来,不显示工具栏。
+const EMBEDDED = new URLSearchParams(location.search).get('embed') === '1';
+let roleNames = { user: '用户', assistant: '助手' };
+
 const MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML';
 const MATHML_TAGS = new Set([
   'math', 'mrow', 'mi', 'mo', 'mn', 'mtext', 'ms', 'mspace', 'msup', 'msub', 'msubsup', 'mfrac',
@@ -48,9 +52,59 @@ closeButton.addEventListener('click', () => {
 fontInput.addEventListener('input', applyFontSize);
 applyFontSize();
 
-start().catch((error) => {
-  showFailure(`打印页出错:${error?.message || error}`);
-});
+if (EMBEDDED) {
+  startEmbedded();
+} else {
+  start().catch((error) => {
+    showFailure(`打印页出错:${error?.message || error}`);
+  });
+}
+
+// 嵌入模式:等父页面把 payload 传进来,渲染完直接打印,不显示任何工具栏。
+function startEmbedded() {
+  document.body.classList.add('embed');
+  window.addEventListener('message', (event) => {
+    if (event.origin !== location.origin) return;
+    const data = event.data;
+    if (!data || data.type !== 'DS_PRINT_PAYLOAD') return;
+
+    const options = data.options || {};
+    roleNames = {
+      user: options.userLabel || '用户',
+      assistant: options.aiLabel || '助手'
+    };
+    if (options.fontPt) {
+      fontInput.value = String(options.fontPt);
+      applyFontSize();
+    }
+
+    payload = data.payload;
+    render();
+
+    const title = payload.title || '对话';
+    document.title = payload.provider && payload.provider !== title ? `${title} - ${payload.provider}` : title;
+
+    window.addEventListener(
+      'afterprint',
+      () => {
+        try {
+          window.parent.postMessage({ type: 'DS_PRINT_DONE' }, location.origin);
+        } catch {
+          // Ignore.
+        }
+      },
+      { once: true }
+    );
+
+    setTimeout(() => {
+      try {
+        window.print();
+      } catch {
+        // Ignore.
+      }
+    }, 120);
+  });
+}
 
 function applyFontSize() {
   const size = Math.min(20, Math.max(9, Number(fontInput.value) || 13));
@@ -245,7 +299,7 @@ function renderCover(turns, stats) {
   const rows = [
     ['来源', payload.provider || ''],
     ['会话', payload.url || ''],
-    ['统计', `用户 ${stats.users} 条 · 模型 ${stats.assistants} 条 · 代码块 ${stats.codes} 个 · 公式 ${stats.math} 处`]
+    ['统计', `${roleNames.user} ${stats.users} 条 · ${roleNames.assistant} ${stats.assistants} 条 · 代码块 ${stats.codes} 个 · 公式 ${stats.math} 处`]
   ];
   for (const [label, value] of rows) {
     if (!value) continue;
@@ -268,23 +322,27 @@ function renderTurn(turn, index) {
   const label = document.createElement('div');
   label.className = 'turn-label';
 
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.className = 'turn-select no-print';
-  checkbox.checked = selected.has(index);
-  checkbox.title = '勾选后才会出现在 PDF 里';
-  checkbox.addEventListener('change', () => {
-    if (checkbox.checked) selected.add(index);
-    else selected.delete(index);
-    section.classList.toggle('turn-off', !checkbox.checked);
-    refreshSelectionUI();
-  });
-  section.classList.toggle('turn-off', !checkbox.checked);
-
   const text = document.createElement('span');
   text.textContent = `T${index + 1} · ${roleLabel(turn.role)}`;
 
-  label.append(checkbox, text);
+  if (EMBEDDED) {
+    label.append(text);
+  } else {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'turn-select no-print';
+    checkbox.checked = selected.has(index);
+    checkbox.title = '勾选后才会出现在 PDF 里';
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selected.add(index);
+      else selected.delete(index);
+      section.classList.toggle('turn-off', !checkbox.checked);
+      refreshSelectionUI();
+    });
+    section.classList.toggle('turn-off', !checkbox.checked);
+    label.append(checkbox, text);
+  }
+
   section.appendChild(label);
 
   for (const block of Array.isArray(turn.blocks) ? turn.blocks : []) {
@@ -294,8 +352,8 @@ function renderTurn(turn, index) {
 }
 
 function roleLabel(role) {
-  if (role === 'user') return '用户';
-  if (role === 'assistant') return '模型';
+  if (role === 'user') return roleNames.user;
+  if (role === 'assistant') return roleNames.assistant;
   return '内容';
 }
 

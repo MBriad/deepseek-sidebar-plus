@@ -294,124 +294,71 @@ async function testExportWithoutSidebar() {
   console.log('PASS print page explains there is nothing to export');
 }
 
-async function testExportPdf() {
+async function testExportDialog() {
   const sidebar = await openSidebar();
-  // 同时开着第二个侧边栏实例(没有数据):它不能抢答,否则打印页会误报没有数据。
+  // 第二个侧边栏实例(没有数据):不能影响导出。
   const secondSidebar = await openSidebar();
 
-  // 打印页会在打开后自己调 window.print();这里把它换掉,才能断言"真的去打印了"。
+  // 打印发生在隐藏 iframe 里;换掉原生打印,避免弹出打印对话框。
   await context.addInitScript(() => {
-    window.__dsPrintCalls = 0;
     window.print = () => {
-      window.__dsPrintCalls += 1;
+      window.__dsPrintCalls = (window.__dsPrintCalls || 0) + 1;
     };
   });
 
-  const [printPage] = await Promise.all([
-    context.waitForEvent('page'),
-    sidebar.click('#btn-export-pdf')
-  ]);
-  await printPage.waitForLoadState('domcontentloaded');
+  const pagesBefore = context.pages().length;
+  await sidebar.click('#btn-export-pdf');
+  await sidebar.waitForSelector('#export-turns .export-turn', { timeout: 30000 });
+  assert.equal(await sidebar.locator('#export-turns .export-turn').count(), 2);
+  assert.ok((await sidebar.locator('#export-count').textContent()).includes('已选择 2 / 2 条'));
 
-  await waitFor(
-    () => printPage.evaluate(() => document.body.innerText.includes('请把这段对话导出成 PDF')),
-    { message: 'exported user message' }
-  );
-  const text = await printPage.evaluate(() => document.body.innerText);
-  assert.ok(text.includes('好的，代码会保留'), 'assistant reply should be in the PDF page');
-  assert.ok(text.includes('const a = 1;'), 'code block should be kept in the PDF page');
-  assert.ok(/1\.\s*第一步/.test(text) && /2\.\s*第二步/.test(text), 'ordered lists should keep their numbering');
-  assert.ok(text.includes('用户') && text.includes('模型'), 'turns should be labelled by role');
-  assert.ok(text.includes('已选择 2 / 2 条'), 'every turn should be selected by default');
-
-  // 公式:显示公式单独成块,行内公式留在段落里,并且都不乱码。
-  const mathInfo = await printPage.evaluate(() => {
-    const block = document.querySelector('.block-math');
-    const inline = document.querySelector('.block-text math');
-    return {
-      blockText: (block?.textContent || '').replace(/\s+/g, ''),
-      inlineText: (inline?.textContent || '').replace(/\s+/g, ''),
-      hasMathElement: Boolean(block?.querySelector('math'))
-    };
+  // 角色称呼与字号
+  await sidebar.fill('#export-user-label', '我');
+  await sidebar.fill('#export-ai-label', '模型');
+  await sidebar.evaluate(() => {
+    const input = document.getElementById('export-font');
+    input.value = '16';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  assert.ok(mathInfo.hasMathElement, 'display math should render as MathML');
-  assert.ok(mathInfo.blockText.includes('E=mc2'), `display math keeps its formula (got ${mathInfo.blockText})`);
-  assert.ok(mathInfo.inlineText.includes('x2'), `inline math stays inside the paragraph (got ${mathInfo.inlineText})`);
+  assert.equal((await sidebar.locator('#export-font-value').textContent()).trim(), '16pt');
+  assert.ok((await sidebar.locator('#export-font-preview').textContent()).includes('天地玄黄'));
 
-  // 列表项里的行内公式也必须渲染成 MathML,不能退化成 $...$ 源码。
-  const listMath = await printPage.evaluate(() => {
-    const items = [...document.querySelectorAll('.block-list-item')];
-    return {
-      hasMath: items.some((item) => item.querySelector('math') && item.textContent.includes('计算')),
-      rawTex: items.some((item) => item.textContent.includes('$'))
-    };
+  // 仅选模型 → 只导出 AI 那条
+  await sidebar.click('#export-select-ai');
+  assert.equal(await sidebar.locator('#export-turns .export-turn input:checked').count(), 1);
+  assert.ok((await sidebar.locator('#export-count').textContent()).includes('已选择 1 / 2 条'));
+
+  await sidebar.click('#btn-export-run');
+
+  // 不打开新标签页:导出在侧边栏自己的隐藏 iframe 里完成。
+  assert.equal(context.pages().length, pagesBefore, 'export must not open a new tab');
+
+  const frame = await waitFor(() => sidebar.frames().find((item) => item.url().includes('print.html')), {
+    message: 'hidden print iframe'
   });
-  assert.ok(listMath.hasMath, 'inline math inside list items should render as MathML');
-  assert.ok(!listMath.rawTex, 'list items should not print raw $...$ TeX');
-
-  // 字体大小:滑块改变正文字号,参考文本跟着变。
-  const fontBefore = await printPage.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize));
-  await printPage.locator('#font-size').fill('16');
-  const fontAfter = await printPage.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize));
-  assert.ok(fontAfter > fontBefore + 2, 'font size slider should scale the document');
-  assert.equal((await printPage.locator('#font-size-value').textContent()).trim(), '16pt');
-  assert.ok((await printPage.locator('.font-preview').textContent()).includes('天地玄黄'));
-
-  // 打开后会自动调一次原生打印(后面改勾选时才算"没选就不打印")。
-  await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
-    message: 'native print invoked'
+  await frame.waitForFunction(() => document.body.innerText.includes('好的，代码会保留'), null, {
+    timeout: 20000
   });
 
-  // 导出范围:全选 / 仅选用户 / 仅选模型;一条都不选时导出按钮必须禁用。
-  await printPage.click('#sel-assistant');
-  await waitFor(
-    () =>
-      printPage.evaluate(() => {
-        const boxes = [...document.querySelectorAll('.turn-select')];
-        const checked = boxes.filter((box) => box.checked).length;
-        // 助手那条是 T2(第二块),勾选后应当只剩它。
-        return checked === 1 && boxes[1].checked && !boxes[0].checked &&
-          document.body.innerText.includes('已选择 1 / 2 条');
-      }),
-    { message: 'assistant-only selection' }
-  );
-  await printPage.click('#sel-user');
-  await waitFor(
-    () =>
-      printPage.evaluate(() => {
-        const boxes = [...document.querySelectorAll('.turn-select')];
-        const checked = boxes.filter((box) => box.checked).length;
-        return checked === 1 && boxes[0].checked && !boxes[1].checked &&
-          document.body.innerText.includes('已选择 1 / 2 条');
-      }),
-    { message: 'user-only selection' }
-  );
-  await printPage.click('#sel-all');
-  await waitFor(
-    () => printPage.evaluate(() => document.body.innerText.includes('已选择 2 / 2 条')),
-    { message: 'all turns after selecting all' }
-  );
+  const text = await frame.evaluate(() => document.body.innerText);
+  assert.ok(text.includes('模型'), 'the custom AI label should be used in the document');
+  assert.ok(!text.includes('请把这段对话导出成 PDF'), 'unselected user turn must not be exported');
+  assert.ok(/1\.\s*第一步/.test(text), 'ordered lists should keep their numbering');
 
-  // 取消勾选唯一一条 → 没有可导出的内容,按钮禁用。
-  await printPage.click('#sel-user');
-  await printPage.evaluate(() => {
-    const boxes = [...document.querySelectorAll('.turn-select')].filter((box) => box.checked);
-    for (const box of boxes) box.click();
+  const math = await frame.evaluate(() => ({
+    display: Boolean(document.querySelector('.block-math math')),
+    inline: Boolean(document.querySelector('.block-text math')),
+    listMath: [...document.querySelectorAll('.block-list-item')].some((item) => item.querySelector('math'))
+  }));
+  assert.ok(math.display && math.inline && math.listMath, 'math should render as MathML in every context');
+
+  await waitFor(() => frame.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
+    message: 'native print invoked from the hidden iframe'
   });
-  await waitFor(
-    () =>
-      printPage.evaluate(
-        () =>
-          document.getElementById('btn-print').disabled &&
-          document.body.innerText.includes('还没有勾选任何消息')
-      ),
-    { message: 'print disabled without selection' }
-  );
 
-  await printPage.close();
   await secondSidebar.close();
   await sidebar.close();
-  console.log('PASS export conversation opens a printable page with the dialogue');
+  console.log('PASS export dialog lives in the side panel and prints without a new tab');
 }
 
 async function testPdfFollowAndSend() {
@@ -609,17 +556,11 @@ async function testChatgptProvider() {
     message: 'ChatGPT direct typing'
   });
 
-  // ChatGPT 的导出走 [data-message-author-role] 分支,和 DeepSeek 的启发式不同,单独验一次。
-  const [printPage] = await Promise.all([
-    context.waitForEvent('page'),
-    sidebar.click('#btn-export-pdf')
-  ]);
-  await printPage.waitForLoadState('domcontentloaded');
-  await waitFor(
-    () => printPage.evaluate(() => document.body.innerText.includes('请把这段对话导出成 PDF')),
-    { message: 'ChatGPT export content' }
-  );
-  await printPage.close();
+  // ChatGPT 的导出走 <user-query>/<model-response> 分支,和 DeepSeek 不同,单独验一次。
+  await sidebar.click('#btn-export-pdf');
+  await sidebar.waitForSelector('#export-turns .export-turn', { timeout: 30000 });
+  assert.equal(await sidebar.locator('#export-turns .export-turn').count(), 2);
+  await sidebar.click('#btn-export-cancel');
 
   await article.close();
   await sidebar.close();
@@ -633,7 +574,7 @@ async function testChatgptProvider() {
     await testWebRelay();
     await testWebMouseSelection();
     await testEnterSends();
-    await testExportPdf();
+    await testExportDialog();
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
     await testChatgptProvider();

@@ -157,6 +157,68 @@
       </section>
     </div>
 
+    <!-- 导出对话 -->
+    <div id="export-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="export-title">
+      <div class="sheet-backdrop" data-close="export"></div>
+      <section class="sheet-card export-sheet-card">
+        <div class="sheet-head">
+          <div class="sheet-heading">
+            <div class="eyebrow">Export</div>
+            <h2 id="export-title">导出对话</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="export" title="关闭" aria-label="关闭">×</button>
+        </div>
+
+        <p id="export-status" class="hint">选择导出格式：</p>
+
+        <div class="export-formats">
+          <label class="export-format active">
+            <input type="radio" name="export-format" value="pdf" checked>
+            <span class="export-format-copy">
+              <strong>PDF</strong>
+              <small>适合打印的格式（通过“另存为 PDF”）</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="export-fields">
+          <label class="export-field">
+            <span>你的称呼</span>
+            <input id="export-user-label" class="text-input" type="text" value="用户" maxlength="20">
+          </label>
+          <label class="export-field">
+            <span>AI 的称呼</span>
+            <input id="export-ai-label" class="text-input" type="text" value="助手" maxlength="20">
+          </label>
+        </div>
+
+        <div class="export-range">
+          <div class="export-range-head">
+            <span class="export-range-title">导出范围</span>
+            <button id="export-select-all" class="link-btn" type="button">全选</button>
+            <button id="export-select-user" class="link-btn" type="button">仅选用户</button>
+            <button id="export-select-ai" class="link-btn" type="button">仅选模型</button>
+            <span id="export-count" class="export-count">已选择 0 条</span>
+          </div>
+          <div id="export-turns" class="export-turns"></div>
+        </div>
+
+        <div class="export-font">
+          <div class="export-font-head">
+            <span>字体大小</span>
+            <output id="export-font-value" for="export-font">13pt</output>
+          </div>
+          <input id="export-font" type="range" min="9" max="18" step="0.5" value="13">
+          <p id="export-font-preview" class="export-font-preview">天地玄黄，宇宙洪荒。日月盈昃，辰宿列张。</p>
+        </div>
+
+        <div class="sheet-actions">
+          <button id="btn-export-cancel" class="btn ghost" type="button">取消</button>
+          <button id="btn-export-run" class="btn primary" type="button" disabled>导出</button>
+        </div>
+      </section>
+    </div>
+
     <!-- 设置 -->
     <div id="settings-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="sheet-backdrop" data-close="settings"></div>
