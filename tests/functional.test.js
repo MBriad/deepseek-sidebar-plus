@@ -14,10 +14,22 @@ const chatHtml = `<!doctype html>
   <textarea id="chat-input" style="width:100%;height:120px"></textarea>
   <button data-testid="send-button" onclick="window.sent=document.querySelector('#chat-input').value">Send</button>
   <div id="chat-log">
-    <div data-message-author-role="user">请把这段对话导出成 PDF</div>
-    <div data-message-author-role="assistant">
-      <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol></div>
+    <!-- DeepSeek 真实结构:每条消息 .ds-message,助手内容再套 .ds-assistant-message-main-content -->
+    <div class="ds-message"><div class="ds-collapsible-text">请把这段对话导出成 PDF</div></div>
+    <div class="ds-message">
+      <div class="ds-assistant-message-main-content">
+        <div class="ds-markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol></div>
+      </div>
     </div>
+    <!-- ChatGPT 真实结构:<user-query> / <model-response> -->
+    <user-query><div data-user-message-bubble>请把这段对话导出成 PDF</div></user-query>
+    <model-response>
+      <div data-chatgpt-selection-message-id>
+        <div data-markdown-text-style="assistant-message">
+          <div class="markdown"><p>好的，代码会保留：</p><pre><code class="language-js">const a = 1;</code></pre><ol><li>第一步</li><li>第二步</li></ol></div>
+        </div>
+      </div>
+    </model-response>
   </div>
 </body></html>`;
 
@@ -310,6 +322,38 @@ async function testExportPdf() {
   assert.ok(text.includes('const a = 1;'), 'code block should be kept in the PDF page');
   assert.ok(text.includes('1. 第一步') && text.includes('2. 第二步'), 'ordered lists should keep their numbering');
   assert.ok(text.includes('用户') && text.includes('助手'), 'turns should be labelled by role');
+
+  // 导出范围:全部 / 只看用户 / 只看助手。
+  await printPage.click('#doc-filters [data-filter="assistant"]');
+  await waitFor(
+    () =>
+      printPage.evaluate(
+        () =>
+          !document.body.innerText.includes('请把这段对话导出成 PDF') &&
+          document.body.innerText.includes('好的，代码会保留')
+      ),
+    { message: 'assistant-only filter' }
+  );
+  await printPage.click('#doc-filters [data-filter="user"]');
+  await waitFor(
+    () =>
+      printPage.evaluate(
+        () =>
+          document.body.innerText.includes('请把这段对话导出成 PDF') &&
+          !document.body.innerText.includes('好的，代码会保留')
+      ),
+    { message: 'user-only filter' }
+  );
+  await printPage.click('#doc-filters [data-filter="all"]');
+  await waitFor(
+    () =>
+      printPage.evaluate(
+        () =>
+          document.body.innerText.includes('请把这段对话导出成 PDF') &&
+          document.body.innerText.includes('好的，代码会保留')
+      ),
+    { message: 'all turns after clearing the filter' }
+  );
 
   await waitFor(() => printPage.evaluate(() => (window.__dsPrintCalls || 0) > 0), {
     message: 'native print invoked'

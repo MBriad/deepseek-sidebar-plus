@@ -213,10 +213,11 @@ Settings → Appearance → Show mini menu when selecting text → Off
 
 - 点工具栏的 **导出 PDF**，扩展会读取当前聊天里的对话，打开一个打印页。
 - 打印页会自动弹出浏览器打印对话框；选 **另存为 PDF** 保存。也可以稍后再点页面上的“打印 / 另存为 PDF”。
+- 打印页顶部可以选导出范围：**全部 / 只看用户 / 只看助手**，切换立即重新渲染。
 - 输出是**可选中、可搜索的文字**（不是截图）；用户/助手按角色分段，代码块、表格、引用保留。
 - 不引入任何 PDF 库，所以必须经过一次打印对话框；文件名默认取会话标题。
 - 数据只在侧边栏内存里转一手，不写进 `chrome.storage`；侧边栏关掉后再打开打印页会提示重新导出。
-- 结构识别是按站点做的：ChatGPT 用官方的 `data-message-author-role`，DeepSeek 以 `.ds-markdown` 为锚点推断用户/助手；站点改版导致识别失败时会退回整页文本并提示。
+- 结构识别按站点做：ChatGPT 用 `<user-query>` / `<model-response>`（老结构退回 `data-message-author-role`），DeepSeek 用 `.ds-message` + `.ds-assistant-message-main-content`。DeepSeek 的会话是虚拟列表，导出时会边滚边收并去重，所以长对话需要几秒。识别失败时退回整页文本，并在打印页与侧边栏控制台给出诊断计数。
 
 ### 7. @ 读取标签页（含当前页）
 

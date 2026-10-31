@@ -149,22 +149,24 @@
         break;
       }
 
-      case 'DS_EXPORT_PDF': {
-        try {
-          post('EXPORT_RESULT', {
-            requestId: data.requestId,
-            ok: true,
-            conversation: collectConversation()
-          });
-        } catch (error) {
-          post('EXPORT_RESULT', {
-            requestId: data.requestId,
-            ok: false,
-            error: error?.message || '读取对话失败'
-          });
-        }
+      case 'DS_EXPORT_PDF':
+        // 虚拟列表要边滚边收,所以这里是异步的;结果晚一点回。
+        (async () => {
+          try {
+            post('EXPORT_RESULT', {
+              requestId: data.requestId,
+              ok: true,
+              conversation: await collectConversation()
+            });
+          } catch (error) {
+            post('EXPORT_RESULT', {
+              requestId: data.requestId,
+              ok: false,
+              error: error?.message || '读取对话失败'
+            });
+          }
+        })();
         break;
-      }
 
       case 'DS_RELAY_START': {
         const input = findInput();
@@ -1984,12 +1986,35 @@
   ]);
   const EXPORT_HEADINGS = { H1: 1, H2: 2, H3: 3, H4: 4, H5: 5, H6: 6 };
 
-  function collectConversation() {
-    const raw = CHAT_NAME === 'ChatGPT' ? collectChatGptTurns() : collectDeepSeekTurns();
-    const turns = raw.filter((turn) => turn.blocks && turn.blocks.length);
+  // 虚拟列表只渲染视口附近的几条消息,所以滚动扫一遍,按消息 key 去重合并。
+  async function collectConversation() {
+    const debug = exportDebug();
+    const scroller = findScroller();
+    const restoreTop = scroller ? scroller.scrollTop : 0;
+    const merged = new Map();
+
+    try {
+      if (scroller && scroller.scrollHeight > scroller.clientHeight + 80) {
+        const max = scroller.scrollHeight - scroller.clientHeight;
+        const steps = Math.min(60, Math.max(8, Math.ceil(scroller.scrollHeight / Math.max(240, scroller.clientHeight)) + 4));
+        for (let step = 0; step < steps; step += 1) {
+          scroller.scrollTop = Math.round((max * step) / Math.max(1, steps - 1));
+          await sleep(160);
+          mergeTurns(merged, snapshotTurns());
+        }
+      } else {
+        mergeTurns(merged, snapshotTurns());
+      }
+    } finally {
+      if (scroller) scroller.scrollTop = restoreTop;
+    }
+
+    const turns = Array.from(merged.values()).filter((turn) => turn.blocks && turn.blocks.length);
+    debug.collectedTurns = turns.length;
 
     if (!turns.length) {
       // 站点改版时不再猜结构:退回整页可见文本,至少给一份可读的 PDF。
+      // 同时带上诊断计数,方便下一轮直接照着真实 DOM 修选择器。
       const text = textOf(document.body).slice(0, 200000);
       if (!text) throw new Error('没有找到可导出的对话内容');
       return {
@@ -1997,7 +2022,8 @@
         url: location.href,
         provider: CHAT_NAME,
         turns: [{ role: 'unknown', blocks: [{ type: 'text', text }] }],
-        degraded: true
+        degraded: true,
+        debug
       };
     }
 
@@ -2006,19 +2032,149 @@
       url: location.href,
       provider: CHAT_NAME,
       turns,
-      degraded: false
+      degraded: false,
+      debug
     };
   }
 
-  // ChatGPT 有稳定的官方属性,直接按它取。
+  function snapshotTurns() {
+    return CHAT_NAME === 'ChatGPT' ? collectChatGptTurns() : collectDeepSeekTurns();
+  }
+
+  function mergeTurns(target, turns) {
+    for (const turn of turns) {
+      const key = turnKey(turn);
+      if (!target.has(key)) target.set(key, turn);
+    }
+  }
+
+  function turnKey(turn) {
+    const first = turn.blocks[0];
+    const text = String((first && first.text) || first?.rows?.flat?.().join(' ') || '').slice(0, 120);
+    return `${turn.role}|${turn.id || ''}|${text}`;
+  }
+
+  function findScroller() {
+    const candidates =
+      CHAT_NAME === 'ChatGPT'
+        ? ['main', '[data-scroll-root]', '[class*="scroll"]']
+        : ['.ds-virtual-list.ds-scroll-area', '.ds-scroll-area', '[class*="virtual"]', '[class*="scroll"]'];
+
+    for (const selector of candidates) {
+      for (const element of Array.from(document.querySelectorAll(selector))) {
+        if (element.scrollHeight <= element.clientHeight + 40) continue;
+        const overflow = getComputedStyle(element).overflowY;
+        if (/(auto|scroll|overlay)/.test(overflow)) return element;
+      }
+    }
+    const fallback = document.scrollingElement;
+    return fallback && fallback.scrollHeight > fallback.clientHeight + 40 ? fallback : null;
+  }
+
+  // 结构识别的诊断计数。导出降级时由侧边栏打到控制台,不用再让用户翻 DOM。
+  function exportDebug() {
+    const count = (selector) => {
+      try {
+        return document.querySelectorAll(selector).length;
+      } catch {
+        return -1;
+      }
+    };
+    const sample = (selector, limit = 3) => {
+      try {
+        return Array.from(document.querySelectorAll(selector))
+          .slice(0, limit)
+          .map((element) => String(element.className || element.getAttribute('data-testid') || element.tagName).slice(0, 80));
+      } catch {
+        return [];
+      }
+    };
+    return {
+      provider: CHAT_NAME,
+      url: location.href,
+      authorRoles: count('[data-message-author-role]'),
+      userQueries: count('user-query'),
+      modelResponses: count('model-response'),
+      dsMessages: count('.ds-message'),
+      dsAssistant: count('.ds-assistant-message-main-content'),
+      markdown: count('.ds-markdown'),
+      articles: count('article'),
+      sample: sample('[data-message-author-role], .ds-message, user-query, model-response, article')
+    };
+  }
+
+  // ChatGPT(2026 DOM):轮次是 <user-query> / <model-response>;老结构退回气泡/属性。
   function collectChatGptTurns() {
-    return Array.from(document.querySelectorAll('[data-message-author-role]')).map((element) => ({
-      role: element.getAttribute('data-message-author-role') === 'user' ? 'user' : 'assistant',
-      blocks: blocksOf(element)
-    }));
+    let nodes = Array.from(document.querySelectorAll('user-query, model-response'));
+    if (!nodes.length) {
+      nodes = Array.from(
+        document.querySelectorAll('[data-user-message-bubble], [data-chatgpt-selection-message-id], [data-message-author-role]')
+      );
+    }
+
+    return nodes
+      .filter((element) => element.getClientRects().length)
+      .map((element) => {
+        const role = roleOfTurn(element);
+        const content =
+          role === 'assistant'
+            ? element.querySelector('[data-markdown-text-style="assistant-message"]') ||
+              element.querySelector('.markdown, .markdown-main-panel') ||
+              element
+            : element;
+        return {
+          id: element.getAttribute('data-message-id') || element.getAttribute('data-testid') || '',
+          role,
+          blocks: blocksOf(content)
+        };
+      })
+      .filter((turn) => turn.blocks.length);
+  }
+
+  function roleOfTurn(element) {
+    const tag = element.tagName.toLowerCase();
+    if (tag === 'user-query') return 'user';
+    if (tag === 'model-response') return 'assistant';
+    if (element.hasAttribute('data-user-message-bubble')) return 'user';
+    if (element.hasAttribute('data-chatgpt-selection-message-id')) return 'assistant';
+
+    const attribute = element.getAttribute('data-message-author-role');
+    if (attribute) return attribute === 'user' ? 'user' : 'assistant';
+
+    const inner = element.querySelector('[data-message-author-role]');
+    if (inner) return inner.getAttribute('data-message-author-role') === 'user' ? 'user' : 'assistant';
+
+    const heading = String(element.querySelector('h5, h6, h4')?.textContent || '').trim();
+    if (/you said|你说|用户/i.test(heading)) return 'user';
+    if (/chatgpt said|assistant|助手|deepseek/i.test(heading)) return 'assistant';
+
+    if (element.querySelector('[class*="user-turn"], [class*="user-message"], [data-testid*="user"]')) return 'user';
+    return 'assistant';
   }
 
   function collectDeepSeekTurns() {
+    // DeepSeek(2026 DOM):每条消息是 .ds-message;助手消息里再套
+    // .ds-assistant-message-main-content / .ds-think-content / .ds-markdown。
+    const messages = Array.from(document.querySelectorAll('.ds-message')).filter(
+      (element) => element.getClientRects().length
+    );
+    if (messages.length) {
+      return messages.map((element) => {
+        const assistantContent = element.querySelector(
+          '.ds-assistant-message-main-content, .ds-think-content'
+        );
+        const markdown =
+          element.querySelector('.ds-markdown') ||
+          element.querySelector('.ds-assistant-message-main-content') ||
+          element;
+        return {
+          id: element.getAttribute('data-message-id') || element.getAttribute('data-testid') || '',
+          role: assistantContent ? 'assistant' : 'user',
+          blocks: blocksOf(markdown)
+        };
+      });
+    }
+
     const marks = Array.from(document.querySelectorAll('.ds-markdown')).filter(
       (element) => element.getClientRects().length
     );

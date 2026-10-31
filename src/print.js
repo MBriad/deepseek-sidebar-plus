@@ -13,6 +13,10 @@ const metaEl = document.getElementById('doc-meta');
 const hintEl = document.getElementById('print-hint');
 const printButton = document.getElementById('btn-print');
 const closeButton = document.getElementById('btn-close');
+const filtersEl = document.getElementById('doc-filters');
+
+let payload = null;
+let filter = 'all';
 
 // 关闭按钮在**所有**状态下都要能用,包括失败页,所以放在模块级注册。
 closeButton.addEventListener('click', () => {
@@ -28,17 +32,18 @@ start().catch((error) => {
 });
 
 async function start() {
-  const payload = await loadPayload();
+  payload = await loadPayload();
   if (!payload) {
     showFailure('没有可打印的对话,请回到侧边栏重新点击「导出 PDF」。');
     return;
   }
 
-  render(payload);
+  render();
   const title = payload.title || '对话';
   // 文件名默认取会话标题;标题等于站点名时不再拼一遍。
   document.title = payload.provider && payload.provider !== title ? `${title} - ${payload.provider}` : title;
 
+  bindFilters();
   printButton.addEventListener('click', () => {
     try {
       window.print();
@@ -89,11 +94,35 @@ function showFailure(message) {
   metaEl.textContent = '';
   hintEl.textContent = message;
   printButton.disabled = true;
+  filtersEl.hidden = true;
 }
 
-function render(payload) {
-  const turns = Array.isArray(payload.turns) ? payload.turns : [];
+function bindFilters() {
+  for (const button of filtersEl.querySelectorAll('[data-filter]')) {
+    button.addEventListener('click', () => {
+      filter = button.dataset.filter || 'all';
+      for (const other of filtersEl.querySelectorAll('[data-filter]')) {
+        other.classList.toggle('active', other === button);
+      }
+      render();
+    });
+  }
+}
 
+function render() {
+  const turns = Array.isArray(payload.turns) ? payload.turns : [];
+  const counts = {
+    all: turns.length,
+    user: turns.filter((turn) => turn.role === 'user').length,
+    assistant: turns.filter((turn) => turn.role === 'assistant').length
+  };
+  for (const button of filtersEl.querySelectorAll('[data-filter]')) {
+    const key = button.dataset.filter || 'all';
+    button.textContent = `${filterLabel(key)} ${counts[key] ?? 0}`;
+    button.classList.toggle('active', key === filter);
+  }
+
+  docEl.textContent = '';
   titleEl.textContent = payload.title || '对话';
   metaEl.textContent = [payload.provider, formatTime(payload.exportedAt), `${turns.length} 条消息`]
     .filter(Boolean)
@@ -102,9 +131,16 @@ function render(payload) {
   if (payload.degraded || payload.truncated) {
     const notice = document.createElement('p');
     notice.className = 'notice';
-    notice.textContent = payload.degraded
-      ? '没能识别出对话结构,已退回整页文本导出;内容可能包含页面导航。'
-      : '对话过长,已截断到可打印范围。';
+    if (payload.degraded) {
+      const debug = payload.debug || {};
+      notice.textContent =
+        `没能识别出对话结构,已按整页文本导出;内容可能包含页面导航。` +
+        `诊断:[data-message-author-role]=${debug.authorRoles ?? '?'}, ` +
+        `.ds-message=${debug.dsMessages ?? '?'}, .ds-markdown=${debug.markdown ?? '?'}, ` +
+        `article=${debug.articles ?? '?'}。`;
+    } else {
+      notice.textContent = '对话过长,已截断到可打印范围。';
+    }
     docEl.appendChild(notice);
   }
 
@@ -118,7 +154,21 @@ function render(payload) {
   cover.append(heading, source);
   docEl.appendChild(cover);
 
-  for (const turn of turns) {
+  const visible = turns.filter((turn) => {
+    if (filter === 'all') return true;
+    // 降级导出的整页文本没有角色,不被筛选吞掉。
+    return turn.role === filter || turn.role === 'unknown';
+  });
+
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'notice';
+    empty.textContent = '没有符合筛选的消息。';
+    docEl.appendChild(empty);
+    return;
+  }
+
+  for (const turn of visible) {
     const section = document.createElement('section');
     section.className = `turn turn-${turn.role || 'unknown'}`;
     const label = document.createElement('div');
@@ -130,6 +180,12 @@ function render(payload) {
     }
     docEl.appendChild(section);
   }
+}
+
+function filterLabel(key) {
+  if (key === 'user') return '只看用户';
+  if (key === 'assistant') return '只看助手';
+  return '全部';
 }
 
 function roleLabel(role) {

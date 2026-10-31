@@ -790,8 +790,9 @@ async function exportConversationPdf() {
     }
   }
 
-  showToast('正在读取对话…', 'info', 2000);
-  const response = await sendToFrame('DS_EXPORT_PDF', {}, 25000);
+  showToast('正在读取对话…（长对话需要几秒）', 'info', 4000);
+  // 虚拟列表要边滚边收,给足时间。
+  const response = await sendToFrame('DS_EXPORT_PDF', {}, 45000);
   if (!response?.ok || !response.conversation) {
     showToast(response?.error || '读取对话失败', 'error', 4000);
     return;
@@ -804,6 +805,11 @@ async function exportConversationPdf() {
 
   try {
     await chrome.tabs.create({ url: chrome.runtime.getURL('src/print.html') });
+    if (exportPayload.degraded) {
+      console.warn('[DS+] PDF 导出降级:没能识别对话结构', exportPayload.debug);
+      showToast('已打开打印页（没能识别对话结构，已按整页文本导出；诊断信息见控制台）', 'info', 6000);
+      return;
+    }
     const note = exportPayload.truncated ? '（过长已截断）' : '';
     showToast(`已打开打印页：${exportPayload.turns.length} 条消息${note}`);
   } catch (error) {

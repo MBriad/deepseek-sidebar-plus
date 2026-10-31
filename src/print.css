@@ -57,6 +57,9 @@ body {
 
 .toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -80,6 +83,32 @@ body {
 .btn:disabled {
   opacity: .55;
   cursor: default;
+}
+
+.filters {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #cfd9e6;
+  border-radius: 999px;
+  background: #eef2f9;
+}
+
+.chip {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #3d4b5f;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip.active {
+  background: #fff;
+  color: #1c2430;
+  box-shadow: 0 1px 2px rgba(20, 32, 51, .12);
 }
 
 .hint {
