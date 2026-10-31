@@ -2,14 +2,13 @@
 
 在 Microsoft Edge 侧边栏里使用 **DeepSeek 或 ChatGPT**，并补上原版缺少的几件事：
 
-- **双聊天服务切换**：顶部“聊天服务”可在 DeepSeek 和 ChatGPT 之间切换并记住选择；页面读取、划词、提示词、PDF 和网页标签工具共用。ChatGPT 需要能访问 `chatgpt.com` 的网络。
+- **双聊天服务切换**：顶部“聊天服务”可在 DeepSeek 和 ChatGPT 之间切换并记住选择；页面读取、划词、提示词和 PDF 工具共用。ChatGPT 需要能访问 `chatgpt.com` 的网络。
 - **读取当前网页正文**：一键提取当前标签页的标题、链接和正文；预览后可以附加为 `.txt` 文档，或直接填入正文。**不会替你决定或填写提示词。**
 - **划词自动填入 / 直接输入 / 撤回**：高亮选中文字就自动填入当前聊天输入框，不需要右键；填入后会在高亮文字下方出现一个小输入窗，直接打字会同步到侧边栏输入框，不用先点输入框。按 `Enter` 完成并关闭小窗，`Ctrl+Z`（可自定义）或 `Esc` 撤回并恢复之前草稿；点击页面或侧边栏也会结束直接输入。
 - **PDF 支持**：读取 PDF 时只把文件附加到当前聊天，由对应服务解析；输入框不填提示词。在线 PDF 保持 Edge 原生阅读器，原有目录和“读本页”不受影响；需要跟随选区时，从设置或提示条用增强阅读器打开同一份 PDF，原生标签保留，两者可以同时存在。增强阅读器按原生 `#page=N` 打开当前页，划词时保存滚动位置；阅读器工具栏有“目录”按钮（书签或页码目录），支持选区跟随、直接输入和 Enter 发送。本地 PDF 的“读本页”仍可附加文件并自动打开增强阅读器（可在设置关闭）。
 - **@ 读取标签页**：在当前聊天输入框输入 `@`，当前页置顶，下面列出所有窗口的其他标签页；选择后把该页正文作为 `.txt` 文档附加，输入框保留你自己写的内容。
 - **引用对话**：在聊天回复里选中文字，点浮出的“引用”按钮（或右键“引用到输入框”），会以 `>` 引用格式插入输入框。
 - **提示词库**：保存当前输入，或直接粘贴文本创建；支持自定义 `/命令`、搜索、编辑、置顶、删除和 JSON 导入/导出。在聊天输入框输入 `/` 会显示命令列表和对应提示词预览。
-- **网页标签**：给当前网页加标签，按标签筛选或自然语言搜索已标记网页；标签可新建、改名、合并、删除。索引只保存在本机，不联网。
 
 > 非官方扩展，与 DeepSeek 官方无关。基于你已安装的 **Deepseek Chat Sidebar (Unofficial) v1.0** 重写增强。  
 > GitHub: https://github.com/lllhcbjj/deepseek-sidebar-plus · 隐私政策: https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html
@@ -109,7 +108,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 **PDF 没有目录按钮？**
 
 - 确认打开的是 **增强阅读器**，不是原生 PDF。
-- 增强阅读器标题栏应显示当前版本号（如 `v1.11.36`）。
+- 增强阅读器标题栏应显示当前版本号（如 `v1.12.0`）。
 - 点工具栏 **目录**；没有书签的 PDF 会显示页码目录。
 
 **Enter 不发送？**
@@ -165,7 +164,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 如果 PDF 的网址不带 `.pdf` 后缀，`page-tools.js` 检测到页面里的 PDF `<embed>` 后也会走同一套“下载并附加”流程。
 - **PDF 划词**：在 Edge 内置 PDF 阅读器里选中文字，扩展通过 PDF 阅读器的 `embed.postMessage({type:'getSelectedText'})` 接口读取当前选区，自动填入 DeepSeek；取消选区后同样自动撤回。这个接口只允许页面主世界调用，所以 `pdf-main.js` 会作为 web-accessible script 注入 PDF 页面。不同 Edge 版本的 PDF 阅读器内部接口可能变化；本版在 Edge 154 验证通过。
 - **本地 `file://` PDF 的自动方案**：Edge 原标签页在 `file://` 下是不透明源（opaque origin），`getSelectedText` 回复会被浏览器丢弃，所以直接在原 PDF 标签页里选中不会自动。侧边栏检测到本地 PDF 时会显示提示条，点 **打开增强阅读器** 即可在一个新标签页里用扩展内的 Edge 原生 PDF 阅读器打开同一份 PDF；阅读器页面是 `chrome-extension://` 源，选区 API 可用，所以**选中自动填入、取消选中自动撤回**都正常。也可以从设置里的 **用增强阅读器打开当前 PDF** 进入。
-- 如果只想快速取一段文字，仍可选中后 `Ctrl+C`，点侧边栏工具栏的 **剪贴板** 按钮填入；或者用“读本页”把 PDF 附件发给 DeepSeek 解析。
+- 如果只想快速取一段文字，仍可选中后 `Ctrl+C` 复制，再粘贴到聊天输入框；或者用“读本页”把 PDF 附件发给 DeepSeek 解析。
 - **本地 PDF 的读本页（合并流程）**：先在扩展 **详细信息** 里打开 **允许访问文件 URL**，然后点“读本页”：扩展会附加本地 PDF，并默认自动打开增强阅读器；阅读器里选中文字会继续自动填入，取消选中自动撤回。设置里可以关闭“本地 PDF 自动打开阅读器”，关闭后只附加文件，再从提示条手动打开阅读器。失败时提示条会给出“打开扩展详情”的入口。
 
 ![本地 PDF 增强阅读器](docs/reader.png)
@@ -209,20 +208,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - **导入 / 导出 JSON**：参考 Voyager 的 Saved Library 数据模型（`id`、`name`、`text`、`tags`、`command`、`pinnedAt`、`createdAt`、`updatedAt`），方便备份和迁移。
 - 提示词保存在 `chrome.storage.local` 的 `promptLibrary` 键下。
 
-### 6. 网页标签（本地语义搜索）
-
-- 点工具栏的 **标签图标**打开“网页标签”。
-- 给当前页输入标签，按 `Enter` 或点“加标签”即保存；支持逗号分隔多个标签，例如 `设计, 待读`。
-- 当前页已有标签会显示为可移除的标签；下方会推荐常用标签，点一下即可加上。
-- 自动保存网页标题、URL 和**正文摘要**（约 1200 字），只存在本机 `chrome.storage.local`，不上传。
-- **本地自动分类**：默认在保存标签时根据标题、URL 和摘要识别 **技术 / 设计 / 研究 / 学习 / 文档 / 新闻 / 工具 / 视频 / 阅读 / 购物 / 生活**，自动补一个分类标签；取消“保存时自动分类”即可关闭。
-- 也可以点“立即分类”手动补分类；分类只是普通标签，可以改名、删除或筛选。所有规则都在本地运行，不联网、不调用模型。
-- 标签栏点击即筛选；点“管理”可以新建、改名、删除标签。改名会同步到所有网页，改成已有标签会自动合并。
-- 搜索框支持**自然语言**，例如“找之前看过的关于 AI 设计的网页”；使用本地同义词和分词打分，不调用云端模型，也不联网。
-- 搜索结果可以“打开”原网页或“移除”记录；最多保存 500 个网页。
-- 这是轻量的网页索引，不保存完整正文，也不做后台抓取；只在你点击“加标签”时读取当前页摘要。
-
-### 7. @ 读取标签页（含当前页）
+### 6. @ 读取标签页（含当前页）
 
 - 在 DeepSeek 输入框输入 `@`，会列出**所有窗口**的其他标签页；当前页（侧边栏所在页）会作为第一项 **“当前页”** 单独置顶，不会在普通列表里重复。
 - **直接读取当前页**：输入 `@` 后直接按 `Enter`（当前页默认第一项），就会把当前页正文作为 `.txt` 文档附加到 DeepSeek，不经过预览、不改输入框。
@@ -232,7 +218,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 如果选中的是 PDF 标签页，会附加 PDF 文件；本地 `file://` PDF 需要在扩展详细信息里允许访问文件 URL。
 - 标签页列表只读取标题/URL；正文只在你选中某个标签页后才读取。
 
-### 8. 设置
+### 7. 设置
 
 - 划词自动填入开关（工具栏上的“划词”按钮也可以快速开关）。
 - 填入方式：智能追加 / 覆盖 / 追加。
@@ -244,18 +230,17 @@ Settings → Appearance → Show mini menu when selecting text → Off
 - 撤销填入快捷键：默认 `Ctrl+Z`，可点击设置里的按钮录制新组合（需带 Ctrl/Alt/Shift）。
 - PDF 跟随选区：默认开启，用本地 PDF.js 渲染；关闭则使用 Edge 原生 PDF。
 - 小窗 Enter 直接发送：默认开启；关闭后 Enter 只完成并关闭小窗。
-- 工具栏 **剪贴板** 按钮：读取剪贴板并填入，适合本地 PDF 或无法划词的页面。
 - 填入当前选中文字、在标签页打开当前聊天、用增强阅读器打开当前 PDF、在标签页打开侧边栏（移动/分屏）、重新加载聊天页面、恢复默认设置。
 
-### 9. 切换 DeepSeek / ChatGPT
+### 8. 切换 DeepSeek / ChatGPT
 
 - 顶部“聊天服务”栏点 **DeepSeek** 或 **ChatGPT** 即可切换；选择会保存在本地，下次打开侧边栏继续使用。
-- 切换会重新加载对应网页；页面读取、划词填入、引用、`/` 提示词命令、`@` 标签页、PDF 和网页标签都作用于当前选择的服务。
+- 切换会重新加载对应网页；页面读取、划词填入、引用、`/` 提示词命令、`@` 标签页和 PDF 都作用于当前选择的服务。
 - 两个服务各自需要登录；ChatGPT 需要浏览器能访问 `chatgpt.com`（网络受限时请先配置代理）。
 - 划词填入后不用点侧边栏输入框：网页会启用一个隐藏输入层，直接在网页上打字，字符同步到当前聊天输入框。
 - 默认 `Ctrl+Z` 或 `Esc` 撤回并恢复草稿；快捷键可在设置里录制修改。
 - 点击页面或侧边栏结束直接输入；之后仍可正常点输入框继续编辑。
-- 页面读取和标签管理仍是本地功能；聊天内容只在填入/发送/附加时进入当前选择的服务。
+- 页面读取仍是本地功能；聊天内容只在填入/发送/附加时进入当前选择的服务。
 
 
 ## 安装（Edge）
@@ -268,7 +253,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.11.36-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.12.0-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -283,15 +268,15 @@ Settings → Appearance → Show mini menu when selecting text → Off
 
 ## Edge 商店提交材料
 
-**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.11.36 新增网页标签和 DeepSeek / ChatGPT 切换，暂不覆盖审核中的商店包，等审核结束后再提交。
+**v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.12.0 删除网页标签、收藏整理和工具栏剪贴板按钮，暂不覆盖审核中的商店包，等审核结束后再提交。
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
 - 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
 - 隐私政策：[docs/privacy.html](docs/privacy.html)、[PRIVACY.md](PRIVACY.md)
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
-- 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)
+- 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)（六张都是 v1.11 工具栏；`store-05-page-tags.png` 还拍了 v1.12.0 已删除的网页标签，提交前重拍或裁掉工具栏）
 - 当前审核包：`deepseek-sidebar-plus-v1.9.3-store.zip`
-- v1.11.36 商店包：`deepseek-sidebar-plus-v1.11.36-store.zip`（审核结束后再提交）
+- v1.12.0 商店包：`deepseek-sidebar-plus-v1.12.0-store.zip`（审核结束后再提交）
 
 **商店提交前还需要：**
 
@@ -324,7 +309,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 | `scripting` | 对安装扩展前就已打开的页面，按需注入提取脚本。 |
 | `storage` | 保存设置和待填入的划词。 |
 | `contextMenus` | 右键菜单。 |
-| `clipboardRead` | 工具栏“从剪贴板填入”，用于 Edge 无法读取选区的本地 PDF。 |
+| `clipboardRead` | 提示词库“粘贴创建”读取剪贴板文本；不会在后台监听。 |
 | `clipboardWrite` | 复制网页正文。 |
 | `declarativeNetRequestWithHostAccess` | 移除三个嵌入聊天域（`chat.deepseek.com`、`chatgpt.com`、`chat.openai.com`）的 `X-Frame-Options` / CSP（仅 `sub_frame`），让它们能嵌入侧边栏（与原版一致）。 |
 | `web_accessible_resources`（`pdf-main.js`） | 在 PDF 页面主世界读取 Edge 阅读器当前选区；只监听 PDF 选区，不读取页面其他内容。 |
@@ -456,6 +441,7 @@ deepseek-sidebar-plus/
 
 ## 版本
 
+- **v1.12.0**：删除三个多余功能——网页标签（含本地语义搜索与自动分类）、收藏整理（书签移动）和工具栏“从剪贴板填入”按钮；`bookmarks` 权限随之移除。侧边栏只剩读本页、划词、提示词库、PDF 与设置。
 - **v1.11.36**：直接输入小窗支持按光标位置 Backspace/Delete 删字（网页 Shadow DOM 与 PDF 浮窗）；修复 PDF.js 6 文本层缺少 `--total-scale-factor` 导致高亮只到行中间；增强阅读器保留原生选区高亮并跟随滚动；原生 Edge PDF 不再启动浮窗；大 PDF 惰性渲染；新选区替换上一段自动填入；网页划词 40ms 重试；PDF 多行划词不中途打断；网页直接输入有页面级键盘兜底；目录并行解析；DeepSeek 与 ChatGPT 共用浮窗和发送。
 - **v1.9.3**：更换为原创图标（聊天气泡 + 侧边栏 + 命令符号），移除原版狐狸图标；图标和商店宣传图纳入 MIT，Logo/宣传图已重新生成。
 - **v1.9.2**：`@` 增加置顶的“当前页”项（`@` 后直接 Enter 即可把当前页作为文档附加），标签页列表覆盖所有窗口并取消条数截断；本地 PDF“读本页”附加后默认自动打开增强阅读器，可在设置关闭。

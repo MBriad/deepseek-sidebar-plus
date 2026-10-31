@@ -3,7 +3,7 @@
 This is the submission worksheet for **AI Sidebar Enhanced (Unofficial)**.  
 It is not a guarantee of approval; it prepares the package and the answers reviewers will look for.
 
-> **v1.9.3 is the version currently in Microsoft certification.** v1.11.0 adds webpage tags and a DeepSeek / ChatGPT provider switch; it is a local/GitHub update only. Do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.11.0 is ready for resubmission.
+> **v1.9.3 is the version currently in Microsoft certification.** v1.12.0 removes the webpage tag feature, the bookmark organizer (and the `bookmarks` permission), and the toolbar paste button; it is a local/GitHub update only. Do not replace the v1.9.3 store package while the review is in progress. Update this worksheet when v1.12.0 is ready for resubmission.
 
 > **改名(D-1)从下一次提交起生效。** 显示名改为 `AI Sidebar Enhanced (Unofficial)` / `AI 侧边栏增强版（非官方）`;v1.9.3 在审包的商店元数据仍是旧名 `DeepSeek …`,不要在审核期间改它。
 
@@ -45,12 +45,12 @@ AI 侧边栏增强版（非官方）是一个独立的第三方 Edge 扩展，�
 - **提示词库**：保存当前输入，或从剪贴板粘贴创建提示词；支持自定义 `/命令`、搜索、编辑、置顶、删除和 JSON 导入/导出。在 DeepSeek 输入框输入 `/` 会显示命令列表和对应提示词预览，Enter 插入。提示词保存在浏览器本地存储中。
 - **@ 读取标签页（含当前页）**：在 DeepSeek 输入框输入 `@`，当前页作为第一项置顶，下面列出所有窗口的其他标签页；`@` 后直接 Enter 会把当前页正文作为 `.txt` 文档附加，选择其他标签页也同样直接附加，输入框内容保持不变。
 - **PDF 支持**：识别 PDF 并只把文件附加给 DeepSeek，不自动填写提示词；本地 PDF 的“读本页”会附加文件并默认自动打开增强阅读器，恢复划词和引用（可在设置关闭自动打开）。
-- **其他工具**：从剪贴板填入、复制正文、在标签页打开 DeepSeek、重新加载侧边栏。
+- **其他工具**：复制正文、在标签页打开 DeepSeek、重新加载侧边栏。
 
 隐私与数据：
 
 - 扩展没有开发者服务器，不包含广告、分析、遥测或追踪 SDK，不出售数据。
-- 只有在用户主动点击“读本页”、划词、填入、引用、剪贴板或 PDF 操作时才访问相应内容。
+- 只有在用户主动点击“读本页”、划词、填入、引用或 PDF 操作时才访问相应内容。
 - 网页正文、选中的文字、DeepSeek 输入内容和本地 PDF 只在用户主动使用时处理；内容在填入、发送或附加时进入 DeepSeek，受 DeepSeek 隐私政策约束。
 - 设置、待填入划词和提示词库保存在浏览器本地存储，用户可删除或卸载清除。
 
@@ -76,12 +76,12 @@ Features:
 - **Prompt library**: save the current input or paste text to create a prompt; supports custom `/commands`, search, edit, pin, delete, and JSON import/export. Type `/` in the DeepSeek input to see matching commands with a prompt preview; press Enter to insert. Prompts are stored locally.
 - **@ tabs (including current page)**: type `@` in the DeepSeek input to show the current page as the first item, followed by other open tabs across all windows. Pressing Enter immediately after `@` attaches the current page as a `.txt` document; selecting another tab attaches that tab's content. The input text is unchanged.
 - **PDF support**: detect PDFs and attach them without injecting a prompt; local PDF “Read this page” attaches the file and by default opens the enhanced reader for selection and quoting (can be disabled in settings).
-- **Extra tools**: paste from clipboard, copy page text, open DeepSeek in a tab, and reload the sidebar.
+- **Extra tools**: copy page text, open DeepSeek in a tab, and reload the sidebar.
 
 Privacy:
 
 - No developer server, ads, analytics, telemetry, or tracking SDK. Data is not sold.
-- Data is accessed only when you click Read this page, select text, fill, quote, use the clipboard button, or open/attach a PDF.
+- Data is accessed only when you click Read this page, select text, fill, quote, paste-create a prompt, or open/attach a PDF.
 - Page text, selections, DeepSeek input text, and local PDFs are processed only for the feature you invoke. Content enters DeepSeek when you fill, send, or attach it and is governed by DeepSeek's privacy policy.
 - Settings, pending selections, and prompts are stored in browser local storage and can be deleted or removed by uninstalling.
 
@@ -112,10 +112,9 @@ Paste these into **Privacy → Permission justification**:
 | `scripting` | Inject page extraction, selection capture, and PDF bridge scripts only when the user invokes those features, including on tabs that were already open before installation. |
 | `storage` | Persist user settings, a temporary pending selection, and the user's local prompt library. |
 | `contextMenus` | Provide the optional “send selection”, “read page”, and “quote to input” context-menu actions. |
-| `clipboardRead` | Read clipboard text only when the user clicks the “Paste from clipboard” toolbar button. No background clipboard monitoring. |
+| `clipboardRead` | Read clipboard text only when the user clicks “Paste-create” in the prompt library. No background clipboard monitoring. |
 | `clipboardWrite` | Copy page text only when the user clicks the “Copy” button in the page preview. |
 | `declarativeNetRequestWithHostAccess` | Apply header rules only to the three chat services the extension embeds (`chat.deepseek.com`, `chatgpt.com`, `chat.openai.com`), and only to `sub_frame` requests, removing `X-Frame-Options` / CSP so they can render inside the side panel. No other domains are affected. |
-| `bookmarks` | Read the bookmark tree and move the bookmarks the user ticks into the folder they pick, in the side panel's “收藏整理” (bookmark organizer). No bookmark is created, deleted, or reordered automatically; nothing leaves the device. No background reading of bookmarks. |
 | `<all_urls>` host permission | Capture a user's text selection and extract the current page's body only when the user has enabled selection autofill or clicked “Read this page”. No automatic background collection or upload. |
 | `web_accessible_resources` (`pdf-main.js`) | Expose the PDF selection bridge script to PDF pages so the extension can read the Edge PDF viewer's selected text. |
 
@@ -200,13 +199,13 @@ Required / recommended:
 | Small promotional tile | 440×280, optional | `docs/store/small-promo-440x280.png` |
 | Large promotional tile | 1400×560, optional | `docs/store/large-promo-1400x560.png` |
 
-Ready screenshots (actual UI, 1280×800, demo article/prompt/PDF/tagged-page content; no chat account required). The v1.9.3 upload used the first four; v1.11.0 adds the fifth and sixth:
+Ready screenshots (actual UI, 1280×800, demo article/prompt/PDF content; no chat account required). The v1.9.3 upload used the first four; v1.11.0 added the sixth. **These were captured before v1.12.0, so all six show the old toolbar (with the page-tag, bookmark and paste buttons), and `store-05` shows the removed page-tags panel. Re-shoot them, or crop the toolbar, before resubmitting:**
 
 1. `store-01-page.png` — page preview with “附加文档 / 填入正文 / 复制”
 2. `store-02-prompts.png` — prompt library with paste-create, command chips, tags
 3. `store-03-pdf.png` — local PDF enhanced reader with selection hint
 4. `store-04-settings.png` — settings including “本地 PDF 自动打开阅读器”
-5. `store-05-page-tags.png` — webpage tags, tag filters, and local semantic search (v1.11.0)
+5. `store-05-page-tags.png` — **stale as of v1.12.0** (webpage tags removed); drop it or re-shoot the remaining toolbar
 6. `store-06-chatgpt.png` — DeepSeek / ChatGPT switch with prompt commands in ChatGPT (v1.11.0)
 
 Capture at 1280×800 (browser window) or 640×480; keep text readable and do not stretch. If you only have a narrow side panel capture, place it on a clean 1280×800 canvas without fake chat text.
