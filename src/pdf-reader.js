@@ -439,12 +439,12 @@
       if (!response.ok) throw new Error(`无法下载 PDF（HTTP ${response.status}）。`);
 
       const length = Number(response.headers.get('content-length') || 0);
-      if (length > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)},阅读器可能因此无响应。`);
+      if (length > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)},已拒绝打开(再大就会占满内存)。`);
       if (length > SLOW_NOTICE_BYTES) setOverlayText(`正在读取 PDF（${formatSize(length)}）…`);
 
       const blob = await response.blob();
       if (!blob.size) throw new Error('PDF 文件为空。');
-      if (blob.size > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)},阅读器可能因此无响应。`);
+      if (blob.size > MAX_PDF_BYTES) throw new Error(`PDF 超过 ${formatSize(MAX_PDF_BYTES)},已拒绝打开(再大就会占满内存)。`);
       // 有些服务器不给 content-length(分块传输),这时按下载完的真实体积再提示一次。
       if (blob.size > SLOW_NOTICE_BYTES) setOverlayText(`正在解析 PDF（${formatSize(blob.size)}）…`);
 
