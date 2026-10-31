@@ -21,7 +21,6 @@ const CHAT_PROVIDERS = {
     url: 'http://127.0.0.1:3080/',
     origin: 'http://127.0.0.1:3080'
   },
-  }
 };
 const PROVIDER_KEY = 'chatProvider';
 let chatProvider = 'deepseek';
