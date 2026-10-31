@@ -1219,7 +1219,14 @@
     const subtitles = data?.data?.subtitle?.subtitles || [];
     if (!subtitles.length) return null;
 
-    const track = subtitles.find((item) => /zh/i.test(item.lan || '') && !/^ai/i.test(item.lan || '')) || subtitles.find((item) => /^ai-zh/i.test(item.lan || '')) || subtitles[0];
+    const lan = (item) => String(item.lan || '').toLowerCase();
+    const isAi = (item) => lan(item).startsWith('ai-');
+    const isZh = (item) => lan(item).includes('zh');
+    const track =
+      subtitles.find((item) => isZh(item) && !isAi(item)) ||
+      subtitles.find((item) => !isAi(item)) ||
+      subtitles.find((item) => isZh(item)) ||
+      subtitles[0];
     const url = track?.subtitle_url ? `https:${track.subtitle_url}` : '';
     if (!url) return null;
 
