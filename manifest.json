@@ -43,6 +43,17 @@
   "content_scripts": [
     {
       "matches": [
+        "*://*.bilibili.com/video/*"
+      ],
+      "js": [
+        "src/content/bili-capture.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": [
         "*://chat.deepseek.com/*",
         "*://chatgpt.com/*",
         "*://*.chatgpt.com/*",
