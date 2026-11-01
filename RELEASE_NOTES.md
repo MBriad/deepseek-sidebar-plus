@@ -1,6 +1,11 @@
-# v1.13.1 — DeepSeek Sidebar Enhanced (Unofficial)
+# v1.13.2 — DeepSeek Sidebar Enhanced (Unofficial)
 
-Edge 侧边栏增强版 v1.13.1（2026-10-31）。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
+Edge 侧边栏增强版 v1.13.2（2026-10-31）。非官方扩展，与 DeepSeek、OpenAI/ChatGPT 官方均无关联。
+
+## 本版变更
+
+- 移除 DSH 集成（内嵌与写入输入框在浏览器里不可行，见 PR #29）；1.13.1 的 DSH 标签不再存在。
+- 其余能力与 1.13.1 相同：导出 PDF、YouTube / B 站 视频字幕（@页面）、提示词库、读本页、划词等。
 
 ## 新功能：导出当前对话为 PDF
 
@@ -28,9 +33,9 @@ v1.12.0 删掉了网页标签、收藏整理和工具栏“从剪贴板填入”
 
 ## 下载
 
-- `deepseek-sidebar-plus-v1.13.1-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
-- `deepseek-sidebar-plus-v1.13.1.zip` — 完整开发包；含文档、商店素材和提交工作表。
-- `deepseek-sidebar-plus-v1.13.1-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
+- `deepseek-sidebar-plus-v1.13.2-portable.zip` — 推荐分享给他人；含 `INSTALL.md`、隐私政策和扩展文件。
+- `deepseek-sidebar-plus-v1.13.2.zip` — 完整开发包；含文档、商店素材和提交工作表。
+- `deepseek-sidebar-plus-v1.13.2-store.zip` — 最小 Edge Add-ons 包；审核结束后再提交（v1.9.3 仍在审核中）。
 
 ## 安装
 
