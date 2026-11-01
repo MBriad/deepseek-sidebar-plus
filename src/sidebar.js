@@ -1599,8 +1599,18 @@ function toggleDshView(force) {
   dshOpen = typeof force === 'boolean' ? force : !dshOpen;
   view.classList.toggle('hidden', !dshOpen);
   frame.classList.toggle('hidden', dshOpen);
+
+  // 选中态只能有一个：dsh 打开时，DeepSeek / ChatGPT 都不再是当前服务。
   const pill = $('#btn-dsh');
-  if (pill) pill.dataset.open = String(dshOpen);
+  if (pill) {
+    pill.classList.toggle('active', dshOpen);
+    pill.dataset.open = String(dshOpen);
+  }
+  $$('.provider-tab').forEach((tab) => {
+    const active = !dshOpen && tab.dataset.provider === chatProvider;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
 
   if (dshOpen) {
     loadBridgeHistory();

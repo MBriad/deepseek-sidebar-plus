@@ -637,6 +637,13 @@ async function testBridgeSend() {
     { message: 'code fence renders as a code block' }
   );
 
+  const selection = await sidebar.evaluate(() => ({
+    dsh: document.getElementById('btn-dsh')?.classList.contains('active'),
+    providers: document.querySelectorAll('.provider-tab.active').length
+  }));
+  assert.equal(selection.dsh, true, 'dsh pill shows the selected state');
+  assert.equal(selection.providers, 0, 'no provider tab stays selected while dsh is open');
+
   // 打开后应该能像聊天一样继续输入
   await sidebar.fill('#dsh-input', '接着说');
   await sidebar.press('#dsh-input', 'Enter');
