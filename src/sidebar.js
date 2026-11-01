@@ -14,7 +14,13 @@ const CHAT_PROVIDERS = {
     name: 'ChatGPT',
     url: 'https://chatgpt.com/',
     origin: 'https://chatgpt.com'
-  }
+  },
+  dsh: {
+    id: 'dsh',
+    name: 'DSH',
+    url: 'http://127.0.0.1:3080/',
+    origin: 'http://127.0.0.1:3080'
+  },
 };
 const PROVIDER_KEY = 'chatProvider';
 let chatProvider = 'deepseek';
@@ -161,6 +167,22 @@ function applyChatProvider(id, { persist = true, reload = true } = {}) {
 
   if (persist) {
     chrome.storage.local.set({ [PROVIDER_KEY]: provider.id }).catch(() => {});
+  }
+  // DSH 是本地服务:先探测端口,通才加载；不通就显示扩展自带的引导页(dsh.html)。
+  if (provider.id === 'dsh') {
+    if (reload && changed) {
+      setConnection('connecting');
+      fetch(provider.url, { mode: 'no-cors', cache: 'no-store' })
+        .then(() => {
+          frame.src = provider.url;
+          setConnection('ready');
+        })
+        .catch(() => {
+          frame.src = chrome.runtime.getURL('src/dsh.html');
+          setConnection('offline');
+        });
+    }
+    return;
   }
   if (!reload || !changed) return;
 
@@ -2299,7 +2321,7 @@ function bindUI() {
         ? '#page-sheet'
         : target === 'prompt'
           ? '#prompt-sheet'
-          : target === 'export'
+            : target === 'export'
             ? '#export-sheet'
             : '#settings-sheet';
       closeSheet(selector);

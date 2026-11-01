@@ -1393,3 +1393,16 @@ input:focus-visible + .slider {
   opacity: 0;
   pointer-events: none;
 }
+
+/* DSH（实验）内嵌面板 */
+.dsh-card {
+  max-height: 92%;
+}
+
+#dsh-frame {
+  width: 100%;
+  height: 70vh;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+}
