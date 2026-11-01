@@ -1578,8 +1578,28 @@ function toggleDshView(force) {
   if (pill) pill.dataset.open = String(dshOpen);
 
   if (dshOpen) {
+    loadBridgeHistory();
     renderDshLog();
     $('#dsh-input')?.focus();
+  }
+}
+
+// The bridge keeps the session's recent turns; fill an empty log from it so a
+// fresh sidebar still shows the conversation.
+async function loadBridgeHistory() {
+  if (dshMessages.length > 0 || !settings.bridgeToken) return;
+  try {
+    const response = await fetch(`${bridgeBaseUrl()}/bridge/history?token=${encodeURIComponent(settings.bridgeToken)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!data?.ok || !Array.isArray(data.messages) || data.messages.length === 0) return;
+    if (dshMessages.length > 0) return;
+    dshMessages = data.messages.map((item) => ({
+      role: item.role === 'user' ? 'user' : 'assistant',
+      text: String(item.text || '')
+    }));
+    renderDshLog();
+  } catch {
+    // 历史拿不到就当空列表，不影响发送。
   }
 }
 

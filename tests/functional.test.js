@@ -554,6 +554,17 @@ async function testPdfRemembersPosition() {
 async function testBridgeSend() {
   const received = [];
   const bridge = http.createServer((request, response) => {
+    if (request.url.startsWith('/bridge/history')) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({
+        ok: true,
+        messages: [
+          { role: 'user', text: '更早的一页' },
+          { role: 'assistant', text: '更早的回答' }
+        ]
+      }));
+      return;
+    }
     if (request.url.startsWith('/bridge/stream')) {
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.write('event: hello\ndata: {"sessionId":"sidebar-inbox"}\n\n');
@@ -631,10 +642,19 @@ async function testBridgeSend() {
     { message: 'typed message appears in the DSH log' }
   );
 
+  // 重新打开侧边栏时，空列表应该由 bridge 的历史填上。
+  await sidebar.close();
+  const reopened = await openSidebar();
+  await reopened.click('#btn-dsh');
+  await waitFor(
+    () => reopened.evaluate(() => document.getElementById('dsh-log')?.textContent.includes('更早的回答')),
+    { message: 'history fills a fresh sidebar' }
+  );
+  await reopened.close();
+
   bridge.closeAllConnections?.();
   await new Promise((resolve) => bridge.close(resolve));
   await article.close();
-  await sidebar.close();
   console.log('PASS @ page sends to DSH and streams the reply back');
 }
 
