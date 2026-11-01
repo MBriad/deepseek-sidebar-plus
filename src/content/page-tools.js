@@ -1246,11 +1246,25 @@
       // 点不到就退回接口。
     }
     const state = window.__INITIAL_STATE__ || readInlineState(['__INITIAL_STATE__', 'window.__INITIAL_STATE__']) || {};
-    const hasState = Boolean(window.__INITIAL_STATE__ || Object.keys(state).length);
     const video = state.videoData || state.videoInfo || {};
     const bvid = video.bvid || (/(BV[\w]+)/.exec(location.href) || [])[1] || '';
-    const cid = video.cid || state.cid || 0;
-    if (!bvid || !cid) return null;
+    let cid = video.cid || state.cid || 0;
+    if (!bvid) return null;
+    // 新版页面不一定挂 __INITIAL_STATE__；没有 cid 时按 bvid 走 view 接口补。
+    if (!cid) {
+      try {
+        const info = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`, {
+          credentials: 'include'
+        });
+        if (info.ok) {
+          const payload = await info.json();
+          cid = Number(payload?.data?.cid) || Number(payload?.data?.pages?.[0]?.cid) || 0;
+        }
+      } catch {
+        // 补不到就按失败处理，退回整页文本。
+      }
+    }
+    if (!cid) return null;
 
     const response = await fetch(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`, {
       credentials: 'include'
