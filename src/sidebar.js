@@ -1468,7 +1468,7 @@ function bridgeErrorText(status, data) {
   if (status === 401) return 'DSH 拒绝了令牌，检查设置里的 DSH 令牌与插件 config.token 是否一致。';
   if (status === 403) return 'DSH 拒绝了这次请求（来源或主机不被允许）。';
   if (status === 404) return 'DSH 上没有这个接口，插件可能没装或没启动。';
-  if (status === 413) return '页面正文超过 256 KB 上限。';
+  if (status === 413) return '页面正文超过 4 MB 上限。';
   return data?.error || `请求失败（HTTP ${status}）。`;
 }
 
@@ -1521,7 +1521,13 @@ function openBridgeSheet(page, requestId) {
   bridgeAnswer = '';
 
   const meta = $('#bridge-meta');
-  if (meta) meta.textContent = [page.title, page.url].filter(Boolean).join('\n');
+  if (meta) {
+    const lines = [page.title, page.url].filter(Boolean);
+    if (page.mode === 'transcript') {
+      lines.push(`已抓到字幕 · ${String(page.charCount || page.text?.length || 0)} 字`);
+    }
+    meta.textContent = lines.join('\n');
+  }
 
   const answer = $('#bridge-answer');
   if (answer) {
@@ -1556,6 +1562,17 @@ function openBridgeSheet(page, requestId) {
     try { payload = JSON.parse(event.data); } catch {}
     if (payload.requestId && requestId && payload.requestId !== requestId) return;
     if (answer) answer.dataset.state = 'done';
+    closeBridgeStream();
+  });
+
+  stream.addEventListener('failed', (event) => {
+    let payload = {};
+    try { payload = JSON.parse(event.data); } catch {}
+    if (payload.requestId && requestId && payload.requestId !== requestId) return;
+    if (answer) {
+      answer.dataset.state = 'error';
+      answer.textContent = `DSH 报错：${payload.message || '未知错误'}`;
+    }
     closeBridgeStream();
   });
 
