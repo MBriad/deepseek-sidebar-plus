@@ -1440,7 +1440,7 @@ async function handleMentionTab(tabId) {
     }
     if (!response?.ok) throw new Error(response?.error || '读取标签页失败。');
 
-    if (settings.bridgeEnabled && settings.bridgeToken) {
+    if ((settings.bridgeEnabled || dshOpen) && settings.bridgeToken) {
       await sendToBridge(response.page);
       return;
     }
@@ -1545,6 +1545,30 @@ function setBridgeState(state) {
 let dshMessages = [];
 let dshOpen = false;
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
+}
+
+// Deliberately tiny: fenced code, inline code and bold are enough for reading
+// agent replies, and everything is escaped before any markup is added.
+function renderMarkdown(text) {
+  const parts = escapeHtml(text).split('```');
+  let html = '';
+  parts.forEach((part, index) => {
+    if (index % 2 === 1) {
+      const body = part.replace(/^[a-z0-9+#.-]*\r?\n/i, '');
+      html += `<pre class="dsh-code"><code>${body.replace(/\n$/, '')}</code></pre>`;
+      return;
+    }
+    html += part
+      .replace(/`([^`\n]+)`/g, '<code class="dsh-inline">$1</code>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  });
+  return html;
+}
+
 function renderDshLog() {
   const log = $('#dsh-log');
   if (!log) return;
@@ -1560,7 +1584,8 @@ function renderDshLog() {
   for (const row of rows) {
     const item = document.createElement('div');
     item.className = `dsh-msg dsh-${row.role}`;
-    item.textContent = row.text;
+    if (row.role === 'assistant') item.innerHTML = renderMarkdown(row.text);
+    else item.textContent = row.text;
     log.appendChild(item);
   }
   log.scrollTop = log.scrollHeight;
@@ -1581,6 +1606,49 @@ function toggleDshView(force) {
     loadBridgeHistory();
     renderDshLog();
     $('#dsh-input')?.focus();
+  } else {
+    $('#dsh-tabs')?.classList.add('hidden');
+  }
+}
+
+// 在 DSH 视图里挑一个标签页发过去；读取/提取复用 @ 选页那条路径。
+async function toggleDshTabs() {
+  const box = $('#dsh-tabs');
+  if (!box) return;
+
+  if (!box.classList.contains('hidden')) {
+    box.classList.add('hidden');
+    return;
+  }
+
+  box.classList.remove('hidden');
+  box.textContent = '正在读取标签页…';
+
+  try {
+    // listOpenTabs() deliberately drops the active tab (the @ palette shows it
+    // separately); here the current page is a perfectly good target.
+    const tabs = (await chrome.tabs.query({}))
+      .filter((tab) => tab?.id && /^(https?|file):/i.test(tab.url || ''))
+      .sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
+    box.textContent = '';
+    if (!tabs.length) {
+      box.textContent = '没有可读取的标签页。';
+      return;
+    }
+    for (const tab of tabs.slice(0, 40)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dsh-tab';
+      button.title = tab.url || '';
+      button.textContent = tab.title || tab.url || '(无标题)';
+      button.addEventListener('click', () => {
+        box.classList.add('hidden');
+        handleMentionTab(tab.id);
+      });
+      box.appendChild(button);
+    }
+  } catch (error) {
+    box.textContent = `读取标签页失败：${error.message}`;
   }
 }
 
@@ -2502,6 +2570,7 @@ function bindUI() {
   });
 
   $('#dsh-form').addEventListener('submit', submitDshMessage);
+  $('#dsh-page').addEventListener('click', toggleDshTabs);
   $('#dsh-input').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();

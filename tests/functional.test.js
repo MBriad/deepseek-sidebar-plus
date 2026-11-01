@@ -568,7 +568,7 @@ async function testBridgeSend() {
     if (request.url.startsWith('/bridge/stream')) {
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.write('event: hello\ndata: {"sessionId":"sidebar-inbox"}\n\n');
-      response.write('event: delta\ndata: {"text":"DSH 回答第一段"}\n\n');
+      response.write('event: delta\ndata: {"text":"DSH 回答第一段\\n```js\\nconsole.log(1)\\n```"}\n\n');
       response.write('event: done\ndata: {}\n\n');
       return;
     }
@@ -632,6 +632,11 @@ async function testBridgeSend() {
     { message: 'opening the pill shows the streamed reply' }
   );
 
+  await waitFor(
+    () => sidebar.evaluate(() => document.querySelector('#dsh-log pre code')?.textContent.includes('console.log(1)')),
+    { message: 'code fence renders as a code block' }
+  );
+
   // 打开后应该能像聊天一样继续输入
   await sidebar.fill('#dsh-input', '接着说');
   await sidebar.press('#dsh-input', 'Enter');
@@ -642,8 +647,17 @@ async function testBridgeSend() {
     { message: 'typed message appears in the DSH log' }
   );
 
-  // 重新打开侧边栏时，空列表应该由 bridge 的历史填上。
-  await sidebar.close();
+  // DSH 视图里也能挑标签页发过去
+  await sidebar.click('#dsh-page');
+  await waitFor(
+    () => sidebar.evaluate(() => document.querySelectorAll('#dsh-tabs .dsh-tab').length > 0),
+    { message: 'tab picker lists open tabs' }
+  );
+  await sidebar.evaluate(() => document.querySelector('#dsh-tabs .dsh-tab')?.click());
+  const picked = await waitFor(() => received[2], { message: 'picked tab reaches the bridge' });
+  assert.ok(picked.body.url.includes('/article'), 'picked tab url is sent');
+
+  // 重新打开侧边栏时，空列表应该由 bridge 的历史填上。  await sidebar.close();
   const reopened = await openSidebar();
   await reopened.click('#btn-dsh');
   await waitFor(
