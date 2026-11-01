@@ -40,12 +40,16 @@
     return false;
   }
 
+  // 复用侧边栏已有的消息形状：DS_FILL_INPUT → 回 FILL_RESULT，和 chat-bridge 一致。
   window.addEventListener('message', (event) => {
     const data = event.data;
-    if (!data || data.source !== 'ds-sidebar' || data.type !== 'DS_DSH_FILL') return;
-    const ok = fill(data.text);
+    if (!data || data.source !== 'ds-sidebar') return;
+    if (data.type !== 'DS_FILL_INPUT' && data.type !== 'DS_DSH_FILL') return;
+    const text = data.text !== undefined ? data.text : data.value;
+    const ok = fill(text);
+    const reply = { source: 'ds-dsh', type: 'FILL_RESULT', requestId: data.requestId, ok };
     try {
-      event.source?.postMessage({ source: 'ds-dsh', type: 'DS_DSH_FILL_RESULT', ok }, event.origin || '*');
+      event.source?.postMessage(reply, event.origin || '*');
     } catch {
       // ignore
     }
