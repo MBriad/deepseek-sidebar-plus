@@ -174,7 +174,9 @@ function applyChatProvider(id, { persist = true, reload = true } = {}) {
       setConnection('connecting');
       fetch(provider.url, { mode: 'no-cors', cache: 'no-store' })
         .then(() => {
-          frame.src = provider.url;
+          // 方案 B:DSH 在普通标签页打开,侧边栏只放引导页;content script 才能注入进去。
+          chrome.tabs.create({ url: provider.url, active: false }).catch(() => {});
+          frame.src = chrome.runtime.getURL('src/dsh.html');
           setConnection('ready');
         })
         .catch(() => {
@@ -305,6 +307,29 @@ function onFrameMessage(event) {
     if (data.type === 'INPUT_RESULT') {
       console.debug('[DS+] input result:', data.ok, data.error || '');
     }
+  }
+}
+
+async function findDshTab() {
+  const tabs = await chrome.tabs.query({ url: ['http://127.0.0.1:3080/*', 'http://localhost:3080/*'] });
+  return tabs.find((tab) => tab.id) || null;
+}
+
+async function sendToDsh(message) {
+  let tab = await findDshTab();
+  if (!tab) {
+    try {
+      await chrome.tabs.create({ url: 'http://127.0.0.1:3080/', active: true });
+    } catch {
+      return null;
+    }
+    tab = await findDshTab();
+  }
+  if (!tab?.id) return null;
+  try {
+    return await chrome.tabs.sendMessage(tab.id, { source: 'ds-sidebar', ...message });
+  } catch {
+    return null;
   }
 }
 
@@ -647,7 +672,9 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     }
   }
 
-  const response = await sendToFrame('DS_FILL_INPUT', { text: value, mode, selectionId }, 22000);
+  const response = chatProvider === 'dsh'
+    ? await sendToDsh({ type: 'DS_FILL_INPUT', text: value })
+    : await sendToFrame('DS_FILL_INPUT', { text: value, mode, selectionId }, 22000);
 
   if (response?.ok) {
     setConnection('ready');
@@ -781,7 +808,9 @@ async function quoteInChat(text) {
   const value = String(text || '').trim();
   if (!value) return;
 
-  const response = await sendToFrame('DS_QUOTE_TEXT', { text: value }, 6000);
+  const response = chatProvider === 'dsh'
+    ? await sendToDsh({ type: 'DS_QUOTE_TEXT', text: value })
+    : await sendToFrame('DS_QUOTE_TEXT', { text: value }, 6000);
   if (response?.ok) showToast('已引用到输入框');
   else showToast(response?.error || '引用失败', 'error', 4000);
 }

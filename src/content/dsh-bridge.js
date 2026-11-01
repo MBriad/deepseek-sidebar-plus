@@ -92,4 +92,15 @@
       // ignore
     }
   });
+
+  // 标签页形态:侧边栏用 chrome.tabs.sendMessage 直接询问,省掉 postMessage。
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || message.source !== 'ds-sidebar') return;
+    const isQuote = message.type === 'DS_QUOTE_TEXT';
+    if (message.type !== 'DS_FILL_INPUT' && message.type !== 'DS_DSH_FILL' && !isQuote) return;
+    const raw = message.text !== undefined ? message.text : message.value;
+    const text = isQuote && raw ? `> ${String(raw).replace(/\r?\n/g, '\n> ')}\n\n` : raw;
+    sendResponse({ ok: fill(text) });
+    return true;
+  });
 })();
