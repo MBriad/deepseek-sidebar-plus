@@ -602,9 +602,23 @@ async function testBridgeSend() {
   assert.equal(request.body.url, 'https://example.com/article');
   assert.ok(request.body.text.includes('This highlighted sentence'), 'page text reaches the bridge');
 
+  // 发送后不应该抢焦点：面板保持关闭，只在 dsh 小标上提示。
+  const sheetOpen = await sidebar.evaluate(() => !document.getElementById('bridge-sheet')?.classList.contains('hidden'));
+  assert.equal(sheetOpen, false, 'panel stays closed so typing can continue');
+
   await waitFor(
-    () => sidebar.evaluate(() => document.getElementById('bridge-answer')?.textContent.includes('DSH 回答第一段')),
-    { message: 'reply streamed into the panel' }
+    () => sidebar.evaluate(() => document.getElementById('btn-dsh')?.dataset.state === 'unread'),
+    { message: 'dsh pill reports an unread reply' }
+  );
+
+  await sidebar.click('#btn-dsh');
+  await waitFor(
+    () => sidebar.evaluate(() => {
+      const sheet = document.getElementById('bridge-sheet');
+      return !sheet?.classList.contains('hidden')
+        && document.getElementById('bridge-answer')?.textContent.includes('DSH 回答第一段');
+    }),
+    { message: 'opening the pill shows the streamed reply' }
   );
 
   bridge.closeAllConnections?.();
