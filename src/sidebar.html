@@ -79,6 +79,13 @@
 
     <main id="frame-wrap">
       <iframe id="ds-frame" title="DeepSeek" allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>
+      <section id="dsh-view" class="dsh-view hidden" aria-label="DSH 对话">
+        <div id="dsh-log" class="dsh-log" aria-live="polite"></div>
+        <form id="dsh-form" class="dsh-form">
+          <textarea id="dsh-input" class="dsh-input" rows="1" placeholder="给 DSH 发消息…"></textarea>
+          <button id="dsh-send" class="dsh-send" type="submit" title="发送" aria-label="发送">↑</button>
+        </form>
+      </section>
       <div id="frame-loading" class="frame-overlay">
         <div class="spinner" aria-hidden="true"></div>
         <div id="frame-loading-text" class="frame-loading-text">正在加载 DeepSeek…</div>
@@ -108,26 +115,6 @@
           <button id="btn-copy-page" class="btn ghost" type="button">复制</button>
         </div>
         <p class="hint">附加文档只把 .txt 放进当前聊天，不会替你决定或填写提示词；请自行输入问题。</p>
-      </section>
-    </div>
-
-    <!-- DSH 回复 -->
-    <div id="bridge-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="bridge-sheet-title">
-      <div class="sheet-backdrop" data-close="bridge"></div>
-      <section class="sheet-card">
-        <div class="sheet-head">
-          <div class="sheet-heading">
-            <div class="eyebrow">DSH 插件</div>
-            <h2 id="bridge-sheet-title">DSH 回复</h2>
-          </div>
-          <button class="icon-btn" type="button" data-close="bridge" title="关闭" aria-label="关闭">×</button>
-        </div>
-        <div id="bridge-meta" class="page-meta"></div>
-        <pre id="bridge-answer" class="page-preview" data-state="waiting"></pre>
-        <div class="sheet-actions">
-          <button id="btn-bridge-copy" class="btn ghost" type="button">复制回复</button>
-        </div>
-        <p class="hint">回复来自 DSH 的 inbox 会话；关掉这个面板不会中断 DSH 里的回合。</p>
       </section>
     </div>
 

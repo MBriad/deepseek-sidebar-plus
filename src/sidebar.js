@@ -1510,14 +1510,16 @@ async function sendToBridge(page) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(bridgeErrorText(response.status, data));
 
-    // The panel stays closed so the caret keeps its place in the chat input;
+    // The view stays closed so the caret keeps its place in the chat input;
     // the pill reports progress and opens the answer when asked.
+    dshMessages.push({ role: 'user', text: [page.title, page.url].filter(Boolean).join('\n') });
+    renderDshLog();
     watchBridge(requestId);
     showBanner(`已发送到 DSH：${page.title || page.url}`, '知道了', hideBanner, { type: 'success' });
   } catch (error) {
     bridgeFailure = `DSH 发送失败：${error.message}`;
     setBridgeState('error');
-    renderBridgePanel();
+    renderDshLog();
     showBanner(bridgeFailure, '重试', () => sendToBridge(page), { type: 'error' });
   }
 }
@@ -1540,32 +1542,82 @@ function setBridgeState(state) {
       : 'DSH 回复（点击查看）';
 }
 
-function renderBridgePanel() {
-  const meta = $('#bridge-meta');
-  const answer = $('#bridge-answer');
+let dshMessages = [];
+let dshOpen = false;
 
-  if (meta) {
-    const lines = lastBridgePage ? [lastBridgePage.title, lastBridgePage.url].filter(Boolean) : [];
-    if (lastBridgePage?.mode === 'transcript') {
-      lines.push(`已抓到字幕 · ${String(lastBridgePage.charCount || lastBridgePage.text?.length || 0)} 字`);
-    }
-    meta.textContent = lines.join('\n');
-  }
+function renderDshLog() {
+  const log = $('#dsh-log');
+  if (!log) return;
 
-  if (!answer) return;
+  const rows = dshMessages.slice();
   if (bridgeFailure) {
-    answer.textContent = bridgeFailure;
-    answer.dataset.state = 'error';
-    return;
+    rows.push({ role: 'error', text: bridgeFailure });
+  } else if (bridgeState === 'sending' || bridgeState === 'streaming') {
+    rows.push({ role: 'assistant', text: bridgeAnswer || '…' });
   }
-  answer.dataset.state = bridgeState === 'unread' ? 'done' : bridgeState;
-  answer.textContent = bridgeAnswer || (bridgeState === 'sending' ? '等待 DSH 回应…' : '还没有回复。');
-  answer.scrollTop = answer.scrollHeight;
+
+  log.textContent = '';
+  for (const row of rows) {
+    const item = document.createElement('div');
+    item.className = `dsh-msg dsh-${row.role}`;
+    item.textContent = row.text;
+    log.appendChild(item);
+  }
+  log.scrollTop = log.scrollHeight;
 }
 
-function openBridgePanel() {
-  renderBridgePanel();
-  openSheet('#bridge-sheet');
+function toggleDshView(force) {
+  const view = $('#dsh-view');
+  const frame = $('#ds-frame');
+  if (!view || !frame) return;
+
+  dshOpen = typeof force === 'boolean' ? force : !dshOpen;
+  view.classList.toggle('hidden', !dshOpen);
+  frame.classList.toggle('hidden', dshOpen);
+  const pill = $('#btn-dsh');
+  if (pill) pill.dataset.open = String(dshOpen);
+
+  if (dshOpen) {
+    renderDshLog();
+    $('#dsh-input')?.focus();
+  }
+}
+
+async function submitDshMessage(event) {
+  event.preventDefault();
+  const input = $('#dsh-input');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+  if (!settings.bridgeToken) {
+    showBanner('还没填 DSH 令牌。', '打开设置', () => { applySettingsToUI(); openSheet('#settings-sheet'); }, { type: 'error' });
+    return;
+  }
+
+  input.value = '';
+  dshMessages.push({ role: 'user', text });
+  bridgeAnswer = '';
+  bridgeFailure = '';
+  setBridgeState('sending');
+  renderDshLog();
+
+  const requestId = `dsd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    const response = await fetch(`${bridgeBaseUrl()}/bridge/ingest`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${settings.bridgeToken}`
+      },
+      body: JSON.stringify({ requestId, text })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(bridgeErrorText(response.status, data));
+    watchBridge(requestId);
+  } catch (error) {
+    bridgeFailure = `DSH 发送失败：${error.message}`;
+    setBridgeState('error');
+    renderDshLog();
+  }
 }
 
 function watchBridge(requestId) {
@@ -1577,7 +1629,7 @@ function watchBridge(requestId) {
   } catch (error) {
     bridgeFailure = `无法连接 DSH：${error.message}`;
     setBridgeState('error');
-    renderBridgePanel();
+    renderDshLog();
     return;
   }
   bridgeStream = stream;
@@ -1588,15 +1640,17 @@ function watchBridge(requestId) {
     if (payload.requestId && requestId && payload.requestId !== requestId) return;
     bridgeAnswer += payload.text || '';
     setBridgeState('streaming');
-    renderBridgePanel();
+    renderDshLog();
   });
 
   stream.addEventListener('done', (event) => {
     let payload = {};
     try { payload = JSON.parse(event.data); } catch {}
     if (payload.requestId && requestId && payload.requestId !== requestId) return;
+    if (bridgeAnswer) dshMessages.push({ role: 'assistant', text: bridgeAnswer });
+    bridgeAnswer = '';
     setBridgeState('unread');
-    renderBridgePanel();
+    renderDshLog();
     closeBridgeStream();
   });
 
@@ -1606,7 +1660,7 @@ function watchBridge(requestId) {
     if (payload.requestId && requestId && payload.requestId !== requestId) return;
     bridgeFailure = `DSH 报错：${payload.message || '未知错误'}`;
     setBridgeState('error');
-    renderBridgePanel();
+    renderDshLog();
     closeBridgeStream();
   });
 }
@@ -2322,11 +2376,12 @@ function restoreDefaults() {
 function bindUI() {
   $$('.provider-tab').forEach((button) => {
     button.addEventListener('click', () => {
+      toggleDshView(false);
       applyChatProvider(button.getAttribute('data-provider'));
     });
   });
 
-  $('#btn-dsh').addEventListener('click', openBridgePanel);
+  $('#btn-dsh').addEventListener('click', () => toggleDshView());
 
   $('#btn-read').addEventListener('click', readPage);
   $('#btn-autofill').addEventListener('click', toggleAutofill);
@@ -2426,13 +2481,11 @@ function bindUI() {
     saveSettings();
   });
 
-  $('#btn-bridge-copy').addEventListener('click', async () => {
-    if (!bridgeAnswer) return;
-    try {
-      await navigator.clipboard.writeText(bridgeAnswer);
-      showToast('DSH 回复已复制', 'success');
-    } catch {
-      showToast('复制失败，请手动选择文本', 'error', 4000);
+  $('#dsh-form').addEventListener('submit', submitDshMessage);
+  $('#dsh-input').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      $('#dsh-form').requestSubmit();
     }
   });
 
@@ -2514,10 +2567,7 @@ function bindUI() {
           ? '#prompt-sheet'
           : target === 'export'
             ? '#export-sheet'
-            : target === 'bridge'
-              ? '#bridge-sheet'
-              : '#settings-sheet';
-      if (selector === '#bridge-sheet') closeBridgeStream();
+            : '#settings-sheet';
       closeSheet(selector);
     });
   });
@@ -2533,10 +2583,6 @@ function bindUI() {
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');
     else if (isSheetOpen('#export-sheet')) closeSheet('#export-sheet');
-    else if (isSheetOpen('#bridge-sheet')) {
-      closeBridgeStream();
-      closeSheet('#bridge-sheet');
-    }
     else if (isSheetOpen('#settings-sheet')) closeSheet('#settings-sheet');
   });
 

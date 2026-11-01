@@ -1449,3 +1449,96 @@ input:focus-visible + .slider {
   opacity: 0;
   pointer-events: none;
 }
+
+/* DSH view: a plain-text chat surface in the main area. */
+.dsh-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.dsh-view.hidden {
+  display: none;
+}
+
+.dsh-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dsh-msg {
+  max-width: 88%;
+  padding: 8px 11px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dsh-user {
+  align-self: flex-end;
+  background: var(--accent-tint);
+  color: var(--text);
+}
+
+.dsh-assistant {
+  align-self: flex-start;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.dsh-error {
+  align-self: stretch;
+  background: rgba(192, 57, 43, .12);
+  color: #c0392b;
+}
+
+.dsh-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dsh-input {
+  flex: 1;
+  min-height: 34px;
+  max-height: 120px;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: 13px/1.5 var(--font);
+}
+
+.dsh-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.dsh-send {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.dsh-send:disabled {
+  opacity: .5;
+  cursor: default;
+}
