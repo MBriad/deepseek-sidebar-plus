@@ -551,6 +551,69 @@ async function testPdfRemembersPosition() {
   console.log('PASS PDF remembers the last reading position');
 }
 
+async function testBridgeSend() {
+  const received = [];
+  const bridge = http.createServer((request, response) => {
+    if (request.url.startsWith('/bridge/stream')) {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write('event: hello\ndata: {"sessionId":"sidebar-inbox"}\n\n');
+      response.write('event: delta\ndata: {"text":"DSH 回答第一段"}\n\n');
+      response.write('event: done\ndata: {}\n\n');
+      return;
+    }
+    if (request.url === '/bridge/ingest') {
+      let body = '';
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        received.push({ headers: request.headers, body: JSON.parse(body) });
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end('{"ok":true}');
+      });
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise((resolve) => bridge.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${bridge.address().port}`;
+
+  const sidebar = await openSidebar();
+  await sidebar.evaluate(({ url, token }) => chrome.storage.local.set({
+    settings: { ...window.__DS_TEST__.settings, bridgeEnabled: true, bridgeUrl: url, bridgeToken: token }
+  }), { url: base, token: 'test-token' });
+  await sidebar.reload();
+  await waitFor(() => sidebar.evaluate(() => window.__DS_TEST__?.bridgeReady === true), {
+    timeout: 20000,
+    message: 'sidebar bridge after settings reload'
+  });
+
+  const article = await context.newPage();
+  await article.goto('https://example.com/article');
+  const tabId = await sidebar.evaluate(async () => {
+    const tabs = await chrome.tabs.query({});
+    return tabs.find((tab) => (tab.url || '').includes('/article'))?.id || null;
+  });
+  assert.ok(tabId, 'article tab not found');
+
+  await sidebar.evaluate((id) => window.__DS_TEST__.handleMentionTab(id), tabId);
+
+  const request = await waitFor(() => received[0], { message: 'bridge ingest request' });
+  assert.equal(request.headers.authorization, 'Bearer test-token');
+  assert.equal(request.body.url, 'https://example.com/article');
+  assert.ok(request.body.text.includes('This highlighted sentence'), 'page text reaches the bridge');
+
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('bridge-answer')?.textContent.includes('DSH 回答第一段')),
+    { message: 'reply streamed into the panel' }
+  );
+
+  bridge.closeAllConnections?.();
+  await new Promise((resolve) => bridge.close(resolve));
+  await article.close();
+  await sidebar.close();
+  console.log('PASS @ page sends to DSH and streams the reply back');
+}
+
 const watchdog = setTimeout(() => {
   console.error('FUNCTIONAL TEST WATCHDOG TIMEOUT');
   process.exit(1);
@@ -610,6 +673,7 @@ async function testChatgptProvider() {
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
     await testChatgptProvider();
+    await testBridgeSend();
     console.log('ALL FUNCTIONAL TESTS PASSED');
   } catch (error) {
     console.error('FUNCTIONAL TEST FAILED');

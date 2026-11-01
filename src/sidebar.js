@@ -34,7 +34,10 @@ const DEFAULT_SETTINGS = {
   autoOpenLocalPdfReader: true,
   pdfJsFollow: true,
   enterSendsMessage: true,
-  undoShortcut: 'Ctrl+Z'
+  undoShortcut: 'Ctrl+Z',
+  bridgeEnabled: false,
+  bridgeUrl: 'http://127.0.0.1:3080',
+  bridgeToken: ''
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1437,12 +1440,128 @@ async function handleMentionTab(tabId) {
     }
     if (!response?.ok) throw new Error(response?.error || '读取标签页失败。');
 
+    if (settings.bridgeEnabled && settings.bridgeToken) {
+      await sendToBridge(response.page);
+      return;
+    }
+
     await attachPageFile(response.page);
   } catch (error) {
     showBanner(`读取标签页失败：${error.message}`, '重试', () => handleMentionTab(tabId), { type: 'error' });
   } finally {
     mentionReading = false;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* DSH bridge                                                          */
+/* ------------------------------------------------------------------ */
+
+let bridgeStream = null;
+let bridgeAnswer = '';
+
+function bridgeBaseUrl() {
+  return (settings.bridgeUrl || DEFAULT_SETTINGS.bridgeUrl).replace(/\/+$/, '');
+}
+
+function bridgeErrorText(status, data) {
+  if (status === 401) return 'DSH 拒绝了令牌，检查设置里的 DSH 令牌与插件 config.token 是否一致。';
+  if (status === 403) return 'DSH 拒绝了这次请求（来源或主机不被允许）。';
+  if (status === 404) return 'DSH 上没有这个接口，插件可能没装或没启动。';
+  if (status === 413) return '页面正文超过 256 KB 上限。';
+  return data?.error || `请求失败（HTTP ${status}）。`;
+}
+
+async function sendToBridge(page) {
+  if (!settings.bridgeToken) {
+    showBanner(
+      '还没填 DSH 令牌。',
+      '打开设置',
+      () => { applySettingsToUI(); openSheet('#settings-sheet'); },
+      { type: 'error' }
+    );
+    return;
+  }
+
+  const requestId = `dsb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  showBanner(`正在发送到 DSH：${page.title || page.url}…`, '', null, { kind: 'bridge' });
+
+  try {
+    const response = await fetch(`${bridgeBaseUrl()}/bridge/ingest`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${settings.bridgeToken}`
+      },
+      body: JSON.stringify({
+        requestId,
+        title: page.title || '',
+        url: page.url || '',
+        text: page.text || ''
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(bridgeErrorText(response.status, data));
+
+    openBridgeSheet(page, requestId);
+    showBanner(`已发送到 DSH：${page.title || page.url}`, '知道了', hideBanner, { type: 'success' });
+  } catch (error) {
+    showBanner(`发送到 DSH 失败：${error.message}`, '重试', () => sendToBridge(page), { type: 'error' });
+  }
+}
+
+function closeBridgeStream() {
+  if (!bridgeStream) return;
+  try { bridgeStream.close(); } catch {}
+  bridgeStream = null;
+}
+
+function openBridgeSheet(page, requestId) {
+  closeBridgeStream();
+  bridgeAnswer = '';
+
+  const meta = $('#bridge-meta');
+  if (meta) meta.textContent = [page.title, page.url].filter(Boolean).join('\n');
+
+  const answer = $('#bridge-answer');
+  if (answer) {
+    answer.textContent = '';
+    answer.dataset.state = 'waiting';
+  }
+  openSheet('#bridge-sheet');
+
+  let stream;
+  try {
+    stream = new EventSource(`${bridgeBaseUrl()}/bridge/stream?token=${encodeURIComponent(settings.bridgeToken)}`);
+  } catch (error) {
+    if (answer) answer.textContent = `无法连接 DSH：${error.message}`;
+    return;
+  }
+  bridgeStream = stream;
+
+  stream.addEventListener('delta', (event) => {
+    let payload = {};
+    try { payload = JSON.parse(event.data); } catch { return; }
+    if (payload.requestId && requestId && payload.requestId !== requestId) return;
+    bridgeAnswer += payload.text || '';
+    if (answer) {
+      answer.textContent = bridgeAnswer;
+      answer.dataset.state = 'streaming';
+      answer.scrollTop = answer.scrollHeight;
+    }
+  });
+
+  stream.addEventListener('done', (event) => {
+    let payload = {};
+    try { payload = JSON.parse(event.data); } catch {}
+    if (payload.requestId && requestId && payload.requestId !== requestId) return;
+    if (answer) answer.dataset.state = 'done';
+    closeBridgeStream();
+  });
+
+  stream.addEventListener('error', () => {
+    if (answer && answer.dataset.state !== 'done') answer.dataset.state = 'error';
+  });
 }
 
 async function copyPage() {
@@ -2068,8 +2187,17 @@ function normalizeSettings(value) {
     enterSendsMessage: value.enterSendsMessage !== false,
     undoShortcut: normalizeShortcutString(value.undoShortcut),
     extractMode: value.extractMode === 'full' ? 'full' : 'readable',
-    maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000
+    maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000,
+    bridgeEnabled: Boolean(value.bridgeEnabled),
+    bridgeUrl: normalizeBridgeUrl(value.bridgeUrl),
+    bridgeToken: typeof value.bridgeToken === 'string' ? value.bridgeToken.trim() : ''
   };
+}
+
+function normalizeBridgeUrl(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!/^https?:\/\/\S+$/i.test(text)) return DEFAULT_SETTINGS.bridgeUrl;
+  return text.replace(/\/+$/, '');
 }
 
 async function saveSettings() {
@@ -2102,6 +2230,13 @@ function applySettingsToUI() {
   if (undoShortcut) undoShortcut.textContent = settings.undoShortcut;
   if (pdfJsFollow) pdfJsFollow.checked = Boolean(settings.pdfJsFollow);
   if (enterSendsMessage) enterSendsMessage.checked = Boolean(settings.enterSendsMessage);
+
+  const bridgeEnabled = $('#setting-bridge');
+  const bridgeUrl = $('#setting-bridge-url');
+  const bridgeToken = $('#setting-bridge-token');
+  if (bridgeEnabled) bridgeEnabled.checked = Boolean(settings.bridgeEnabled);
+  if (bridgeUrl) bridgeUrl.value = settings.bridgeUrl;
+  if (bridgeToken) bridgeToken.value = settings.bridgeToken;
 
   updateAutofillButton();
 }
@@ -2223,6 +2358,34 @@ function bindUI() {
     showToast(settings.enterSendsMessage ? '小窗 Enter 将直接发送' : '小窗 Enter 只完成，不发送');
   });
 
+  $('#setting-bridge').addEventListener('change', (event) => {
+    settings.bridgeEnabled = event.target.checked;
+    saveSettings();
+    showToast(settings.bridgeEnabled ? '@ 选页将发送到 DSH' : '@ 选页改回附加到当前聊天');
+  });
+
+  $('#setting-bridge-url').addEventListener('change', (event) => {
+    settings.bridgeUrl = normalizeBridgeUrl(event.target.value);
+    event.target.value = settings.bridgeUrl;
+    saveSettings();
+  });
+
+  $('#setting-bridge-token').addEventListener('change', (event) => {
+    settings.bridgeToken = event.target.value.trim();
+    event.target.value = settings.bridgeToken;
+    saveSettings();
+  });
+
+  $('#btn-bridge-copy').addEventListener('click', async () => {
+    if (!bridgeAnswer) return;
+    try {
+      await navigator.clipboard.writeText(bridgeAnswer);
+      showToast('DSH 回复已复制', 'success');
+    } catch {
+      showToast('复制失败，请手动选择文本', 'error', 4000);
+    }
+  });
+
   $('#setting-extract-mode').addEventListener('change', (event) => {
     settings.extractMode = event.target.value === 'full' ? 'full' : 'readable';
     saveSettings();
@@ -2301,7 +2464,10 @@ function bindUI() {
           ? '#prompt-sheet'
           : target === 'export'
             ? '#export-sheet'
-            : '#settings-sheet';
+            : target === 'bridge'
+              ? '#bridge-sheet'
+              : '#settings-sheet';
+      if (selector === '#bridge-sheet') closeBridgeStream();
       closeSheet(selector);
     });
   });
@@ -2317,6 +2483,10 @@ function bindUI() {
     if (isSheetOpen('#page-sheet')) closeSheet('#page-sheet');
     else if (isSheetOpen('#prompt-sheet')) closeSheet('#prompt-sheet');
     else if (isSheetOpen('#export-sheet')) closeSheet('#export-sheet');
+    else if (isSheetOpen('#bridge-sheet')) {
+      closeBridgeStream();
+      closeSheet('#bridge-sheet');
+    }
     else if (isSheetOpen('#settings-sheet')) closeSheet('#settings-sheet');
   });
 
