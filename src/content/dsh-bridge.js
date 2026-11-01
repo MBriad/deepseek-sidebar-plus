@@ -44,10 +44,12 @@
   window.addEventListener('message', (event) => {
     const data = event.data;
     if (!data || data.source !== 'ds-sidebar') return;
-    if (data.type !== 'DS_FILL_INPUT' && data.type !== 'DS_DSH_FILL') return;
-    const text = data.text !== undefined ? data.text : data.value;
+    const isQuote = data.type === 'DS_QUOTE_TEXT';
+    if (data.type !== 'DS_FILL_INPUT' && data.type !== 'DS_DSH_FILL' && !isQuote) return;
+    const raw = data.text !== undefined ? data.text : data.value;
+    const text = isQuote && raw ? `> ${String(raw).replace(/\r?\n/g, '\n> ')}\n\n` : raw;
     const ok = fill(text);
-    const reply = { source: 'ds-dsh', type: 'FILL_RESULT', requestId: data.requestId, ok };
+    const reply = { source: 'ds-dsh', type: isQuote ? 'QUOTE_RESULT' : 'FILL_RESULT', requestId: data.requestId, ok };
     try {
       event.source?.postMessage(reply, event.origin || '*');
     } catch {
