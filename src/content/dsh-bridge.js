@@ -23,12 +23,24 @@
     return `${element.tagName.toLowerCase()}${cls ? `.${cls.split(/\s+/).slice(0, 2).join('.')}` : ''}`;
   }
 
+  function visible(element) {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && element.offsetParent !== null;
+  }
+
   function findComposer() {
     const list = candidates();
     if (!list.length) return null;
     const active = document.activeElement;
-    if (active && list.includes(active)) return active;
-    return list[0];
+    if (active && list.includes(active) && visible(active)) return active;
+    const visibleList = list.filter(visible);
+    const pool = visibleList.length ? visibleList : list;
+    // 优先带 input 类名的、其次是 textarea、最后才是 contenteditable 容器。
+    return (
+      pool.find((element) => /input/i.test(String(element.className || ''))) ||
+      pool.find((element) => element.tagName === 'TEXTAREA') ||
+      pool[0]
+    );
   }
 
   function setNativeValue(element, value) {
