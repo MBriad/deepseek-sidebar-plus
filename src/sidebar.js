@@ -1525,14 +1525,14 @@ function openBridgeSheet(page, requestId) {
 
   const answer = $('#bridge-answer');
   if (answer) {
-    answer.textContent = '';
+    answer.textContent = '等待 DSH 回应…';
     answer.dataset.state = 'waiting';
   }
   openSheet('#bridge-sheet');
 
   let stream;
   try {
-    stream = new EventSource(`${bridgeBaseUrl()}/bridge/stream?token=${encodeURIComponent(settings.bridgeToken)}`);
+    stream = new EventSource(`${bridgeBaseUrl()}/bridge/stream?token=${encodeURIComponent(settings.bridgeToken)}&requestId=${encodeURIComponent(requestId)}`);
   } catch (error) {
     if (answer) answer.textContent = `无法连接 DSH：${error.message}`;
     return;
