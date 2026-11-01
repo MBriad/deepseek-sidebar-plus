@@ -43,17 +43,6 @@
   "content_scripts": [
     {
       "matches": [
-        "http://127.0.0.1:3080/*",
-        "http://localhost:3080/*"
-      ],
-      "js": [
-        "src/content/dsh-bridge.js"
-      ],
-      "all_frames": true,
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
         "*://*.bilibili.com/video/*"
       ],
       "js": [
@@ -102,7 +91,7 @@
     ]
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' http://127.0.0.1:3080 http://localhost:3080 https://*.deepseek.com https://chatgpt.com https://*.chatgpt.com https://chat.openai.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' https://*.deepseek.com https://chatgpt.com https://*.chatgpt.com https://chat.openai.com"
   },
   "web_accessible_resources": [
     {
