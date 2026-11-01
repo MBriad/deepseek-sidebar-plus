@@ -211,6 +211,15 @@ function bindFrame() {
 }
 
 function onFrameLoad() {
+  // DSH 不是聊天页:没有 chat-bridge,不探测输入框,直接算就绪。
+  if (chatProvider === 'dsh') {
+    clearTimeout(frameLoadWatchdog);
+    frameLoaded = true;
+    hideFrameLoading();
+    setConnection('ready');
+    return;
+  }
+
   if (!frame.src || !frame.src.startsWith(CHAT_URL)) return;
 
   clearTimeout(frameLoadWatchdog);
