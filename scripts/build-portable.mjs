@@ -23,9 +23,7 @@ const INCLUDE = [
   'manifest.json',
   'background.js',
   'rules.json',
-  'PRIVACY.md',
   'LICENSE',
-  'NOTICE',
   'icons',
   'src',
   '_locales'
