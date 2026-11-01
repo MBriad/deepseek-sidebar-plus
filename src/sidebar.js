@@ -14,13 +14,7 @@ const CHAT_PROVIDERS = {
     name: 'ChatGPT',
     url: 'https://chatgpt.com/',
     origin: 'https://chatgpt.com'
-  },
-  dsh: {
-    id: 'dsh',
-    name: 'DSH',
-    url: 'http://127.0.0.1:3080/',
-    origin: 'http://127.0.0.1:3080'
-  },
+  }
 };
 const PROVIDER_KEY = 'chatProvider';
 let chatProvider = 'deepseek';
@@ -168,24 +162,6 @@ function applyChatProvider(id, { persist = true, reload = true } = {}) {
   if (persist) {
     chrome.storage.local.set({ [PROVIDER_KEY]: provider.id }).catch(() => {});
   }
-  // DSH 是本地服务:先探测端口,通才加载；不通就显示扩展自带的引导页(dsh.html)。
-  if (provider.id === 'dsh') {
-    if (reload && changed) {
-      setConnection('connecting');
-      fetch(provider.url, { mode: 'no-cors', cache: 'no-store' })
-        .then(() => {
-          // 方案 B:DSH 在普通标签页打开,侧边栏只放引导页;content script 才能注入进去。
-          chrome.tabs.create({ url: provider.url, active: false }).catch(() => {});
-          frame.src = chrome.runtime.getURL('src/dsh.html');
-          setConnection('ready');
-        })
-        .catch(() => {
-          frame.src = chrome.runtime.getURL('src/dsh.html');
-          setConnection('offline');
-        });
-    }
-    return;
-  }
   if (!reload || !changed) return;
 
   bridgeReady = false;
@@ -213,15 +189,6 @@ function bindFrame() {
 }
 
 function onFrameLoad() {
-  // DSH 不是聊天页:没有 chat-bridge,不探测输入框,直接算就绪。
-  if (chatProvider === 'dsh') {
-    clearTimeout(frameLoadWatchdog);
-    frameLoaded = true;
-    hideFrameLoading();
-    setConnection('ready');
-    return;
-  }
-
   if (!frame.src || !frame.src.startsWith(CHAT_URL)) return;
 
   clearTimeout(frameLoadWatchdog);
@@ -307,29 +274,6 @@ function onFrameMessage(event) {
     if (data.type === 'INPUT_RESULT') {
       console.debug('[DS+] input result:', data.ok, data.error || '');
     }
-  }
-}
-
-async function findDshTab() {
-  const tabs = await chrome.tabs.query({ url: ['http://127.0.0.1:3080/*', 'http://localhost:3080/*'] });
-  return tabs.find((tab) => tab.id) || null;
-}
-
-async function sendToDsh(message) {
-  let tab = await findDshTab();
-  if (!tab) {
-    try {
-      await chrome.tabs.create({ url: 'http://127.0.0.1:3080/', active: true });
-    } catch {
-      return null;
-    }
-    tab = await findDshTab();
-  }
-  if (!tab?.id) return null;
-  try {
-    return await chrome.tabs.sendMessage(tab.id, { source: 'ds-sidebar', ...message });
-  } catch {
-    return null;
   }
 }
 
@@ -663,16 +607,6 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     return false;
   }
 
-  if (chatProvider === 'dsh') {
-    const dshResponse = await sendToDsh({ type: 'DS_FILL_INPUT', text: value });
-    if (dshResponse?.ok) {
-      showToast('已填入 DSH');
-      return true;
-    }
-    showBanner('没有找到 DSH 标签页或输入框，请先打开 DSH 并等页面加载完成。', '重新加载', () => sendToDsh({ type: 'DS_FILL_INPUT', text: value }), { type: 'error', kind: 'connection' });
-    return false;
-  }
-
   if (!bridgeReady) {
     const ready = await waitForBridge(9000);
     if (!ready) {
@@ -682,9 +616,7 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     }
   }
 
-  const response = chatProvider === 'dsh'
-    ? await sendToDsh({ type: 'DS_FILL_INPUT', text: value })
-    : await sendToFrame('DS_FILL_INPUT', { text: value, mode, selectionId }, 22000);
+  const response = await sendToFrame('DS_FILL_INPUT', { text: value, mode, selectionId }, 22000);
 
   if (response?.ok) {
     setConnection('ready');
@@ -818,9 +750,7 @@ async function quoteInChat(text) {
   const value = String(text || '').trim();
   if (!value) return;
 
-  const response = chatProvider === 'dsh'
-    ? await sendToDsh({ type: 'DS_QUOTE_TEXT', text: value })
-    : await sendToFrame('DS_QUOTE_TEXT', { text: value }, 6000);
+  const response = await sendToFrame('DS_QUOTE_TEXT', { text: value }, 6000);
   if (response?.ok) showToast('已引用到输入框');
   else showToast(response?.error || '引用失败', 'error', 4000);
 }
@@ -2369,7 +2299,7 @@ function bindUI() {
         ? '#page-sheet'
         : target === 'prompt'
           ? '#prompt-sheet'
-            : target === 'export'
+          : target === 'export'
             ? '#export-sheet'
             : '#settings-sheet';
       closeSheet(selector);
