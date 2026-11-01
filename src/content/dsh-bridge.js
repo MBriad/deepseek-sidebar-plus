@@ -1,57 +1,93 @@
-// DSH 页面的桥:只做"把文字填进输入框",不采集、不上传、不自动发送。
+// DSH 页面的桥:把文字填进输入框。带日志,方便定位选择器;不采集、不上传、不自动发送。
 (() => {
-  console.debug('[DS+ dsh-bridge] loaded');
+  const log = (...args) => console.warn('[DS+ dsh-bridge]', ...args);
+  log('loaded', location.href);
+
+  function candidates() {
+    const list = [];
+    const push = (selector) => {
+      for (const element of document.querySelectorAll(selector)) {
+        if (element && !list.includes(element)) list.push(element);
+      }
+    };
+    push('textarea');
+    push('[contenteditable="true"]');
+    push('[role="textbox"]');
+    push('div[contenteditable]');
+    return list;
+  }
+
+  function describe(element) {
+    if (!element) return 'null';
+    const cls = typeof element.className === 'string' ? element.className : '';
+    return `${element.tagName.toLowerCase()}${cls ? `.${cls.split(/\s+/).slice(0, 2).join('.')}` : ''}`;
+  }
 
   function findComposer() {
-    const candidates = [
-      'textarea',
-      '[contenteditable="true"]',
-      'div[role="textbox"]',
-      '.composer textarea',
-      '[class*="composer"] textarea'
-    ];
-    for (const selector of candidates) {
-      const element = document.querySelector(selector);
-      if (element) return element;
+    const list = candidates();
+    if (!list.length) return null;
+    const active = document.activeElement;
+    if (active && list.includes(active)) return active;
+    return list[0];
+  }
+
+  function setNativeValue(element, value) {
+    const proto = element.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    if (setter) setter.call(element, value);
+    else element.value = value;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function insertIntoEditable(element, value) {
+    element.focus();
+    const selection = window.getSelection();
+    selection?.selectAllChildren(element);
+    selection?.collapseToEnd();
+    let ok = false;
+    try {
+      ok = document.execCommand('insertText', false, value);
+    } catch {
+      ok = false;
     }
-    return null;
+    if (!ok && element.isContentEditable) {
+      element.textContent = value;
+      ok = true;
+    }
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }));
+    return ok;
   }
 
   function fill(text) {
     const composer = findComposer();
+    log('fill', { composer: describe(composer), candidates: candidates().map(describe) });
     if (!composer) return false;
     const value = String(text || '');
     if (composer.tagName === 'TEXTAREA' || composer.tagName === 'INPUT') {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-      const inputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-      if (composer.tagName === 'TEXTAREA' && setter) setter.call(composer, value);
-      else if (inputSetter) inputSetter.call(composer, value);
-      else composer.value = value;
-      composer.dispatchEvent(new Event('input', { bubbles: true }));
       composer.focus();
+      setNativeValue(composer, value);
       return true;
     }
-    if (composer.isContentEditable) {
-      composer.focus();
-      document.execCommand('insertText', false, value);
-      composer.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    }
-    return false;
+    const ok = insertIntoEditable(composer, value);
+    log('editable insert', { ok });
+    return ok;
   }
 
-  // 复用侧边栏已有的消息形状：DS_FILL_INPUT → 回 FILL_RESULT，和 chat-bridge 一致。
   window.addEventListener('message', (event) => {
     const data = event.data;
     if (!data || data.source !== 'ds-sidebar') return;
+    log('message', data.type, Boolean(data.text ?? data.value));
     const isQuote = data.type === 'DS_QUOTE_TEXT';
     if (data.type !== 'DS_FILL_INPUT' && data.type !== 'DS_DSH_FILL' && !isQuote) return;
     const raw = data.text !== undefined ? data.text : data.value;
     const text = isQuote && raw ? `> ${String(raw).replace(/\r?\n/g, '\n> ')}\n\n` : raw;
     const ok = fill(text);
-    const reply = { source: 'ds-dsh', type: isQuote ? 'QUOTE_RESULT' : 'FILL_RESULT', requestId: data.requestId, ok };
+    log('result', ok);
     try {
-      event.source?.postMessage(reply, event.origin || '*');
+      event.source?.postMessage(
+        { source: 'ds-dsh', type: isQuote ? 'QUOTE_RESULT' : 'FILL_RESULT', requestId: data.requestId, ok },
+        event.origin || '*'
+      );
     } catch {
       // ignore
     }
