@@ -266,7 +266,7 @@ Settings → Appearance → Show mini menu when selecting text → Off
 6. 点击图标打开侧边栏；首次加载时按提示允许权限。
 7. 建议在 `edge://extensions/` 里**停用或移除原来的 Deepseek Chat Sidebar**，避免两个侧边栏同时存在。
 
-更完整的分享/安装/更新说明见 [INSTALL.md](INSTALL.md)。给他人使用时，发 `deepseek-sidebar-plus-v1.13.2-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
+给他人使用时，发 `deepseek-sidebar-plus-v1.13.2-portable.zip`（含安装说明、隐私政策和扩展文件）即可；不要只发开发目录里的零散文件。
 
 > 直接双击 ZIP 不会安装扩展；Edge 需要选择解压后的文件夹。解压/移动文件夹会改变未打包扩展的 ID，原来的设置和提示词库不会自动跟过去。
 
@@ -284,7 +284,6 @@ Settings → Appearance → Show mini menu when selecting text → Off
 **v1.9.3 已提交 Microsoft Edge Add-ons 审核**；v1.12.0 删除网页标签、收藏整理和工具栏剪贴板按钮，v1.13.2 新增对话导出 PDF，均暂不覆盖审核中的商店包，等审核结束后再提交。
 
 - 名称和描述改为 `_locales/en`、`_locales/zh_CN` 本地化，名称明确带 **Unofficial / 非官方**。
-- 完整提交工作表：[STORE_SUBMISSION.md](STORE_SUBMISSION.md)
 - 隐私政策：[docs/privacy.html](docs/privacy.html)、[PRIVACY.md](PRIVACY.md)
 - 商店 Logo 和宣传图：[docs/store/](docs/store/)
 - 商店截图（1280×800，6 张）：[docs/store/screenshots/](docs/store/screenshots/)（六张都是 v1.11 工具栏；`store-05-page-tags.png` 还拍了 v1.12.0 已删除的网页标签，提交前重拍或裁掉工具栏）
@@ -296,7 +295,6 @@ Settings → Appearance → Show mini menu when selecting text → Off
 1. 隐私政策已发布在 `https://lllhcbjj.github.io/deepseek-sidebar-plus/privacy.html`（源码 `docs/privacy.html`，GitHub Pages 从 `/docs` 发布）。
 2. 商店截图已准备 6 张 1280×800（见 `docs/store/screenshots/`），不需要 DeepSeek 测试账号。
 3. 没有测试账号时，在认证备注中说明“审核员使用自己的免费 DeepSeek 账号”。
-4. 按 `STORE_SUBMISSION.md` 的权限说明、数据使用披露和认证备注填写。
 
 当前商店包仍是**全功能版**（包含 `<all_urls>`、剪贴板和 DNR 规则）；如果审核因为权限或 iframe 拒绝，下一步再做 optional host permissions 的低风险版本。
 
@@ -359,7 +357,6 @@ deepseek-sidebar-plus/
 │  ├─ reader.png                 PDF 阅读器截图
 │  └─ store/                     商店 Logo、宣传图、4 张截图、生成脚本
 ├─ PRIVACY.md                    隐私政策摘要
-└─ STORE_SUBMISSION.md           Edge Add-ons 提交流程、权限说明、认证备注
 ```
 
 ## 实现要点
