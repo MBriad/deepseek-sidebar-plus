@@ -663,6 +663,16 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     return false;
   }
 
+  if (chatProvider === 'dsh') {
+    const dshResponse = await sendToDsh({ type: 'DS_FILL_INPUT', text: value });
+    if (dshResponse?.ok) {
+      showToast('已填入 DSH');
+      return true;
+    }
+    showBanner('没有找到 DSH 标签页或输入框，请先打开 DSH 并等页面加载完成。', '重新加载', () => sendToDsh({ type: 'DS_FILL_INPUT', text: value }), { type: 'error', kind: 'connection' });
+    return false;
+  }
+
   if (!bridgeReady) {
     const ready = await waitForBridge(9000);
     if (!ready) {
