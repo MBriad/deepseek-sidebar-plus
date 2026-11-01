@@ -59,18 +59,24 @@
   }
 
   function fill(text) {
-    const composer = findComposer();
-    log('fill', { composer: describe(composer), candidates: candidates().map(describe) });
-    if (!composer) return false;
-    const value = String(text || '');
-    if (composer.tagName === 'TEXTAREA' || composer.tagName === 'INPUT') {
-      composer.focus();
-      setNativeValue(composer, value);
-      return true;
+    try {
+      const composer = findComposer();
+      log('fill', { composer: describe(composer), candidates: candidates().map(describe) });
+      if (!composer) return false;
+      const value = String(text || '');
+      if (composer.tagName === 'TEXTAREA' || composer.tagName === 'INPUT') {
+        composer.focus();
+        setNativeValue(composer, value);
+        log('textarea value now', composer.value === value ? 'ok' : `mismatch(${composer.value.length})`);
+        return true;
+      }
+      const ok = insertIntoEditable(composer, value);
+      log('editable insert', { ok });
+      return ok;
+    } catch (error) {
+      log('fill error', error?.message || String(error));
+      return false;
     }
-    const ok = insertIntoEditable(composer, value);
-    log('editable insert', { ok });
-    return ok;
   }
 
   window.addEventListener('message', (event) => {
