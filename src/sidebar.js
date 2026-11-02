@@ -1307,23 +1307,40 @@ function renderPageSheet(page) {
 function updatePdfButtons() {
   const enabled = Boolean(settings.pdfEnabled);
   const cueCount = Array.isArray(pageData?.video?.cues) ? pageData.video.cues.length : 0;
+  const chinese = cueCount > 0 && isChineseTranscript(pageData);
+
+  const reason = cueCount === 0
+    ? '这个页面没有抓到字幕，无法生成 PDF'
+    : chinese
+      ? '中文字幕暂不支持打印，目前只做英文'
+      : '';
+  const action = cueCount === 0
+    ? '把这一页的字幕生成 PDF（先读一页有字幕的视频）'
+    : chinese
+      ? '中文字幕暂不支持打印，目前只做英文'
+      : `把这 ${cueCount} 条字幕生成 PDF`;
 
   const sheetButton = $('#btn-make-pdf');
   if (sheetButton) {
     sheetButton.classList.toggle('hidden', !enabled);
-    sheetButton.disabled = cueCount === 0;
-    sheetButton.title = cueCount === 0
-      ? '这个页面没有抓到字幕，无法生成 PDF'
-      : `用 ${cueCount} 条字幕生成 PDF`;
+    sheetButton.disabled = reason !== '';
+    sheetButton.title = reason || `用 ${cueCount} 条字幕生成 PDF`;
   }
   const toolbarButton = $('#btn-pdf-from-page');
   if (toolbarButton) {
     toolbarButton.classList.toggle('hidden', !enabled);
-    toolbarButton.disabled = cueCount === 0;
-    toolbarButton.title = cueCount === 0
-      ? '把这一页的字幕生成 PDF（先读一页有字幕的视频）'
-      : `把这 ${cueCount} 条字幕生成 PDF`;
+    toolbarButton.disabled = reason !== '';
+    toolbarButton.title = action;
   }
+}
+
+// 中文字幕暂不提供打印：排版规则是按英文调的，中文稿读起来还不如直接看视频。
+function isChineseTranscript(page) {
+  const cues = Array.isArray(page?.video?.cues) ? page.video.cues : [];
+  if (!cues.length) return false;
+  const sample = cues.slice(0, 60).map((cue) => String(cue?.text || '')).join('');
+  const cjk = (sample.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  return cjk / Math.max(1, sample.length) > 0.15;
 }
 
 // 视频页抓到字幕后，打开打印窗口：排版好的字幕稿，用浏览器「另存为 PDF」。
@@ -1332,6 +1349,10 @@ function makePdfFromPage() {
   const cues = Array.isArray(page?.video?.cues) ? page.video.cues : [];
   if (!cues.length) {
     showToast('这个页面没有抓到字幕', 'error');
+    return;
+  }
+  if (isChineseTranscript(page)) {
+    showToast('中文字幕暂不支持打印，目前只做英文', 'error', 4000);
     return;
   }
 
