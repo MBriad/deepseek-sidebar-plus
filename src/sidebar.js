@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS = {
   bridgeEnabled: false,
   bridgeUrl: 'http://127.0.0.1:3080',
   bridgeToken: '',
+  pdfEnabled: false,
   pdfUrl: 'http://127.0.0.1:8765/make-pdf'
 };
 
@@ -1304,9 +1305,12 @@ function renderPageSheet(page) {
 
 // 预览面板和工具条各有一个入口，状态一起更新。
 function updatePdfButtons() {
+  const enabled = Boolean(settings.pdfEnabled);
   const cueCount = Array.isArray(pageData?.video?.cues) ? pageData.video.cues.length : 0;
+
   const sheetButton = $('#btn-make-pdf');
   if (sheetButton) {
+    sheetButton.classList.toggle('hidden', !enabled);
     sheetButton.disabled = cueCount === 0;
     sheetButton.title = cueCount === 0
       ? '这个页面没有抓到字幕，无法生成 PDF'
@@ -1314,6 +1318,7 @@ function updatePdfButtons() {
   }
   const toolbarButton = $('#btn-pdf-from-page');
   if (toolbarButton) {
+    toolbarButton.classList.toggle('hidden', !enabled);
     toolbarButton.disabled = cueCount === 0;
     toolbarButton.title = cueCount === 0
       ? '把这一页的字幕生成 PDF（先读一页有字幕的视频）'
@@ -2511,6 +2516,7 @@ function normalizeSettings(value) {
     bridgeEnabled: Boolean(value.bridgeEnabled),
     bridgeUrl: normalizeBridgeUrl(value.bridgeUrl),
     bridgeToken: typeof value.bridgeToken === 'string' ? value.bridgeToken.trim() : '',
+    pdfEnabled: Boolean(value.pdfEnabled),
     pdfUrl: normalizeBridgeUrl(value.pdfUrl || DEFAULT_SETTINGS.pdfUrl)
   };
 }
@@ -2561,8 +2567,11 @@ function applySettingsToUI() {
 
   const pdfUrl = $('#setting-pdf-url');
   if (pdfUrl) pdfUrl.value = settings.pdfUrl;
+  const pdfEnabled = $('#setting-pdf-enabled');
+  if (pdfEnabled) pdfEnabled.checked = Boolean(settings.pdfEnabled);
 
   updateAutofillButton();
+  updatePdfButtons();
 }
 
 function updateAutofillButton() {
@@ -2709,6 +2718,12 @@ function bindUI() {
     settings.pdfUrl = normalizeBridgeUrl(event.target.value);
     event.target.value = settings.pdfUrl;
     saveSettings();
+  });
+
+  $('#setting-pdf-enabled').addEventListener('change', (event) => {
+    settings.pdfEnabled = event.target.checked;
+    saveSettings();
+    updatePdfButtons();
   });
 
   $('#dsh-form').addEventListener('submit', submitDshMessage);
