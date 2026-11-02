@@ -1755,6 +1755,7 @@ async function toggleDshTabs() {
 
   box.classList.remove('hidden');
   box.textContent = '正在读取标签页…';
+  box.classList.add('loading');
 
   try {
     // listOpenTabs() deliberately drops the active tab (the @ palette shows it
@@ -1762,17 +1763,58 @@ async function toggleDshTabs() {
     const tabs = (await chrome.tabs.query({}))
       .filter((tab) => tab?.id && /^(https?|file):/i.test(tab.url || ''))
       .sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
+
     box.textContent = '';
+    box.classList.remove('loading');
+
     if (!tabs.length) {
       box.textContent = '没有可读取的标签页。';
       return;
     }
+
+    const head = document.createElement('div');
+    head.className = 'dsh-tab-head';
+    const headText = document.createElement('span');
+    headText.textContent = '发一个标签页给 DSH';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'dsh-tab-close';
+    close.textContent = '×';
+    close.title = '关闭';
+    close.addEventListener('click', () => box.classList.add('hidden'));
+    head.append(headText, close);
+    box.appendChild(head);
+
     for (const tab of tabs.slice(0, 40)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'dsh-tab';
       button.title = tab.url || '';
-      button.textContent = tab.title || tab.url || '(无标题)';
+
+      const icon = document.createElement('span');
+      icon.className = 'dsh-tab-icon';
+      if (tab.favIconUrl && /^https?:/i.test(tab.favIconUrl)) {
+        const img = document.createElement('img');
+        img.src = tab.favIconUrl;
+        img.alt = '';
+        icon.appendChild(img);
+      }
+
+      const title = document.createElement('span');
+      title.className = 'dsh-tab-title';
+      title.textContent = tab.title || tab.url || '(无标题)';
+
+      let host = '';
+      try { host = new URL(tab.url).hostname.replace(/^www\./, ''); } catch { /* 忽略 */ }
+      const url = document.createElement('span');
+      url.className = 'dsh-tab-url';
+      url.textContent = host;
+
+      const text = document.createElement('span');
+      text.className = 'dsh-tab-text';
+      text.append(title, url);
+
+      button.append(icon, text);
       button.addEventListener('click', () => {
         box.classList.add('hidden');
         handleMentionTab(tab.id);
