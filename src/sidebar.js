@@ -61,6 +61,7 @@ let pendingSelection = null;
 let activeSelectionId = '';
 let typeRelayActive = false;
 let dshRelayPrev = '';
+let dshRelayBase = '';
 let lastClearedSelectionId = '';
 let prompts = [];
 let promptFormMode = '';
@@ -454,7 +455,10 @@ function shortcutMatches(event, shortcut) {
 
 async function startTypeRelay() {
   if (!activeSelectionId) return;
-  if (dshOpen) dshRelayPrev = $('#dsh-input')?.value || '';
+  if (dshOpen) {
+    dshRelayBase = $('#dsh-input')?.value || '';
+    dshRelayPrev = dshRelayBase;
+  }
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
 
@@ -527,8 +531,12 @@ async function stopTypeRelayPage(cancel) {
 
 async function applyTypeRelayText(text) {
   if (!typeRelayActive) return;
-  // DSH 视图里输入框是唯一来源，网页小窗的整段文本会把用户刚打的字冲掉。
-  if (dshOpen) return;
+  // 小窗只装它自己敲的字，所以要拼在划词后面，不能整段覆盖。
+  if (dshOpen) {
+    const input = $('#dsh-input');
+    if (input) input.value = dshRelayBase + String(text || '');
+    return;
+  }
   await sendToFrame('DS_RELAY_SET', { text: String(text || '') }, 4000);
 }
 
@@ -712,8 +720,7 @@ async function fillSelection(selection, { auto = false } = {}) {
     hideBanner();
     if (!clearedAfterFill) {
       showToast(auto ? `已填入选中文字 · ${formatChars(text.length)}` : '已填入选中文字');
-      // DSH 视图里输入框就在同一屏，网页上再浮一个小窗只会跟它抢内容。
-      if (!dshOpen) await startTypeRelay();
+      await startTypeRelay();
     }
   }
 
