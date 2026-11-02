@@ -1570,9 +1570,13 @@ function renderMarkdown(text) {
   return html;
 }
 
-function renderDshLog() {
+function renderDshLog(options = {}) {
   const log = $('#dsh-log');
   if (!log) return;
+
+  // 每来一个增量就整表重绘会把用户正在拖选的选区清掉；流式期间有选区就跳过。
+  const selection = window.getSelection?.();
+  if (!options.force && selection && String(selection).length > 0) return;
 
   const rows = dshMessages.slice();
   if (bridgeFailure) {
@@ -1762,7 +1766,7 @@ function watchBridge(requestId) {
     if (bridgeAnswer) dshMessages.push({ role: 'assistant', text: bridgeAnswer });
     bridgeAnswer = '';
     setBridgeState('unread');
-    renderDshLog();
+    renderDshLog({ force: true });
     closeBridgeStream();
   });
 
