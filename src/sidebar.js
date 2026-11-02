@@ -527,12 +527,8 @@ async function stopTypeRelayPage(cancel) {
 
 async function applyTypeRelayText(text) {
   if (!typeRelayActive) return;
-  // DSH 视图没有 iframe 聊天页可以转发，直接把网页上敲的字镜像进去。
-  if (dshOpen) {
-    const input = $('#dsh-input');
-    if (input) input.value = String(text || '');
-    return;
-  }
+  // DSH 视图里输入框是唯一来源，网页小窗的整段文本会把用户刚打的字冲掉。
+  if (dshOpen) return;
   await sendToFrame('DS_RELAY_SET', { text: String(text || '') }, 4000);
 }
 
@@ -716,7 +712,8 @@ async function fillSelection(selection, { auto = false } = {}) {
     hideBanner();
     if (!clearedAfterFill) {
       showToast(auto ? `已填入选中文字 · ${formatChars(text.length)}` : '已填入选中文字');
-      await startTypeRelay();
+      // DSH 视图里输入框就在同一屏，网页上再浮一个小窗只会跟它抢内容。
+      if (!dshOpen) await startTypeRelay();
     }
   }
 
