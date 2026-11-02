@@ -385,7 +385,12 @@
           background: #fff;
           color: #1b1f2a;
           box-shadow: 0 10px 30px rgba(15, 23, 42, .22);
+          transition: box-shadow .15s ease;
           font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+        /* 光标已经在输入框里，给个亮起的外圈，免得看不出可以直接打字。 */
+        .panel:focus-within {
+          box-shadow: 0 0 0 3px rgba(77, 107, 254, .22), 0 10px 30px rgba(15, 23, 42, .22);
         }
         .dot {
           flex: none;
