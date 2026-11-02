@@ -60,6 +60,7 @@ let pageData = null;
 let pendingSelection = null;
 let activeSelectionId = '';
 let typeRelayActive = false;
+let dshRelayPrev = '';
 let lastClearedSelectionId = '';
 let prompts = [];
 let promptFormMode = '';
@@ -453,6 +454,7 @@ function shortcutMatches(event, shortcut) {
 
 async function startTypeRelay() {
   if (!activeSelectionId) return;
+  if (dshOpen) dshRelayPrev = $('#dsh-input')?.value || '';
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
 
@@ -525,6 +527,12 @@ async function stopTypeRelayPage(cancel) {
 
 async function applyTypeRelayText(text) {
   if (!typeRelayActive) return;
+  // DSH 视图没有 iframe 聊天页可以转发，直接把网页上敲的字镜像进去。
+  if (dshOpen) {
+    const input = $('#dsh-input');
+    if (input) input.value = String(text || '');
+    return;
+  }
   await sendToFrame('DS_RELAY_SET', { text: String(text || '') }, 4000);
 }
 
@@ -532,6 +540,18 @@ async function finishTypeRelay(commit, send = false) {
   if (!typeRelayActive) return;
   typeRelayActive = false;
   chrome.storage.local.remove('dsTypeRelay').catch(() => {});
+
+  if (dshOpen) {
+    const input = $('#dsh-input');
+    if (!commit) {
+      if (input) input.value = dshRelayPrev;
+    } else if (send && settings.enterSendsMessage !== false) {
+      $('#dsh-form')?.requestSubmit();
+    }
+    activeSelectionId = '';
+    pendingSelection = null;
+    return;
+  }
   if (commit) {
     await sendToFrame('DS_RELAY_END', {}, 4000);
     activeSelectionId = '';
@@ -553,6 +573,10 @@ async function finishTypeRelay(commit, send = false) {
 async function cancelTypeRelayFromSidebar() {
   if (!activeSelectionId) return;
   typeRelayActive = false;
+  if (dshOpen) {
+    const input = $('#dsh-input');
+    if (input) input.value = dshRelayPrev;
+  }
   await stopTypeRelayPage(true);
   await sendToFrame('DS_RELAY_CANCEL', {}, 4000);
   activeSelectionId = '';
@@ -617,6 +641,7 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
       const current = input.value;
       input.value = current + (current !== '' && !/\n$/.test(current) ? '\n' : '') + value;
       input.focus();
+      activeSelectionId = selectionId;
       showToast('已填入 DSH 输入框');
       return true;
     }
