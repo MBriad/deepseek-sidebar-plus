@@ -67,6 +67,42 @@
 
   document.title = title || '字幕稿';
 
+  // 字号：先给个能看的效果，调好再点打印；选择记在本地，下次沿用。
+  const bar = document.getElementById('bar');
+  const sizeInput = document.getElementById('size');
+  const sizeValue = document.getElementById('size-value');
+
+  const applySize = (size) => {
+    document.documentElement.style.setProperty('--base-size', `${size}pt`);
+    if (sizeValue) sizeValue.textContent = `${size} pt`;
+  };
+
+  const stored = await new Promise((resolve) => {
+    try {
+      chrome.storage.local.get('cuesPrintSize', (data) => {
+        void chrome.runtime.lastError;
+        resolve(Number(data?.cuesPrintSize) || 0);
+      });
+    } catch {
+      resolve(0);
+    }
+  });
+  const initial = stored >= 9 && stored <= 18 ? stored : 12;
+  applySize(initial);
+  if (sizeInput) sizeInput.value = String(initial);
+  if (bar) bar.hidden = false;
+
+  sizeInput?.addEventListener('input', () => {
+    applySize(Number(sizeInput.value) || 12);
+  });
+  sizeInput?.addEventListener('change', () => {
+    try { chrome.storage.local.set({ cuesPrintSize: Number(sizeInput.value) || 12 }); } catch { /* 忽略 */ }
+  });
+
+  document.getElementById('print')?.addEventListener('click', () => {
+    try { window.print(); } catch { /* 忽略 */ }
+  });
+
   const closeSelf = () => {
     try {
       chrome.windows.getCurrent((win) => {
@@ -78,8 +114,4 @@
     }
   };
   window.addEventListener('afterprint', () => setTimeout(closeSelf, 400), { once: true });
-
-  setTimeout(() => {
-    try { window.print(); } catch { /* 忽略 */ }
-  }, 120);
 })();
