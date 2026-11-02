@@ -326,20 +326,35 @@ async function renderOutline(pdfDocument) {
   const list = document.getElementById('pdfjs-outline-list');
   toggle.hidden = false;
   toggle.addEventListener('click', () => panel.classList.toggle('open'));
+  document.getElementById('pdfjs-outline-close')?.addEventListener('click', () => panel.classList.remove('open'));
 
   function pageButton(pageNumber, label, depth = 1) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = label;
-    button.className = `pdfjs-outline-depth-${Math.min(depth, 4)}`;
+    button.className = 'outline-item';
+    button.style.setProperty('--depth', String(Math.min(depth, 6)));
+
+    const title = document.createElement('span');
+    title.className = 'outline-item-title';
+    title.textContent = label;
+    button.appendChild(title);
+
     if (pageNumber) {
       button.dataset.pageNumber = String(pageNumber);
+      const pageTag = document.createElement('span');
+      pageTag.className = 'outline-item-page';
+      pageTag.textContent = String(pageNumber);
+      button.appendChild(pageTag);
       button.addEventListener('click', () => {
+        for (const item of list.querySelectorAll('.outline-item.active')) item.classList.remove('active');
+        button.classList.add('active');
         scrollToPdfPage(pageNumber);
         schedulePersist();
       });
     } else {
       button.disabled = true;
+      button.style.cursor = 'default';
+      button.style.color = '#9aa3b5';
     }
     list.appendChild(button);
   }

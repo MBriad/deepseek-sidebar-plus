@@ -46,51 +46,98 @@
     }
     #pdfjs-outline {
       position: fixed;
-      top: 48px;
+      top: 46px;
       left: 10px;
       bottom: 12px;
-      width: min(300px, calc(100vw - 20px));
+      width: min(320px, calc(100vw - 20px));
       z-index: 19;
       display: none;
       flex-direction: column;
       overflow: hidden;
       border: 1px solid #d8deea;
-      border-radius: 10px;
+      border-radius: 12px;
       background: #fff;
-      box-shadow: 0 10px 32px rgba(0, 0, 0, .25);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, .22);
     }
     #pdfjs-outline.open { display: flex; }
-    #pdfjs-outline-title {
-      padding: 10px 12px;
+
+    .outline-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 8px 8px 14px;
       border-bottom: 1px solid #e6eaf2;
+    }
+    .outline-heading {
       color: #1b1f2a;
       font: 600 12px/1.4 "Microsoft YaHei", "Segoe UI", sans-serif;
+      letter-spacing: .04em;
     }
-    #pdfjs-outline-list { overflow: auto; padding: 6px; }
-    #pdfjs-outline-list button {
-      display: block;
-      width: 100%;
-      padding: 5px 8px;
+    #pdfjs-outline-close {
       border: 0;
+      background: transparent;
+      color: #7a8194;
+      font-size: 16px;
+      line-height: 1;
+      padding: 3px 7px;
       border-radius: 6px;
+      cursor: pointer;
+    }
+    #pdfjs-outline-close:hover { background: #eef2ff; color: #2443c4; }
+
+    #pdfjs-outline-list {
+      overflow: auto;
+      padding: 6px 6px 10px;
+    }
+
+    .outline-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 8px 6px calc(8px + (var(--depth, 1) - 1) * 13px);
+      border: 0;
+      border-radius: 7px;
       background: transparent;
       color: #303748;
       font: 12px/1.5 "Microsoft YaHei", "Segoe UI", sans-serif;
       text-align: left;
       cursor: pointer;
     }
-    #pdfjs-outline-list button:hover { background: #eef2ff; color: #2443c4; }
-    .pdfjs-outline-depth-1 { padding-left: 8px !important; }
-    .pdfjs-outline-depth-2 { padding-left: 24px !important; }
-    .pdfjs-outline-depth-3 { padding-left: 40px !important; }
-    .pdfjs-outline-depth-4 { padding-left: 56px !important; }
+
+    .outline-item-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .outline-item-page {
+      flex: none;
+      color: #9aa3b5;
+      font: 10.5px/1.5 "Cascadia Code", Consolas, monospace;
+    }
+
+    .outline-item:hover { background: #eef2ff; color: #2443c4; }
+    .outline-item:hover .outline-item-page { color: #2443c4; }
+
+    .outline-item.active {
+      background: #e6ecff;
+      color: #1f3fa3;
+      font-weight: 600;
+    }
+    .outline-item.active .outline-item-page { color: #1f3fa3; }
   </style>
 </head>
 <body>
   <div id="pdfjs-container"><div id="pdfjs-viewer"></div></div>
   <button id="pdfjs-outline-toggle" type="button" hidden>目录</button>
   <aside id="pdfjs-outline" aria-label="PDF 目录">
-    <div id="pdfjs-outline-title">目录</div>
+    <div class="outline-head">
+      <span class="outline-heading">目录</span>
+      <button id="pdfjs-outline-close" type="button" title="关闭目录" aria-label="关闭目录">×</button>
+    </div>
     <nav id="pdfjs-outline-list"></nav>
   </aside>
   <script type="module" src="pdfjs-viewer.js"></script>
