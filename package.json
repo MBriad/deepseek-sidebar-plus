@@ -10,6 +10,7 @@
     "check": "node scripts/check.mjs && node scripts/docs-check.mjs",
     "test": "node tests/functional.test.js",
     "build": "node scripts/build-portable.mjs",
+    "demo": "node scripts/demo.mjs",
     "verify": "npm run check && npm test && npm run build"
   },
   "devDependencies": {

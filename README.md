@@ -4,6 +4,10 @@
 
 Manifest V3，无构建步骤、无框架、无运行时依赖。基于 [deepseek-sidebar-plus](https://github.com/lllhcbjj/deepseek-sidebar-plus) 重写增强，本仓库是 [MBriad](https://github.com/MBriad) 维护的 fork。
 
+## 预览
+
+![PDF 增强阅读器：目录占位栏、划词高亮](docs/media/reader-poster.png)
+
 ## 功能
 
 - **读本页** — 提取当前标签页标题、链接、正文；预览后另存为 `.txt` 附件或填进输入框，不替你写提示词。
