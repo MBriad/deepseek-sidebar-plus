@@ -381,10 +381,21 @@
           <label class="setting-row">
             <span class="setting-copy">
               <span class="setting-title">字幕生成 PDF</span>
-              <span class="setting-desc">开启后，抓到英文字幕的视频页多一个「生成 PDF」按钮；点它会打开打印窗口，用「另存为 PDF」保存</span>
+              <span class="setting-desc">开启后，抓到字幕的视频页多一个「生成 PDF」按钮；点它会打开打印窗口，用「另存为 PDF」保存</span>
             </span>
             <span class="switch">
               <input id="setting-pdf-enabled" type="checkbox">
+              <span class="slider" aria-hidden="true"></span>
+            </span>
+          </label>
+
+          <label class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">允许打印中文字幕</span>
+              <span class="setting-desc">排版是按英文调的；打开后中文稿也能生成，行距会自动放宽</span>
+            </span>
+            <span class="switch">
+              <input id="setting-pdf-cjk" type="checkbox">
               <span class="slider" aria-hidden="true"></span>
             </span>
           </label>

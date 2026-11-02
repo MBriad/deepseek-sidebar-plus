@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS = {
   bridgeUrl: 'http://127.0.0.1:3080',
   bridgeToken: '',
   pdfEnabled: false,
+  pdfCjkEnabled: false,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1308,16 +1309,17 @@ function updatePdfButtons() {
   const enabled = Boolean(settings.pdfEnabled);
   const cueCount = Array.isArray(pageData?.video?.cues) ? pageData.video.cues.length : 0;
   const chinese = cueCount > 0 && isChineseTranscript(pageData);
+  const chineseBlocked = chinese && !settings.pdfCjkEnabled;
 
   const reason = cueCount === 0
     ? '这个页面没有抓到字幕，无法生成 PDF'
-    : chinese
-      ? '中文字幕暂不支持打印，目前只做英文'
+    : chineseBlocked
+      ? '中文字幕暂不支持打印（可在设置里打开）'
       : '';
   const action = cueCount === 0
     ? '把这一页的字幕生成 PDF（先读一页有字幕的视频）'
-    : chinese
-      ? '中文字幕暂不支持打印，目前只做英文'
+    : chineseBlocked
+      ? '中文字幕暂不支持打印（可在设置里打开）'
       : `把这 ${cueCount} 条字幕生成 PDF`;
 
   const sheetButton = $('#btn-make-pdf');
@@ -1351,8 +1353,8 @@ function makePdfFromPage() {
     showToast('这个页面没有抓到字幕', 'error');
     return;
   }
-  if (isChineseTranscript(page)) {
-    showToast('中文字幕暂不支持打印，目前只做英文', 'error', 4000);
+  if (isChineseTranscript(page) && !settings.pdfCjkEnabled) {
+    showToast('中文字幕暂不支持打印，可在设置里打开', 'error', 4000);
     return;
   }
 
@@ -2577,7 +2579,8 @@ function normalizeSettings(value) {
     bridgeEnabled: Boolean(value.bridgeEnabled),
     bridgeUrl: normalizeBridgeUrl(value.bridgeUrl),
     bridgeToken: typeof value.bridgeToken === 'string' ? value.bridgeToken.trim() : '',
-    pdfEnabled: Boolean(value.pdfEnabled)
+    pdfEnabled: Boolean(value.pdfEnabled),
+    pdfCjkEnabled: Boolean(value.pdfCjkEnabled)
   };
 }
 
@@ -2627,6 +2630,8 @@ function applySettingsToUI() {
 
   const pdfEnabled = $('#setting-pdf-enabled');
   if (pdfEnabled) pdfEnabled.checked = Boolean(settings.pdfEnabled);
+  const pdfCjk = $('#setting-pdf-cjk');
+  if (pdfCjk) pdfCjk.checked = Boolean(settings.pdfCjkEnabled);
 
   updateAutofillButton();
   updatePdfButtons();
@@ -2774,6 +2779,12 @@ function bindUI() {
 
   $('#setting-pdf-enabled').addEventListener('change', (event) => {
     settings.pdfEnabled = event.target.checked;
+    saveSettings();
+    updatePdfButtons();
+  });
+
+  $('#setting-pdf-cjk').addEventListener('change', (event) => {
+    settings.pdfCjkEnabled = event.target.checked;
     saveSettings();
     updatePdfButtons();
   });
