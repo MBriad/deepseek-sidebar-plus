@@ -578,7 +578,7 @@ async function testBridgeSend() {
       request.on('end', () => {
         received.push({ headers: request.headers, body: JSON.parse(body) });
         response.writeHead(200, { 'content-type': 'application/json' });
-        response.end('{"ok":true}');
+        response.end('{"ok":true,"file":"C:/tmp/inbox.txt"}');
       });
       return;
     }
@@ -652,6 +652,11 @@ async function testBridgeSend() {
   await waitFor(
     () => sidebar.evaluate(() => document.getElementById('dsh-log')?.textContent.includes('接着说')),
     { message: 'typed message appears in the DSH log' }
+  );
+
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('dsh-log')?.textContent.includes('已存为文件')),
+    { message: 'a stored body is marked in the log' }
   );
 
   // DSH 视图里也能挑标签页发过去

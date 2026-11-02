@@ -1514,6 +1514,7 @@ async function sendToBridge(page) {
     // the pill reports progress and opens the answer when asked.
     dshMessages.push({ role: 'user', text: [page.title, page.url].filter(Boolean).join('\n') });
     renderDshLog();
+    markBridgedFile(data.file);
     watchBridge(requestId);
     showBanner(`已发送到 DSH：${page.title || page.url}`, '知道了', hideBanner, { type: 'success' });
   } catch (error) {
@@ -1589,6 +1590,18 @@ function renderDshLog() {
     log.appendChild(item);
   }
   log.scrollTop = log.scrollHeight;
+}
+
+// 长正文会被插件写成文件，消息里只留路径；在气泡上标一下，免得以为是丢了内容。
+function markBridgedFile(file) {
+  if (!file) return;
+  for (let index = dshMessages.length - 1; index >= 0; index -= 1) {
+    if (dshMessages[index].role === 'user') {
+      dshMessages[index].text += '\n（正文较长，已存为文件，模型会自己读取）';
+      break;
+    }
+  }
+  renderDshLog();
 }
 
 function toggleDshView(force) {
@@ -1710,6 +1723,7 @@ async function submitDshMessage(event) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(bridgeErrorText(response.status, data));
+    markBridgedFile(data.file);
     watchBridge(requestId);
   } catch (error) {
     bridgeFailure = `DSH 发送失败：${error.message}`;
