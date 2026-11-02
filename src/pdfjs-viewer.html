@@ -128,6 +128,20 @@
       font-weight: 600;
     }
     .outline-item.active .outline-item-page { color: #1f3fa3; }
+    @media (prefers-color-scheme: dark) {
+      #pdfjs-outline { background: #22252b; border-right-color: #333740; }
+      .outline-head { border-bottom-color: #333740; }
+      .outline-heading { color: #e6e8ee; }
+      #pdfjs-outline-close { color: #8b93a3; }
+      #pdfjs-outline-close:hover { background: #2c313a; color: #c7d2ff; }
+      .outline-item { color: #c9ced8; }
+      .outline-item-page { color: #7b8394; }
+      .outline-item:hover { background: #2a3040; color: #c7d2ff; }
+      .outline-item:hover .outline-item-page { color: #c7d2ff; }
+      .outline-item.active { background: #2f3a56; color: #dbe3ff; }
+      .outline-item.active .outline-item-page { color: #dbe3ff; }
+      #pdfjs-outline-toggle { background: #22252b; color: #e6e8ee; border-color: #4d6bfe; }
+    }
   </style>
 </head>
 <body>

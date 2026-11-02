@@ -518,7 +518,10 @@ function publicTab(tab) {
 
 function isPdfUrl(url) {
   if (!url) return false;
-  return /^(https?|file):/i.test(url) && /\.pdf(?:$|[?#])/i.test(url);
+  if (!/^(https?|file):/i.test(url)) return false;
+  // 后缀是最稳的信号；但 arXiv 这类是 /pdf/<id> 没有后缀，也要认。
+  if (/\.pdf(?:$|[?#])/i.test(url)) return true;
+  return (/\/pdf\/[^/?#]+/i.test(url) && !/\.html?(?:$|[?#])/i.test(url)) || /[?&](?:format|type)=pdf\b/i.test(url);
 }
 
 function pdfNameFromUrl(url) {

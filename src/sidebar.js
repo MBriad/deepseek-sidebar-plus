@@ -953,11 +953,16 @@ async function openChatInTab() {
 }
 
 function isPdfTabUrl(url) {
-  return /^(https?|file):/i.test(url || '') && /\.pdf(?:$|[?#])/i.test(url || '');
+  const value = String(url || '');
+  if (!/^(https?|file):/i.test(value)) return false;
+  // 后缀是最稳的信号；但 arXiv 这类是 /pdf/<id> 没有后缀，也要认。
+  if (/\.pdf(?:$|[?#])/i.test(value)) return true;
+  return (/\/pdf\/[^/?#]+/i.test(value) && !/\.html?(?:$|[?#])/i.test(value)) || /[?&](?:format|type)=pdf\b/i.test(value);
 }
 
 async function openPdfReader(pdfUrl, title) {
-  const pageMatch = String(pdfUrl).match(/[#&?]page=(\d+)/i);
+  // 兼容 #page=5 和 arXiv 那种 #5 的写法
+  const pageMatch = String(pdfUrl).match(/[#&?]page=(\d+)/i) || String(pdfUrl).match(/#(\d+)(?:[#&#]|$)/);
   const page = pageMatch ? Number(pageMatch[1]) : 1;
   const pageQuery = page > 1 ? `&page=${page}` : '';
   const readerUrl = chrome.runtime.getURL(
