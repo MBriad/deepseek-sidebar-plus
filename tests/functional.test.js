@@ -494,8 +494,8 @@ async function testPdfRemembersPosition() {
   ), { message: 'two-page directory' });
 
   await frame.evaluate(() => {
-    const button = Array.from(document.querySelectorAll('#pdfjs-outline-list button'))
-      .find((item) => item.textContent.trim() === '第 2 页');
+    const button = Array.from(document.querySelectorAll('#pdfjs-outline-list .outline-item'))
+      .find((item) => item.querySelector('.outline-item-title')?.textContent.trim() === '第 2 页');
     button?.click();
   });
 
