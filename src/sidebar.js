@@ -57,6 +57,7 @@ let pingToken = 0;
 let connectHintTimer = null;
 let bannerTimer = null;
 let bannerKind = '';
+let pdfHintShownFor = '';
 let toastTimer = null;
 let pageData = null;
 let pendingSelection = null;
@@ -1015,7 +1016,24 @@ async function refreshLocalPdfHint(tab = null) {
       [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     }
 
-    const isLocalPdf = tab?.url && /^file:/i.test(tab.url) && isPdfTabUrl(tab.url);
+    const isPdf = Boolean(tab?.url) && isPdfTabUrl(tab.url);
+    const isLocalPdf = isPdf && /^file:/i.test(tab.url);
+    const isOnlinePdf = isPdf && /^https?:/i.test(tab.url);
+
+    // 在线 PDF 走浏览器原生阅读器，选区拿不到；提示一次，别每次切标签都弹。
+    if (isOnlinePdf) {
+      if (pdfHintShownFor === tab.url) return;
+      if (isBannerVisible() && bannerKind !== 'online-pdf') return;
+      pdfHintShownFor = tab.url;
+      showBanner(
+        '在线 PDF 由浏览器自带阅读器打开，扩展读不到选区。用增强阅读器打开同一份 PDF 就能划词填入。',
+        '打开增强阅读器',
+        () => openPdfReader(tab.url, tab.title),
+        { kind: 'online-pdf' }
+      );
+      return;
+    }
+
     if (isLocalPdf) {
       if (isBannerVisible() && bannerKind !== 'local-pdf') return;
       showBanner(
@@ -1027,7 +1045,7 @@ async function refreshLocalPdfHint(tab = null) {
       return;
     }
 
-    if (bannerKind === 'local-pdf') hideBanner();
+    if (bannerKind === 'local-pdf' || bannerKind === 'online-pdf') hideBanner();
   } catch {
     // Ignore tab lookup failures.
   }
