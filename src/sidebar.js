@@ -1299,13 +1299,25 @@ function renderPageSheet(page) {
   }
 
   // 只有抓到字幕的页面才有时间轴，才谈得上生成 PDF。
-  const cueCount = Array.isArray(page.video?.cues) ? page.video.cues.length : 0;
-  const pdfButton = $('#btn-make-pdf');
-  if (pdfButton) {
-    pdfButton.disabled = cueCount === 0;
-    pdfButton.title = cueCount === 0
+  updatePdfButtons();
+}
+
+// 预览面板和工具条各有一个入口，状态一起更新。
+function updatePdfButtons() {
+  const cueCount = Array.isArray(pageData?.video?.cues) ? pageData.video.cues.length : 0;
+  const sheetButton = $('#btn-make-pdf');
+  if (sheetButton) {
+    sheetButton.disabled = cueCount === 0;
+    sheetButton.title = cueCount === 0
       ? '这个页面没有抓到字幕，无法生成 PDF'
       : `用 ${cueCount} 条字幕生成 PDF`;
+  }
+  const toolbarButton = $('#btn-pdf-from-page');
+  if (toolbarButton) {
+    toolbarButton.disabled = cueCount === 0;
+    toolbarButton.title = cueCount === 0
+      ? '把这一页的字幕生成 PDF（先读一页有字幕的视频）'
+      : `把这 ${cueCount} 条字幕生成 PDF`;
   }
 }
 
@@ -1339,7 +1351,7 @@ async function makePdfFromPage() {
   } catch (error) {
     showBanner(`生成 PDF 失败：${error.message}`, '重试', () => makePdfFromPage(), { type: 'error' });
   } finally {
-    if (button) button.disabled = false;
+    updatePdfButtons();
   }
 }
 
@@ -1525,6 +1537,10 @@ async function handleMentionTab(tabId) {
       return;
     }
     if (!response?.ok) throw new Error(response?.error || '读取标签页失败。');
+
+    // 无论发给 DSH 还是附件给聊天页，都记下这一页，工具条的 PDF 按钮靠它判断。
+    pageData = response.page;
+    updatePdfButtons();
 
     if ((settings.bridgeEnabled || dshOpen) && settings.bridgeToken) {
       await sendToBridge(response.page);
@@ -2600,6 +2616,7 @@ function bindUI() {
     if (pageData?.text) attachPageFile(pageData);
   });
   $('#btn-make-pdf').addEventListener('click', () => { makePdfFromPage().catch(() => {}); });
+  $('#btn-pdf-from-page').addEventListener('click', () => { makePdfFromPage().catch(() => {}); });
   $('#btn-fill-raw').addEventListener('click', fillPageText);
   $('#btn-copy-page').addEventListener('click', copyPage);
 
