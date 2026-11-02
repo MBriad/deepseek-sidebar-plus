@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="vendor/pdfjs/web/pdf_viewer.css">
   <style>
     html, body { height: 100%; margin: 0; background: #525659; }
+    body { display: flex; }
 
     /* 选区颜色对齐 Edge 原生 PDF 阅读器。pdf.js 默认是 25% 的纯蓝、还叠了
        color-mix(AccentColor)，在深色页面上偏淡；这里统一成一个实心蓝。 */
@@ -20,7 +21,8 @@
       color: transparent;
     }
 
-    #pdfjs-container { position: absolute; inset: 0; overflow: auto; }
+    /* 目录是占位栏，不是浮层：打开时把正文挤窄，不再盖住页面。 */
+    #pdfjs-container { position: relative; flex: 1; min-width: 0; overflow: auto; }
     #pdfjs-viewer { position: relative; margin: 0 auto; padding: 24px 0; }
     .pdfjs-page {
       position: relative;
@@ -34,7 +36,7 @@
       position: fixed;
       top: 10px;
       left: 10px;
-      z-index: 20;
+      z-index: 18;
       padding: 7px 12px;
       border: 1px solid #4d6bfe;
       border-radius: 8px;
@@ -45,19 +47,17 @@
       box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
     }
     #pdfjs-outline {
-      position: fixed;
-      top: 46px;
-      left: 10px;
-      bottom: 12px;
-      width: min(320px, calc(100vw - 20px));
+      position: relative;
+      order: -1;
+      flex: 0 0 min(300px, 45vw);
+      width: min(300px, 45vw);
       z-index: 19;
       display: none;
       flex-direction: column;
       overflow: hidden;
-      border: 1px solid #d8deea;
-      border-radius: 12px;
+      border: 0;
+      border-right: 1px solid #d8deea;
       background: #fff;
-      box-shadow: 0 14px 36px rgba(0, 0, 0, .22);
     }
     #pdfjs-outline.open { display: flex; }
 

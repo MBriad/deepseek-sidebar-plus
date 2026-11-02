@@ -137,7 +137,13 @@ document.addEventListener('pointerup', () => {
 window.addEventListener('message', (event) => {
   if (event.data?.source !== 'ds-pdf-host') return;
   if (event.data?.type === 'toggle-outline') {
-    document.getElementById('pdfjs-outline')?.classList.toggle('open');
+    const outline = document.getElementById('pdfjs-outline');
+    if (outline) {
+      const next = !outline.classList.contains('open');
+      outline.classList.toggle('open', next);
+      const toggle = document.getElementById('pdfjs-outline-toggle');
+      if (toggle) toggle.hidden = next;
+    }
   } else if (event.data?.type === 'clear-highlight') {
     clearSelectionHighlight();
   }
@@ -325,8 +331,13 @@ async function renderOutline(pdfDocument) {
   const panel = document.getElementById('pdfjs-outline');
   const list = document.getElementById('pdfjs-outline-list');
   toggle.hidden = false;
-  toggle.addEventListener('click', () => panel.classList.toggle('open'));
-  document.getElementById('pdfjs-outline-close')?.addEventListener('click', () => panel.classList.remove('open'));
+  const setOutlineOpen = (open) => {
+    panel.classList.toggle('open', open);
+    // 目录占位时把入口按钮藏起来，否则它会压在目录标题上。
+    toggle.hidden = open;
+  };
+  toggle.addEventListener('click', () => setOutlineOpen(!panel.classList.contains('open')));
+  document.getElementById('pdfjs-outline-close')?.addEventListener('click', () => setOutlineOpen(false));
 
   function pageButton(pageNumber, label, depth = 1) {
     const button = document.createElement('button');
