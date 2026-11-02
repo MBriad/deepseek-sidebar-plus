@@ -37,7 +37,8 @@ const DEFAULT_SETTINGS = {
   undoShortcut: 'Ctrl+Z',
   bridgeEnabled: false,
   bridgeUrl: 'http://127.0.0.1:3080',
-  bridgeToken: ''
+  bridgeToken: '',
+  pdfUrl: 'http://127.0.0.1:8765/make-pdf'
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1296,6 +1297,50 @@ function renderPageSheet(page) {
   for (const selector of ['#btn-attach-page', '#btn-fill-raw', '#btn-copy-page']) {
     $(selector).disabled = !hasText;
   }
+
+  // 只有抓到字幕的页面才有时间轴，才谈得上生成 PDF。
+  const cueCount = Array.isArray(page.video?.cues) ? page.video.cues.length : 0;
+  const pdfButton = $('#btn-make-pdf');
+  if (pdfButton) {
+    pdfButton.disabled = cueCount === 0;
+    pdfButton.title = cueCount === 0
+      ? '这个页面没有抓到字幕，无法生成 PDF'
+      : `用 ${cueCount} 条字幕生成 PDF`;
+  }
+}
+
+// 视频页抓到字幕后，手动把这个按钮点下去，交给本地脚本出 PDF。
+async function makePdfFromPage() {
+  const page = pageData;
+  const cues = Array.isArray(page?.video?.cues) ? page.video.cues : [];
+  if (!cues.length) {
+    showToast('这个页面没有抓到字幕', 'error');
+    return;
+  }
+
+  const button = $('#btn-make-pdf');
+  if (button) button.disabled = true;
+  showBanner(`正在生成 PDF（${cues.length} 条字幕）…`, '', null, { kind: 'pdf' });
+
+  try {
+    const response = await fetch(settings.pdfUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: page.title || '',
+        url: page.url || '',
+        platform: page.video?.platform || '',
+        cues
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data?.error || `请求失败（HTTP ${response.status}）`);
+    showBanner(`PDF 已生成：${data.path || '完成'}`, '知道了', hideBanner, { type: 'success' });
+  } catch (error) {
+    showBanner(`生成 PDF 失败：${error.message}`, '重试', () => makePdfFromPage(), { type: 'error' });
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function truncateText(text, maxChars) {
@@ -2449,7 +2494,8 @@ function normalizeSettings(value) {
     maxPageChars: [6000, 12000, 20000, 30000].includes(Number(value.maxPageChars)) ? Number(value.maxPageChars) : 12000,
     bridgeEnabled: Boolean(value.bridgeEnabled),
     bridgeUrl: normalizeBridgeUrl(value.bridgeUrl),
-    bridgeToken: typeof value.bridgeToken === 'string' ? value.bridgeToken.trim() : ''
+    bridgeToken: typeof value.bridgeToken === 'string' ? value.bridgeToken.trim() : '',
+    pdfUrl: normalizeBridgeUrl(value.pdfUrl || DEFAULT_SETTINGS.pdfUrl)
   };
 }
 
@@ -2496,6 +2542,9 @@ function applySettingsToUI() {
   if (bridgeEnabled) bridgeEnabled.checked = Boolean(settings.bridgeEnabled);
   if (bridgeUrl) bridgeUrl.value = settings.bridgeUrl;
   if (bridgeToken) bridgeToken.value = settings.bridgeToken;
+
+  const pdfUrl = $('#setting-pdf-url');
+  if (pdfUrl) pdfUrl.value = settings.pdfUrl;
 
   updateAutofillButton();
 }
@@ -2550,6 +2599,7 @@ function bindUI() {
   $('#btn-attach-page').addEventListener('click', () => {
     if (pageData?.text) attachPageFile(pageData);
   });
+  $('#btn-make-pdf').addEventListener('click', () => { makePdfFromPage().catch(() => {}); });
   $('#btn-fill-raw').addEventListener('click', fillPageText);
   $('#btn-copy-page').addEventListener('click', copyPage);
 
@@ -2635,6 +2685,12 @@ function bindUI() {
   $('#setting-bridge-token').addEventListener('change', (event) => {
     settings.bridgeToken = event.target.value.trim();
     event.target.value = settings.bridgeToken;
+    saveSettings();
+  });
+
+  $('#setting-pdf-url').addEventListener('change', (event) => {
+    settings.pdfUrl = normalizeBridgeUrl(event.target.value);
+    event.target.value = settings.pdfUrl;
     saveSettings();
   });
 

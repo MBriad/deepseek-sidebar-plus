@@ -115,6 +115,7 @@
           <button id="btn-attach-page" class="btn primary" type="button" title="把网页正文作为 .txt 文件附加到当前聊天，不修改输入框">附加文档</button>
           <button id="btn-fill-raw" class="btn ghost" type="button" title="把网页正文写进输入框，不添加提示词">填入正文</button>
           <button id="btn-copy-page" class="btn ghost" type="button">复制</button>
+          <button id="btn-make-pdf" class="btn ghost" type="button" disabled title="只对抓到字幕的视频页有效">生成 PDF</button>
         </div>
         <p class="hint">附加文档只把 .txt 放进当前聊天，不会替你决定或填写提示词；请自行输入问题。</p>
       </section>
@@ -366,6 +367,14 @@
               <span class="setting-desc">与插件 config.token 保持一致；只存在本机扩展存储里</span>
             </span>
             <input id="setting-bridge-token" class="text-input" type="password" placeholder="与插件配置一致" aria-label="DSH 令牌">
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-copy">
+              <span class="setting-title">PDF 服务地址</span>
+              <span class="setting-desc">抓到字幕后点「生成 PDF」会 POST 到这里；脚本由你自己起</span>
+            </span>
+            <input id="setting-pdf-url" class="text-input" type="text" inputmode="url" placeholder="http://127.0.0.1:8765/make-pdf" aria-label="PDF 服务地址">
           </div>
 
           <div class="settings-actions">
