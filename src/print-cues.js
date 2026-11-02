@@ -21,13 +21,15 @@
 
   const { title, url, platform, cues } = response.payload;
 
+  // 超过一小时就整份用 h:mm:ss，避免同一行里出现两种写法。
+  const withHours = Number(cues[cues.length - 1]?.start) >= 3600;
   const stamp = (seconds) => {
     const total = Math.max(0, Math.round(Number(seconds) || 0));
     const h = Math.floor(total / 3600);
     const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
     const pad = (n) => String(n).padStart(2, '0');
-    return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+    return withHours ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
   };
 
   const el = (tag, className, text) => {
@@ -52,17 +54,43 @@
 
   // 没有语义章节可用，就按 5 分钟切段，至少让长视频有节奏。
   const CHAPTER = 300;
-  let currentChapter = -1;
+  const chapters = [];
   for (const cue of cues) {
     const start = Number(cue.start) || 0;
-    const chapter = Math.floor(start / CHAPTER);
-    if (chapter !== currentChapter) {
-      currentChapter = chapter;
-      doc.append(el('h2', 'chapter', `${stamp(chapter * CHAPTER)} – ${stamp((chapter + 1) * CHAPTER)}`));
+    const index = Math.floor(start / CHAPTER);
+    let bucket = chapters[chapters.length - 1];
+    if (!bucket || bucket.index !== index) {
+      bucket = { index, start: index * CHAPTER, cues: [] };
+      chapters.push(bucket);
     }
-    const row = el('div', 'cue');
-    row.append(el('span', 't', stamp(start)), el('span', 'x', String(cue.text || '')));
-    doc.append(row);
+    bucket.cues.push({ start, text: String(cue.text || '') });
+  }
+
+  // 目录只在多章时才值得占一页。
+  if (chapters.length >= 3) {
+    const toc = el('nav', 'toc');
+    toc.append(el('h2', 'toc-title', 'Contents'));
+    const list = el('ol', 'toc-list');
+    for (const bucket of chapters) {
+      const item = el('li', 'toc-item');
+      item.append(
+        el('span', 'toc-time', `${stamp(bucket.start)} – ${stamp(bucket.start + CHAPTER)}`),
+        el('span', 'toc-lead'),
+        el('span', 'toc-count', `${bucket.cues.length} lines`)
+      );
+      list.append(item);
+    }
+    toc.append(list);
+    doc.append(toc);
+  }
+
+  for (const bucket of chapters) {
+    doc.append(el('h2', 'chapter', `${stamp(bucket.start)} – ${stamp(bucket.start + CHAPTER)}`));
+    for (const cue of bucket.cues) {
+      const row = el('div', 'cue');
+      row.append(el('span', 't', stamp(cue.start)), el('span', 'x', cue.text));
+      doc.append(row);
+    }
   }
 
   document.title = title || '字幕稿';
