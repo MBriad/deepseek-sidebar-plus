@@ -388,9 +388,20 @@
           transition: box-shadow .15s ease;
           font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
         }
-        /* 光标已经在输入框里，给个亮起的外圈，免得看不出可以直接打字。 */
+        /* 光标已经在输入框里，用呼吸外圈提示可以直接打字；开始打字后停下。 */
         .panel:focus-within {
+          animation: ds-relay-pulse 1.6s ease-in-out infinite;
+        }
+        .panel.typing:focus-within {
+          animation: none;
           box-shadow: 0 0 0 3px rgba(77, 107, 254, .22), 0 10px 30px rgba(15, 23, 42, .22);
+        }
+        @keyframes ds-relay-pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(77, 107, 254, .22), 0 10px 30px rgba(15, 23, 42, .22); }
+          50% { box-shadow: 0 0 0 7px rgba(77, 107, 254, .10), 0 10px 30px rgba(15, 23, 42, .22); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .panel:focus-within { animation: none; }
         }
         .dot {
           flex: none;
@@ -435,6 +446,12 @@
     });
     typeRelay.addEventListener('input', () => {
       if (!typeRelayActive || typeRelayComposing) return;
+      // 开始打字就停下呼吸外圈
+      try {
+        typeRelay.closest('.panel')?.classList.add('typing');
+      } catch {
+        // Ignore.
+      }
       relaySend('DS_TYPE_RELAY_TEXT', { text: typeRelay.value });
     });
     typeRelay.addEventListener('keydown', (event) => {
@@ -501,6 +518,11 @@
     positionTypeRelay();
     typeRelayActive = true;
     typeRelayComposing = false;
+    try {
+      typeRelay?.closest('.panel')?.classList.remove('typing');
+    } catch {
+      // Ignore.
+    }
     const focusRelay = () => {
       try {
         relay.focus({ preventScroll: true });
