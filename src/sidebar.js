@@ -2637,6 +2637,41 @@ function applySettingsToUI() {
   updatePdfButtons();
 }
 
+// PDF 划词自检：原生阅读器这套接口随 Edge 版本变，出问题时先看是哪一环。
+async function selfCheckPdfBridge() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      showToast('没有活动标签页', 'error');
+      return;
+    }
+
+    showBanner('正在自检 PDF 划词…', '', null, { kind: 'pdf-check' });
+    const result = await chrome.tabs.sendMessage(tab.id, { type: 'DS_PDF_SELFCHECK' });
+    if (!result?.ok) {
+      showBanner(`自检失败：${result?.error || '未知原因'}`, '知道了', hideBanner, { type: 'error' });
+      return;
+    }
+
+    const detail = result.pdf
+      ? `PDF 页 · 主世界脚本${result.bridge ? '已注入' : '未注入'}${typeof result.elapsed === 'number' ? ` · ${result.elapsed}ms` : ''}`
+      : '当前不是 PDF 页';
+    showBanner(
+      `${result.message}${result.pdf ? `（${detail}）` : ''}`,
+      '知道了',
+      hideBanner,
+      { type: result.pdf && result.responded === false ? 'error' : 'info' }
+    );
+  } catch (error) {
+    showBanner(
+      `自检失败：${error.message}。这个页面可能没有注入内容脚本，刷新页面再试。`,
+      '知道了',
+      hideBanner,
+      { type: 'error' }
+    );
+  }
+}
+
 function updateAutofillButton() {
   const button = $('#btn-autofill');
   if (!button) return;
@@ -2849,6 +2884,7 @@ function bindUI() {
   $('#btn-grab-selection').addEventListener('click', grabCurrentSelection);
   $('#btn-open-tab').addEventListener('click', openChatInTab);
   $('#btn-open-reader').addEventListener('click', openCurrentPdfReader);
+  $('#btn-pdf-check').addEventListener('click', () => { selfCheckPdfBridge().catch(() => {}); });
   $('#btn-open-sidebar-tab').addEventListener('click', openSidebarInTab);
   $('#btn-reload-frame').addEventListener('click', () => {
     closeSheet('#settings-sheet');

@@ -7,6 +7,19 @@
   <link rel="stylesheet" href="vendor/pdfjs/web/pdf_viewer.css">
   <style>
     html, body { height: 100%; margin: 0; background: #525659; }
+
+    /* 选区颜色对齐 Edge 原生 PDF 阅读器。pdf.js 默认是 25% 的纯蓝、还叠了
+       color-mix(AccentColor)，在深色页面上偏淡；这里统一成一个实心蓝。 */
+    .textLayer ::selection {
+      background: rgba(0, 120, 212, .35);
+      color: transparent;
+    }
+
+    .textLayer ::-moz-selection {
+      background: rgba(0, 120, 212, .35);
+      color: transparent;
+    }
+
     #pdfjs-container { position: absolute; inset: 0; overflow: auto; }
     #pdfjs-viewer { position: relative; margin: 0 auto; padding: 24px 0; }
     .pdfjs-page {

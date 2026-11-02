@@ -236,6 +236,13 @@
         if (message?.type === 'DS_STOP_TYPE_RELAY') {
           stopTypeRelay(Boolean(message.cancel));
           sendResponse({ ok: true });
+          return;
+        }
+        if (message?.type === 'DS_PDF_SELFCHECK') {
+          selfCheckPdf().then((result) => sendResponse(result)).catch((error) => {
+            sendResponse({ ok: false, error: error?.message || String(error) });
+          });
+          return true;
         }
       });
     } catch {
@@ -805,7 +812,53 @@
     });
   }
 
-  function pdfTitle() {
+  // 自检：告诉侧边栏这个 PDF 页的划词链路到底哪一环断了。
+// 原生接口失效时 pdf-main 不会回 selection-reply，只能靠“回没回”和“多久回”判断。
+async function selfCheckPdf() {
+  const started = Date.now();
+  if (!isPdfViewer()) {
+    return { ok: true, pdf: false, message: '当前页面不是 PDF，自检要在 PDF 标签页里做。' };
+  }
+
+  setupPdfBridge();
+  for (let i = 0; i < 16; i += 1) {
+    if (document.documentElement.dataset.dsPdfBridge === '1') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  const bridgeReady = document.documentElement.dataset.dsPdfBridge === '1';
+  if (!bridgeReady) {
+    return {
+      ok: true,
+      pdf: true,
+      bridge: false,
+      elapsed: Date.now() - started,
+      message: '主世界脚本没有注入，原生划词不可用，请用增强阅读器。'
+    };
+  }
+
+  const text = String((await requestPdfSelection()) || '');
+  const elapsed = Date.now() - started;
+  // pdf-main 最多 1.8s 一定会回一帧；2.8s 才结束说明连回复都没有。
+  const responded = elapsed < 2600;
+
+  return {
+    ok: true,
+    pdf: true,
+    bridge: true,
+    responded,
+    elapsed,
+    hasSelection: Boolean(text.trim()),
+    textLength: text.length,
+    message: !responded
+      ? '原生接口没有响应，划词已失效，请用增强阅读器。'
+      : text.trim()
+        ? '接口正常，且读到了当前选区。'
+        : '接口有响应，但当前没有选中文字（有选区时再试一次）。'
+  };
+}
+
+function pdfTitle() {
     try {
       const url = new URL(location.href);
       const file = url.searchParams.get('file');
