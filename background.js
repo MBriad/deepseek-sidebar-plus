@@ -497,6 +497,9 @@ function normalizePage(raw, tab) {
     totalCharCount: Number(raw.totalCharCount || raw.charCount || raw.text?.length || 0),
     truncated: Boolean(raw.truncated),
     mode: raw.mode || 'readable',
+    video: raw.video && Array.isArray(raw.video.cues)
+      ? { ...raw.video, cues: raw.video.cues }
+      : undefined,
     warning: String(raw.warning || ''),
     extractedAt: Date.now()
   };

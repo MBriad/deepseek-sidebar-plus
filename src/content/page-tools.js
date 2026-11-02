@@ -1319,7 +1319,9 @@
         platform: video.platform,
         title: video.title,
         duration: video.duration,
-        cueCount: video.cues.length
+        cueCount: video.cues.length,
+        // 时间轴要跟着走：生成 PDF / SRT 需要每一行的起点。
+        cues: video.cues.map((cue) => ({ start: Number(cue.start) || 0, text: String(cue.text || '') }))
       }
     };
   }
