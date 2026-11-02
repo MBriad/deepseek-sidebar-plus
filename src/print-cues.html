@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>字幕稿</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 14mm; }
+
+  :root {
+    --ink: #1b1b1f;
+    --muted: #6b6f76;
+    --accent: #4d6bfe;
+    --deep: #1f3fa3;
+    --rule: #e3e6ec;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: #fff;
+    font: 12pt/1.7 Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+  }
+
+  .cover {
+    padding-top: 30px;
+    margin-bottom: 30px;
+    border-top: 6px solid var(--accent);
+  }
+
+  .eyebrow {
+    margin: 0 0 16px;
+    color: var(--muted);
+    font: 600 7.5pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: .3em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0 0 12px;
+    color: var(--deep);
+    font-size: 24pt;
+    line-height: 1.22;
+    letter-spacing: .01em;
+  }
+
+  .meta {
+    margin: 2px 0;
+    color: var(--muted);
+    font: 9pt/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .meta strong { color: var(--ink); font-weight: 600; }
+
+  .chapter {
+    margin: 26px 0 10px;
+    padding-top: 12px;
+    border-top: 2px solid var(--accent);
+    color: var(--deep);
+    font: 700 9.5pt/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    break-after: avoid;
+  }
+
+  .cue {
+    display: flex;
+    gap: 14px;
+    padding: 4px 0;
+    break-inside: avoid;
+  }
+
+  .cue .t {
+    flex: 0 0 52px;
+    color: var(--accent);
+    font: 8.5pt/1.75 "Cascadia Code", Consolas, monospace;
+  }
+
+  .cue .x { flex: 1; }
+
+  .empty {
+    padding: 24px 0;
+    color: var(--muted);
+    font: 10pt/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+</style>
+</head>
+<body>
+<main id="doc"></main>
+<script src="print-cues.js"></script>
+</body>
+</html>

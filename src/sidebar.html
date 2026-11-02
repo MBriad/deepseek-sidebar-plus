@@ -381,21 +381,13 @@
           <label class="setting-row">
             <span class="setting-copy">
               <span class="setting-title">字幕生成 PDF</span>
-              <span class="setting-desc">开启后，抓到字幕的视频页多一个「生成 PDF」按钮；关掉则完全隐藏</span>
+              <span class="setting-desc">开启后，抓到字幕的视频页多一个「生成 PDF」按钮；点它会打开打印窗口，用「另存为 PDF」保存</span>
             </span>
             <span class="switch">
               <input id="setting-pdf-enabled" type="checkbox">
               <span class="slider" aria-hidden="true"></span>
             </span>
           </label>
-
-          <div class="setting-row">
-            <span class="setting-copy">
-              <span class="setting-title">PDF 服务地址</span>
-              <span class="setting-desc">抓到字幕后点「生成 PDF」会 POST 到这里；脚本由你自己起</span>
-            </span>
-            <input id="setting-pdf-url" class="text-input" type="text" inputmode="url" placeholder="http://127.0.0.1:8765/make-pdf" aria-label="PDF 服务地址">
-          </div>
 
           <div class="settings-actions">
             <button id="btn-grab-selection" class="btn" type="button">填入当前选中文字</button>

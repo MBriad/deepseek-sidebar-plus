@@ -39,7 +39,6 @@ const DEFAULT_SETTINGS = {
   bridgeUrl: 'http://127.0.0.1:3080',
   bridgeToken: '',
   pdfEnabled: false,
-  pdfUrl: 'http://127.0.0.1:8765/make-pdf'
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -913,6 +912,7 @@ function runExport() {
 // 侧边栏面板本身不能调起浏览器打印(Edge 会忽略),所以打印放在一个独立窗口里:
 // 弹出 → 渲染 → 弹打印 → 打印完自己关掉。数据只经 runtime 消息传内存,不落盘。
 let printPayload = null;
+let cuesPayload = null;
 
 function openPrintWindow(payload, options) {
   printPayload = { payload, options };
@@ -1326,8 +1326,8 @@ function updatePdfButtons() {
   }
 }
 
-// 视频页抓到字幕后，手动把这个按钮点下去，交给本地脚本出 PDF。
-async function makePdfFromPage() {
+// 视频页抓到字幕后，打开打印窗口：排版好的字幕稿，用浏览器「另存为 PDF」。
+function makePdfFromPage() {
   const page = pageData;
   const cues = Array.isArray(page?.video?.cues) ? page.video.cues : [];
   if (!cues.length) {
@@ -1335,28 +1335,26 @@ async function makePdfFromPage() {
     return;
   }
 
-  const button = $('#btn-make-pdf');
-  if (button) button.disabled = true;
-  showBanner(`正在生成 PDF（${cues.length} 条字幕）…`, '', null, { kind: 'pdf' });
+  cuesPayload = {
+    title: page.title || '',
+    url: page.url || '',
+    platform: page.video?.platform || '',
+    cues
+  };
 
   try {
-    const response = await fetch(settings.pdfUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        title: page.title || '',
-        url: page.url || '',
-        platform: page.video?.platform || '',
-        cues
-      })
+    const url = chrome.runtime.getURL('src/print-cues.html');
+    if (chrome.windows?.create) {
+      chrome.windows.create({ url, type: 'popup', width: 1000, height: 1200 }, () => {
+        void chrome.runtime.lastError;
+      });
+      return;
+    }
+    chrome.tabs.create({ url }).catch((error) => {
+      showToast(`打开打印窗口失败：${error.message}`, 'error', 4000);
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data?.error || `请求失败（HTTP ${response.status}）`);
-    showBanner(`PDF 已生成：${data.path || '完成'}`, '知道了', hideBanner, { type: 'success' });
   } catch (error) {
-    showBanner(`生成 PDF 失败：${error.message}`, '重试', () => makePdfFromPage(), { type: 'error' });
-  } finally {
-    updatePdfButtons();
+    showToast(`打开打印窗口失败：${error.message}`, 'error', 4000);
   }
 }
 
@@ -2516,8 +2514,7 @@ function normalizeSettings(value) {
     bridgeEnabled: Boolean(value.bridgeEnabled),
     bridgeUrl: normalizeBridgeUrl(value.bridgeUrl),
     bridgeToken: typeof value.bridgeToken === 'string' ? value.bridgeToken.trim() : '',
-    pdfEnabled: Boolean(value.pdfEnabled),
-    pdfUrl: normalizeBridgeUrl(value.pdfUrl || DEFAULT_SETTINGS.pdfUrl)
+    pdfEnabled: Boolean(value.pdfEnabled)
   };
 }
 
@@ -2565,8 +2562,6 @@ function applySettingsToUI() {
   if (bridgeUrl) bridgeUrl.value = settings.bridgeUrl;
   if (bridgeToken) bridgeToken.value = settings.bridgeToken;
 
-  const pdfUrl = $('#setting-pdf-url');
-  if (pdfUrl) pdfUrl.value = settings.pdfUrl;
   const pdfEnabled = $('#setting-pdf-enabled');
   if (pdfEnabled) pdfEnabled.checked = Boolean(settings.pdfEnabled);
 
@@ -2714,12 +2709,6 @@ function bindUI() {
     saveSettings();
   });
 
-  $('#setting-pdf-url').addEventListener('change', (event) => {
-    settings.pdfUrl = normalizeBridgeUrl(event.target.value);
-    event.target.value = settings.pdfUrl;
-    saveSettings();
-  });
-
   $('#setting-pdf-enabled').addEventListener('change', (event) => {
     settings.pdfEnabled = event.target.checked;
     saveSettings();
@@ -2851,6 +2840,11 @@ function bindUI() {
 
   // 打印窗口来取数据。多个侧边栏实例时,没有数据的那个保持沉默,避免抢答。
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'DS_GET_CUES_PAYLOAD') {
+      if (!cuesPayload) return;
+      sendResponse({ ok: true, payload: cuesPayload });
+      return;
+    }
     if (message?.type !== 'DS_GET_PRINT_PAYLOAD') return;
     if (!printPayload) return;
     sendResponse({ ok: true, payload: printPayload.payload, options: printPayload.options });
