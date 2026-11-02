@@ -659,6 +659,13 @@ async function testBridgeSend() {
     { message: 'a stored body is marked in the log' }
   );
 
+  // DSH 视图开着时，划词要进它的输入框，而不是隐藏的聊天页
+  await sidebar.evaluate(() => window.__DS_TEST__.fillChat('划词文字', 'smart'));
+  await waitFor(
+    () => sidebar.evaluate(() => document.getElementById('dsh-input')?.value.includes('划词文字')),
+    { message: 'selection fills the DSH input' }
+  );
+
   // DSH 视图里也能挑标签页发过去
   await sidebar.click('#dsh-page');
   await waitFor(

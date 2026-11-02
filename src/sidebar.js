@@ -610,6 +610,18 @@ async function fillChatInternal(text, mode = 'smart', options = {}) {
     return false;
   }
 
+  // DSH 视图开着时，划词该进它的输入框，而不是背后那个隐藏的聊天页。
+  if (dshOpen) {
+    const input = $('#dsh-input');
+    if (input) {
+      const current = input.value;
+      input.value = current + (current !== '' && !/\n$/.test(current) ? '\n' : '') + value;
+      input.focus();
+      showToast('已填入 DSH 输入框');
+      return true;
+    }
+  }
+
   if (!bridgeReady) {
     const ready = await waitForBridge(9000);
     if (!ready) {
