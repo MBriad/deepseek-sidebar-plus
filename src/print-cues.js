@@ -39,6 +39,13 @@
     return node;
   };
 
+  // 中文方块字需要更宽的行距，标题也不适合用衬线体的伪粗体。
+  const sample = `${title || ''}${cues.slice(0, 40).map((cue) => cue.text || '').join('')}`;
+  const cjkChars = (sample.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  if (cjkChars / Math.max(1, sample.length) > 0.15) {
+    document.body.classList.add('cjk');
+  }
+
   const cover = el('header', 'cover');
   cover.append(
     el('p', 'eyebrow', 'Video transcript'),
