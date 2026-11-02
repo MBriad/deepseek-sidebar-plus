@@ -388,20 +388,18 @@
           transition: box-shadow .15s ease;
           font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
         }
-        /* 光标已经在输入框里，用呼吸外圈提示可以直接打字；开始打字后停下。 */
-        .panel:focus-within {
+        /* 面板出现就用呼吸外圈提示可以直接打字；开始打字后停下。
+         * 不绑 :focus-within——焦点可能被侧边栏抢走，那样外圈永远不亮。 */
+        .panel.ready {
           animation: ds-relay-pulse 1.6s ease-in-out infinite;
         }
-        .panel.typing:focus-within {
+        .panel.typing {
           animation: none;
           box-shadow: 0 0 0 3px rgba(77, 107, 254, .22), 0 10px 30px rgba(15, 23, 42, .22);
         }
         @keyframes ds-relay-pulse {
           0%, 100% { box-shadow: 0 0 0 3px rgba(77, 107, 254, .22), 0 10px 30px rgba(15, 23, 42, .22); }
           50% { box-shadow: 0 0 0 7px rgba(77, 107, 254, .10), 0 10px 30px rgba(15, 23, 42, .22); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .panel:focus-within { animation: none; }
         }
         .dot {
           flex: none;
@@ -519,7 +517,9 @@
     typeRelayActive = true;
     typeRelayComposing = false;
     try {
-      typeRelay?.closest('.panel')?.classList.remove('typing');
+      const relayPanel = typeRelay?.closest('.panel');
+      relayPanel?.classList.remove('typing');
+      relayPanel?.classList.add('ready');
     } catch {
       // Ignore.
     }
@@ -560,6 +560,7 @@
     lastSelectionText = '';
     lastSelectionAt = 0;
     try {
+      typeRelay?.closest('.panel')?.classList.remove('ready', 'typing');
       typeRelay?.blur();
       if (typeRelay) typeRelay.value = '';
       if (typeRelayHost) typeRelayHost.style.display = 'none';
