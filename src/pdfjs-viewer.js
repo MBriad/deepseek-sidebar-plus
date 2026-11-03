@@ -196,8 +196,11 @@ try {
 
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { alpha: false });
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
+      // 按设备像素比渲染，否则 125%/150% 缩放的屏幕上会被拉伸成糊的。
+      // 上限 2：再高的 DPR 收益很小，内存和渲染时间翻倍。
+      const outputScale = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+      canvas.width = Math.floor(viewport.width * outputScale);
+      canvas.height = Math.floor(viewport.height * outputScale);
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
       pageElement.appendChild(canvas);
@@ -211,7 +214,8 @@ try {
       textLayerElement.style.setProperty('--user-unit', '1');
       pageElement.appendChild(textLayerElement);
 
-      await page.render({ canvasContext: context, viewport }).promise;
+      const transform = outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0];
+      await page.render({ canvasContext: context, viewport, transform }).promise;
 
       const textLayer = new pdfjsLib.TextLayer({
         textContentSource: page.streamTextContent(),
