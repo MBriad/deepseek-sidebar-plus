@@ -551,6 +551,69 @@ async function testPdfRemembersPosition() {
   console.log('PASS PDF remembers the last reading position');
 }
 
+// 目录跳转要正好落在那一页的顶边；窗口变窄要重排，且不能把阅读位置冲掉。
+async function testPdfOutlineJumpAndReflow() {
+  const reader = await context.newPage();
+  await reader.setViewportSize({ width: 1200, height: 900 });
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=reflow.pdf`
+  );
+
+  const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
+    timeout: 25000,
+    message: 'PDF.js iframe (reflow)'
+  });
+  await frame.waitForSelector('.pdfjs-page canvas', { timeout: 25000 });
+  await reader.click('#btn-outline');
+  await waitFor(() => frame.evaluate(() =>
+    document.querySelectorAll('#pdfjs-outline-list .outline-item').length >= 2
+  ), { message: 'two-page directory (reflow)' });
+
+  await frame.evaluate(() => {
+    const button = Array.from(document.querySelectorAll('#pdfjs-outline-list .outline-item'))
+      .find((item) => item.querySelector('.outline-item-title')?.textContent.trim() === '第 2 页');
+    button?.click();
+  });
+
+  // 跳转精度：第 2 页顶边与容器顶边相差不超过 2px。
+  const jump = await waitFor(() => frame.evaluate(() => {
+    const container = document.getElementById('pdfjs-container');
+    const page = document.querySelector('.pdfjs-page[data-page-number="2"]');
+    if (!container || !page) return null;
+    const delta = Math.round(page.getBoundingClientRect().top - container.getBoundingClientRect().top);
+    return { delta, scrollTop: Math.round(container.scrollTop) };
+  }).then((value) => (value && Math.abs(value.delta) <= 2 ? value : null)), {
+    message: 'outline jump aligns page top'
+  });
+  assert.ok(jump.scrollTop > 50, `page 2 should require scrolling (scrollTop=${jump.scrollTop})`);
+
+  const beforeWidth = await frame.evaluate(() =>
+    Math.round(document.querySelector('.pdfjs-page canvas').getBoundingClientRect().width));
+
+  await reader.setViewportSize({ width: 760, height: 900 });
+
+  const after = await waitFor(() => frame.evaluate(() => {
+    const canvas = document.querySelector('.pdfjs-page canvas');
+    const container = document.getElementById('pdfjs-container');
+    if (!canvas || !container) return null;
+    return {
+      width: Math.round(canvas.getBoundingClientRect().width),
+      scrollTop: Math.round(container.scrollTop),
+      pageHeight: Math.round(document.querySelector('.pdfjs-page').getBoundingClientRect().height),
+    };
+  }).then((value) => (value && value.width < 760 * 0.95 ? value : null)), {
+    timeout: 15000,
+    message: 'pages reflow to the narrower width'
+  });
+
+  assert.ok(after.width < beforeWidth, `canvas should shrink (${beforeWidth} -> ${after.width})`);
+  // 位置守住了：还能滚得动，说明没有被打回第一页顶部。
+  assert.ok(after.scrollTop > 50, `reading position kept after reflow (scrollTop=${after.scrollTop})`);
+
+  await reader.close();
+  console.log('PASS PDF outline jump precision + reflow keeps position');
+}
+
 async function testBridgeSend() {
   const received = [];
   const bridge = http.createServer((request, response) => {
@@ -749,6 +812,7 @@ async function testChatgptProvider() {
     await testExportDialog();
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
+  await testPdfOutlineJumpAndReflow();
     await testChatgptProvider();
     await testBridgeSend();
     console.log('ALL FUNCTIONAL TESTS PASSED');

@@ -2,7 +2,9 @@ import * as pdfjsLib from './vendor/pdfjs/build/pdf.mjs';
 
 const params = new URLSearchParams(location.search);
 const fileUrl = params.get('file') || '';
-const scale = Number(params.get('scale')) || 1.4;
+// ?scale= 显式指定时固定缩放；不指定就按容器宽度自适应（像浏览器自带阅读器）。
+const fixedScale = Number(params.get('scale')) || 0;
+let scale = fixedScale || 1.4;
 const initialPage = Math.max(1, Number(params.get('page')) || 1);
 const docKey = params.get('doc') || '';
 const POSITIONS_KEY = 'pdfReadingPositions';
@@ -85,7 +87,10 @@ function paintSelectionHighlight(rects) {
 function scrollToPdfPage(pageNumber) {
   const page = viewer.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
   if (!page) return;
-  page.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  // 按两者顶边的实际差值滚动：容器有内边距、页面有外边距时，
+  // scrollIntoView 的 block:'start' 会差出十几像素，看起来就像跳歪了。
+  const delta = page.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top;
+  scrollContainer.scrollTop += delta;
   requestPageRender(pageNumber);
   setTimeout(() => requestPageRender(pageNumber), 250);
   setTimeout(() => requestPageRender(pageNumber), 800);
@@ -160,6 +165,14 @@ try {
   const pdfDocument = await task.promise;
 
   const firstPage = await pdfDocument.getPage(1);
+  const baseViewport = firstPage.getViewport({ scale: 1 });
+  const fitScale = () => {
+    if (fixedScale) return fixedScale;
+    const available = scrollContainer.clientWidth - 48;
+    if (!available || !baseViewport.width) return scale;
+    return Math.min(3, Math.max(0.3, available / baseViewport.width));
+  };
+  scale = fitScale();
   const defaultViewport = firstPage.getViewport({ scale });
   const pageElements = new Map();
   const renderedPages = new Set();
@@ -167,18 +180,22 @@ try {
 
   // Create page placeholders immediately. Large PDFs (hundreds of pages) were
   // previously blocked until every canvas and text layer finished rendering.
-  for (let number = 1; number <= pdfDocument.numPages; number += 1) {
-    const pageElement = document.createElement('div');
-    pageElement.className = 'pdfjs-page';
-    pageElement.dataset.pageNumber = String(number);
-    pageElement.style.width = `${Math.floor(defaultViewport.width)}px`;
-    pageElement.style.height = `${Math.floor(defaultViewport.height)}px`;
-    pageElement.style.setProperty('--scale-factor', String(defaultViewport.scale));
-    pageElement.style.setProperty('--total-scale-factor', String(defaultViewport.scale));
-    pageElement.style.setProperty('--user-unit', '1');
-    viewer.appendChild(pageElement);
-    pageElements.set(number, pageElement);
-  }
+  const buildPages = () => {
+    for (let number = 1; number <= pdfDocument.numPages; number += 1) {
+      const pageElement = document.createElement('div');
+      pageElement.className = 'pdfjs-page';
+      pageElement.dataset.pageNumber = String(number);
+      const pageViewport = firstPage.getViewport({ scale });
+      pageElement.style.width = `${Math.floor(pageViewport.width)}px`;
+      pageElement.style.height = `${Math.floor(pageViewport.height)}px`;
+      pageElement.style.setProperty('--scale-factor', String(pageViewport.scale));
+      pageElement.style.setProperty('--total-scale-factor', String(pageViewport.scale));
+      pageElement.style.setProperty('--user-unit', '1');
+      viewer.appendChild(pageElement);
+      pageElements.set(number, pageElement);
+    }
+  };
+  buildPages();
 
   async function renderPage(number) {
     if (renderedPages.has(number) || renderingPages.has(number)) return;
@@ -246,6 +263,39 @@ try {
   });
 
   for (const pageElement of pageElements.values()) observer.observe(pageElement);
+
+  // 宽度变了就按新宽度重排。位置以“页单位”保存（scrollTop / 页高），
+  // 重排后仍停在同一页的同一处——不能用页码重算，否则第一次布局就会跳回第一页。
+  let resizeTimer = null;
+  let lastFitWidth = scrollContainer.clientWidth;
+  window.addEventListener('resize', () => {
+    if (fixedScale) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const width = scrollContainer.clientWidth;
+      if (Math.abs(width - lastFitWidth) < 4) return;
+      lastFitWidth = width;
+
+      const next = fitScale();
+      if (!scale || Math.abs(next - scale) / scale < 0.01) return;
+
+      const oldPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
+      const pageUnits = oldPageHeight ? scrollContainer.scrollTop / oldPageHeight : 0;
+
+      scale = next;
+      renderedPages.clear();
+      renderingPages.clear();
+      for (const element of pageElements.values()) element.remove();
+      pageElements.clear();
+      buildPages();
+      for (const element of pageElements.values()) observer.observe(element);
+
+      const newPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
+      if (newPageHeight) scrollContainer.scrollTop = pageUnits * newPageHeight;
+      const current = Math.min(pdfDocument.numPages, Math.max(1, Math.round(pageUnits) + 1));
+      renderPage(current).catch(() => {});
+    }, 200);
+  });
 
   // 记住读到第几页。以"容器顶部上沿落在哪一页"为准,不存像素偏移——
   // 换窗口宽度或缩放比例时,像素值会指向完全不同的地方。
