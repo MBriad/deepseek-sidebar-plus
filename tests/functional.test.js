@@ -52,7 +52,7 @@ let context;
 let extensionId;
 let server;
 let pdfUrl;
-let twoPagePdfUrl;
+let threePagePdfUrl;
 
 async function waitFor(check, { timeout = 15000, interval = 200, message = 'condition' } = {}) {
   const start = Date.now();
@@ -118,8 +118,8 @@ async function setup() {
       send(fs.readFileSync(pdfFixture));
       return;
     }
-    if (request.url === '/two-pages.pdf') {
-      send(twoPagePdf());
+    if (request.url === '/three-pages.pdf') {
+      send(threePagePdf());
       return;
     }
     response.writeHead(404);
@@ -127,21 +127,26 @@ async function setup() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   pdfUrl = `http://127.0.0.1:${server.address().port}/text.pdf`;
-  twoPagePdfUrl = `http://127.0.0.1:${server.address().port}/two-pages.pdf`;
+  threePagePdfUrl = `http://127.0.0.1:${server.address().port}/three-pages.pdf`;
 }
 
 // 现造一份两页 PDF:夹具只有一页,而"记住读到第几页"必须跨页才验得出来。
-function twoPagePdf() {
-  const content = (text) => `BT /F1 24 Tf 40 300 Td (${text}) Tj ET`;
-  const streams = [content('Page One'), content('Page Two')];
+// 三页 A4（612×792pt）。默认 100% 显示时单页 792px 高，两页凑不满一屏，
+// "跳转后页顶对齐" 和 "记住读到第几页" 都得跨三页才验得出来。
+function threePagePdf() {
+  const content = (text) => `BT /F1 24 Tf 40 700 Td (${text}) Tj ET`;
+  const streams = [content('Page One'), content('Page Two'), content('Page Three')];
+  const page = (contentsRef) => `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents ${contentsRef} 0 R >>`;
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 6 0 R 8 0 R] /Count 3 >>',
+    page(5),
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
     `<< /Length ${streams[0].length} >>\nstream\n${streams[0]}\nendstream`,
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>',
-    `<< /Length ${streams[1].length} >>\nstream\n${streams[1]}\nendstream`
+    page(7),
+    `<< /Length ${streams[1].length} >>\nstream\n${streams[1]}\nendstream`,
+    page(9),
+    `<< /Length ${streams[2].length} >>\nstream\n${streams[2]}\nendstream`
   ];
 
   let pdf = '%PDF-1.4\n';
@@ -480,7 +485,7 @@ async function testPdfFollowAndSend() {
 async function testPdfRemembersPosition() {
   const reader = await context.newPage();
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=two-pages.pdf`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=three-pages.pdf`
   );
 
   const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
@@ -518,7 +523,7 @@ async function testPdfRemembersPosition() {
 
   // 显式给了 page 参数时,必须以参数为准,不能被历史位置盖掉。
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=two-pages.pdf&page=1`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=three-pages.pdf&page=1`
   );
   await waitFor(async () => {
     for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
@@ -552,22 +557,46 @@ async function testPdfRemembersPosition() {
 }
 
 // 目录跳转要正好落在那一页的顶边；窗口变窄要重排，且不能把阅读位置冲掉。
-async function testPdfOutlineJumpAndReflow() {
+async function testPdfOutlineJumpAndNaturalSize() {
   const reader = await context.newPage();
   await reader.setViewportSize({ width: 1200, height: 900 });
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(twoPagePdfUrl)}&name=reflow.pdf`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=natural.pdf`
   );
 
   const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
     timeout: 25000,
-    message: 'PDF.js iframe (reflow)'
+    message: 'PDF.js iframe (natural size)'
   });
   await frame.waitForSelector('.pdfjs-page canvas', { timeout: 25000 });
+
+  // 默认 100%：不按容器宽度拉伸。容器 1200 宽，页面应明显更窄。
+  const natural = await frame.evaluate(() => {
+    const page = document.querySelector('.pdfjs-page');
+    const container = document.getElementById('pdfjs-container');
+    return {
+      scaleFactor: getComputedStyle(page).getPropertyValue('--scale-factor').trim(),
+      pageWidth: Math.round(page.getBoundingClientRect().width),
+      containerWidth: Math.round(container.getBoundingClientRect().width),
+      dpr: window.devicePixelRatio,
+      backing: document.querySelector('.pdfjs-page canvas').width,
+    };
+  });
+  assert.equal(natural.scaleFactor, '1', `default zoom should be 100% (got ${natural.scaleFactor})`);
+  assert.ok(
+    natural.pageWidth < natural.containerWidth - 40,
+    `page should not stretch to the container (${natural.pageWidth} vs ${natural.containerWidth})`
+  );
+  // 清晰度：画布后备像素 ≥ CSS 尺寸（高分屏下要更多），不能是 1:1 拉伸放大。
+  assert.ok(
+    natural.backing >= natural.pageWidth,
+    `canvas backing store too small (${natural.backing} < ${natural.pageWidth})`
+  );
+
   await reader.click('#btn-outline');
   await waitFor(() => frame.evaluate(() =>
     document.querySelectorAll('#pdfjs-outline-list .outline-item').length >= 2
-  ), { message: 'two-page directory (reflow)' });
+  ), { message: 'two-page directory (natural size)' });
 
   await frame.evaluate(() => {
     const button = Array.from(document.querySelectorAll('#pdfjs-outline-list .outline-item'))
@@ -587,31 +616,8 @@ async function testPdfOutlineJumpAndReflow() {
   });
   assert.ok(jump.scrollTop > 50, `page 2 should require scrolling (scrollTop=${jump.scrollTop})`);
 
-  const beforeWidth = await frame.evaluate(() =>
-    Math.round(document.querySelector('.pdfjs-page canvas').getBoundingClientRect().width));
-
-  await reader.setViewportSize({ width: 760, height: 900 });
-
-  const after = await waitFor(() => frame.evaluate(() => {
-    const canvas = document.querySelector('.pdfjs-page canvas');
-    const container = document.getElementById('pdfjs-container');
-    if (!canvas || !container) return null;
-    return {
-      width: Math.round(canvas.getBoundingClientRect().width),
-      scrollTop: Math.round(container.scrollTop),
-      pageHeight: Math.round(document.querySelector('.pdfjs-page').getBoundingClientRect().height),
-    };
-  }).then((value) => (value && value.width < 760 * 0.95 ? value : null)), {
-    timeout: 15000,
-    message: 'pages reflow to the narrower width'
-  });
-
-  assert.ok(after.width < beforeWidth, `canvas should shrink (${beforeWidth} -> ${after.width})`);
-  // 位置守住了：还能滚得动，说明没有被打回第一页顶部。
-  assert.ok(after.scrollTop > 50, `reading position kept after reflow (scrollTop=${after.scrollTop})`);
-
   await reader.close();
-  console.log('PASS PDF outline jump precision + reflow keeps position');
+  console.log('PASS PDF 100% natural size + outline jump precision');
 }
 
 async function testBridgeSend() {
@@ -812,7 +818,7 @@ async function testChatgptProvider() {
     await testExportDialog();
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
-  await testPdfOutlineJumpAndReflow();
+  await testPdfOutlineJumpAndNaturalSize();
     await testChatgptProvider();
     await testBridgeSend();
     console.log('ALL FUNCTIONAL TESTS PASSED');
