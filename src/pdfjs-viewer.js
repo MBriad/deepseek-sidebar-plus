@@ -2,9 +2,12 @@ import * as pdfjsLib from './vendor/pdfjs/build/pdf.mjs';
 
 const params = new URLSearchParams(location.search);
 const fileUrl = params.get('file') || '';
-// 默认 100%（1 PDF 点 = 1 CSS 像素，和浏览器自带阅读器的 100% 一致），
-// 不做宽度自适应——放大缩小交给宿主传 ?scale=。
-const scale = Number(params.get('scale')) || 1;
+// 默认 100%（1 PDF 点 = 1 CSS 像素，和浏览器自带阅读器的 100% 一致）。
+// 缩放由阅读器自己做（?scale= 或 Ctrl+滚轮/工具栏），不走浏览器缩放——
+// 扩展页和侧边栏同源，浏览器缩放会把侧边栏一起放大。
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 4;
+let scale = Number(params.get('scale')) || 1;
 const initialPage = Math.max(1, Number(params.get('page')) || 1);
 const docKey = params.get('doc') || '';
 const POSITIONS_KEY = 'pdfReadingPositions';
@@ -165,25 +168,28 @@ try {
   const pdfDocument = await task.promise;
 
   const firstPage = await pdfDocument.getPage(1);
-  const defaultViewport = firstPage.getViewport({ scale });
   const pageElements = new Map();
   const renderedPages = new Set();
   const renderingPages = new Set();
 
   // Create page placeholders immediately. Large PDFs (hundreds of pages) were
   // previously blocked until every canvas and text layer finished rendering.
-  for (let number = 1; number <= pdfDocument.numPages; number += 1) {
-    const pageElement = document.createElement('div');
-    pageElement.className = 'pdfjs-page';
-    pageElement.dataset.pageNumber = String(number);
-    pageElement.style.width = `${Math.floor(defaultViewport.width)}px`;
-    pageElement.style.height = `${Math.floor(defaultViewport.height)}px`;
-    pageElement.style.setProperty('--scale-factor', String(defaultViewport.scale));
-    pageElement.style.setProperty('--total-scale-factor', String(defaultViewport.scale));
-    pageElement.style.setProperty('--user-unit', '1');
-    viewer.appendChild(pageElement);
-    pageElements.set(number, pageElement);
-  }
+  const buildPages = () => {
+    const pageViewport = firstPage.getViewport({ scale });
+    for (let number = 1; number <= pdfDocument.numPages; number += 1) {
+      const pageElement = document.createElement('div');
+      pageElement.className = 'pdfjs-page';
+      pageElement.dataset.pageNumber = String(number);
+      pageElement.style.width = `${Math.floor(pageViewport.width)}px`;
+      pageElement.style.height = `${Math.floor(pageViewport.height)}px`;
+      pageElement.style.setProperty('--scale-factor', String(pageViewport.scale));
+      pageElement.style.setProperty('--total-scale-factor', String(pageViewport.scale));
+      pageElement.style.setProperty('--user-unit', '1');
+      viewer.appendChild(pageElement);
+      pageElements.set(number, pageElement);
+    }
+  };
+  buildPages();
 
   async function renderPage(number) {
     if (renderedPages.has(number) || renderingPages.has(number)) return;
@@ -251,6 +257,48 @@ try {
   });
 
   for (const pageElement of pageElements.values()) observer.observe(pageElement);
+
+  // 缩放：自己重排重渲染，页面位置按“页单位”保住（scrollTop / 页高），
+  // 否则放大时会跳回第一页顶部。
+  function applyScale(next) {
+    const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next) || 1));
+    if (Math.abs(target - scale) < 0.005) return;
+    const oldPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
+    const pageUnits = oldPageHeight ? scrollContainer.scrollTop / oldPageHeight : 0;
+
+    scale = target;
+    renderedPages.clear();
+    renderingPages.clear();
+    for (const element of pageElements.values()) element.remove();
+    pageElements.clear();
+    buildPages();
+    for (const element of pageElements.values()) observer.observe(element);
+
+    const newPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
+    if (newPageHeight) scrollContainer.scrollTop = pageUnits * newPageHeight;
+    const current = Math.min(pdfDocument.numPages, Math.max(1, Math.round(pageUnits) + 1));
+    renderPage(current).catch(() => {});
+
+    // 让宿主更新工具栏上的百分比，并记进 URL
+    try {
+      window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'zoom', scale }, '*');
+    } catch {
+      // Ignore.
+    }
+  }
+
+  // Ctrl+滚轮只缩放 PDF，不让浏览器缩放整个扩展 origin（那会把侧边栏一起放大）。
+  window.addEventListener('wheel', (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    applyScale(scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+  }, { passive: false });
+
+  // 宿主工具栏的 +/- 走这里
+  window.addEventListener('message', (event) => {
+    if (event.data?.source !== 'ds-pdf-host') return;
+    if (event.data.type === 'set-zoom') applyScale(event.data.scale);
+  });
 
   // 记住读到第几页。以"容器顶部上沿落在哪一页"为准,不存像素偏移——
   // 换窗口宽度或缩放比例时,像素值会指向完全不同的地方。

@@ -77,6 +77,22 @@ body {
   text-overflow: ellipsis;
 }
 
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoom .btn {
+  min-width: 28px;
+  padding: 0 6px;
+}
+
+.zoom-label {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -221,7 +237,8 @@ body {
     order: 3;
   }
 
-  .actions {
+
+.actions {
     margin-left: auto;
   }
 

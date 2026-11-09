@@ -620,6 +620,57 @@ async function testPdfOutlineJumpAndNaturalSize() {
   console.log('PASS PDF 100% natural size + outline jump precision');
 }
 
+// 缩放必须在阅读器内部完成：页面变大，而浏览器自己的缩放（visualViewport.scale）
+// 保持 1——扩展页和侧边栏同源，浏览器缩放会把侧边栏一起放大。
+async function testPdfZoomStaysInPage() {
+  const reader = await context.newPage();
+  await reader.setViewportSize({ width: 1100, height: 900 });
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=zoom.pdf`
+  );
+
+  const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
+    timeout: 25000,
+    message: 'PDF.js iframe (zoom)'
+  });
+  await frame.waitForSelector('.pdfjs-page canvas', { timeout: 25000 });
+
+  const width = () => frame.evaluate(() =>
+    Math.round(document.querySelector('.pdfjs-page').getBoundingClientRect().width));
+  const before = await width();
+
+  await reader.click('#btn-zoom-in');
+  await reader.waitForTimeout(250);
+  await reader.click('#btn-zoom-in');
+
+  const after = await waitFor(async () => {
+    const value = await frame.evaluate(() => ({
+      width: Math.round(document.querySelector('.pdfjs-page').getBoundingClientRect().width),
+      scale: Number(getComputedStyle(document.querySelector('.pdfjs-page')).getPropertyValue('--scale-factor')),
+      browserZoom: window.visualViewport?.scale ?? 1,
+    }));
+    return value.width > before + 50 ? value : null;
+  }, { message: 'toolbar zoom enlarges the page' });
+
+  assert.ok(after.width > before, `page should grow (${before} -> ${after.width})`);
+  assert.equal(after.browserZoom, 1, 'browser zoom must stay 1 (otherwise the side panel scales too)');
+  assert.ok(after.scale > 1, `--scale-factor should reflect the zoom (${after.scale})`);
+
+  const label = (await reader.textContent('#btn-zoom-reset'))?.trim();
+  assert.ok(/1[0-9]{2}%/.test(label || ''), `zoom label should show a percentage (got "${label}")`);
+
+  // 点百分比回到 100%
+  await reader.click('#btn-zoom-reset');
+  await waitFor(async () => {
+    const value = await frame.evaluate(() =>
+      Math.round(document.querySelector('.pdfjs-page').getBoundingClientRect().width));
+    return Math.abs(value - before) <= 1;
+  }, { message: 'reset returns to 100%' });
+
+  await reader.close();
+  console.log('PASS PDF zoom stays inside the reader');
+}
+
 async function testBridgeSend() {
   const received = [];
   const bridge = http.createServer((request, response) => {
@@ -819,6 +870,7 @@ async function testChatgptProvider() {
     await testPdfFollowAndSend();
     await testPdfRemembersPosition();
   await testPdfOutlineJumpAndNaturalSize();
+  await testPdfZoomStaysInPage();
     await testChatgptProvider();
     await testBridgeSend();
     console.log('ALL FUNCTIONAL TESTS PASSED');

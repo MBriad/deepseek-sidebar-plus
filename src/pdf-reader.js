@@ -62,6 +62,45 @@
     }
   });
 
+  // 缩放在阅读器里做，不用浏览器缩放——扩展页和侧边栏同源，浏览器缩放会把
+  // 侧边栏一起放大。这里只负责记数值、传给 iframe、更新工具栏百分比。
+  const zoomLabel = document.getElementById('btn-zoom-reset');
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 4;
+  let zoom = Number(new URL(location.href).searchParams.get('scale')) || 1;
+
+  function paintZoom() {
+    if (zoomLabel) zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  }
+
+  function setZoom(next) {
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next) || 1));
+    paintZoom();
+    try {
+      pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'set-zoom', scale: zoom }, '*');
+    } catch {
+      // The frame may be navigating.
+    }
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('scale', zoom.toFixed(2));
+      history.replaceState(null, '', url);
+    } catch {
+      // Ignore.
+    }
+  }
+
+  document.getElementById('btn-zoom-in')?.addEventListener('click', () => setZoom(zoom + 0.25));
+  document.getElementById('btn-zoom-out')?.addEventListener('click', () => setZoom(zoom - 0.25));
+  zoomLabel?.addEventListener('click', () => setZoom(1));
+  // 阅读器页面本身也拦 Ctrl+滚轮，否则在标题栏上滚一下就把整个扩展缩放了。
+  window.addEventListener('wheel', (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    setZoom(zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+  }, { passive: false });
+  paintZoom();
+
   window.addEventListener('message', onPdfMessage);
   window.addEventListener('message', onPdfJsMessage);
   window.addEventListener('pagehide', () => {
@@ -391,6 +430,7 @@
     outlineButton.hidden = false;
     pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`
       + `&page=${startPage}`
+      + `&scale=${zoom}`
       + `&doc=${encodeURIComponent(docKey)}`;
     overlay.classList.add('hidden');
     status.textContent = '选中文字会自动填入';
@@ -519,6 +559,21 @@
     if (event.source !== pdfJsFrame.contentWindow) return;
     const data = event.data;
     if (!data || data.source !== 'ds-pdf-viewer') return;
+    if (data.type === 'zoom') {
+      // iframe 里 Ctrl+滚轮改的缩放，回写百分比和 URL。
+      if (Number(data.scale) > 0) {
+        zoom = Number(data.scale);
+        paintZoom();
+        try {
+          const url = new URL(location.href);
+          url.searchParams.set('scale', zoom.toFixed(2));
+          history.replaceState(null, '', url);
+        } catch {
+          // Ignore.
+        }
+      }
+      return;
+    }
     if (data.type === 'selection-clear') {
       pdfSelectionRect = null;
       handleSelection('');
