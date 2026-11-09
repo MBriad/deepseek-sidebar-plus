@@ -67,7 +67,7 @@
   const zoomLabel = document.getElementById('btn-zoom-reset');
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 4;
-  let zoom = Number(new URL(location.href).searchParams.get('scale')) || 1;
+  let zoom = Number(new URL(location.href).searchParams.get('zoom')) || 1;
 
   function paintZoom() {
     if (zoomLabel) zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
@@ -77,13 +77,13 @@
     zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next) || 1));
     paintZoom();
     try {
-      pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'set-zoom', scale: zoom }, '*');
+      pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'set-zoom', zoom }, '*');
     } catch {
       // The frame may be navigating.
     }
     try {
       const url = new URL(location.href);
-      url.searchParams.set('scale', zoom.toFixed(2));
+      url.searchParams.set('zoom', zoom.toFixed(2));
       history.replaceState(null, '', url);
     } catch {
       // Ignore.
@@ -430,7 +430,7 @@
     outlineButton.hidden = false;
     pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`
       + `&page=${startPage}`
-      + `&scale=${zoom}`
+      + `&zoom=${zoom}`
       + `&doc=${encodeURIComponent(docKey)}`;
     overlay.classList.add('hidden');
     status.textContent = '选中文字会自动填入';
@@ -561,12 +561,12 @@
     if (!data || data.source !== 'ds-pdf-viewer') return;
     if (data.type === 'zoom') {
       // iframe 里 Ctrl+滚轮改的缩放，回写百分比和 URL。
-      if (Number(data.scale) > 0) {
-        zoom = Number(data.scale);
+      if (Number(data.zoom) > 0) {
+        zoom = Number(data.zoom);
         paintZoom();
         try {
           const url = new URL(location.href);
-          url.searchParams.set('scale', zoom.toFixed(2));
+          url.searchParams.set('zoom', zoom.toFixed(2));
           history.replaceState(null, '', url);
         } catch {
           // Ignore.

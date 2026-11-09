@@ -582,7 +582,15 @@ async function testPdfOutlineJumpAndNaturalSize() {
       backing: document.querySelector('.pdfjs-page canvas').width,
     };
   });
-  assert.equal(natural.scaleFactor, '1', `default zoom should be 100% (got ${natural.scaleFactor})`);
+  // 100% = 96/72：612pt 的纸在 100% 下约 816 CSS px（和 Chrome 内置阅读器一致）
+  assert.ok(
+    Math.abs(Number(natural.scaleFactor) - 96 / 72) < 0.01,
+    `zoom 100% should map 1pt to 4/3px (got ${natural.scaleFactor})`
+  );
+  assert.ok(
+    Math.abs(natural.pageWidth - 816) <= 2,
+    `a 612pt page should be ~816px wide at 100% (got ${natural.pageWidth})`
+  );
   assert.ok(
     natural.pageWidth < natural.containerWidth - 40,
     `page should not stretch to the container (${natural.pageWidth} vs ${natural.containerWidth})`

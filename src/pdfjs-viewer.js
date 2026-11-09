@@ -2,12 +2,14 @@ import * as pdfjsLib from './vendor/pdfjs/build/pdf.mjs';
 
 const params = new URLSearchParams(location.search);
 const fileUrl = params.get('file') || '';
-// 默认 100%（1 PDF 点 = 1 CSS 像素，和浏览器自带阅读器的 100% 一致）。
-// 缩放由阅读器自己做（?scale= 或 Ctrl+滚轮/工具栏），不走浏览器缩放——
-// 扩展页和侧边栏同源，浏览器缩放会把侧边栏一起放大。
+// 100% 的定义按打印行业来：1 PDF 点 = 1/72 英寸，CSS 像素 = 1/96 英寸，
+// 所以 1 点 = 96/72 = 4/3 像素（A4 宽 595 点 → 794 CSS px，和 Chrome 内置阅读器一致）。
+// 浏览器缩放按 origin 生效，扩展页和侧边栏同源，所以缩放必须自己做。
+const CSS_PX_PER_POINT = 96 / 72;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 4;
-let scale = Number(params.get('scale')) || 1;
+let zoom = Number(params.get('zoom')) || 1;
+let scale = zoom * CSS_PX_PER_POINT;
 const initialPage = Math.max(1, Number(params.get('page')) || 1);
 const docKey = params.get('doc') || '';
 const POSITIONS_KEY = 'pdfReadingPositions';
@@ -259,14 +261,15 @@ try {
   for (const pageElement of pageElements.values()) observer.observe(pageElement);
 
   // 缩放：自己重排重渲染，页面位置按“页单位”保住（scrollTop / 页高），
-  // 否则放大时会跳回第一页顶部。
-  function applyScale(next) {
-    const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next) || 1));
-    if (Math.abs(target - scale) < 0.005) return;
+  // 否则放大时会跳回第一页顶部。入参是用户看到的百分比（1 = 100%）。
+  function applyScale(nextZoom) {
+    const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(nextZoom) || 1));
+    if (Math.abs(target - zoom) < 0.005) return;
     const oldPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
     const pageUnits = oldPageHeight ? scrollContainer.scrollTop / oldPageHeight : 0;
 
-    scale = target;
+    zoom = target;
+    scale = zoom * CSS_PX_PER_POINT;
     renderedPages.clear();
     renderingPages.clear();
     for (const element of pageElements.values()) element.remove();
@@ -281,7 +284,7 @@ try {
 
     // 让宿主更新工具栏上的百分比，并记进 URL
     try {
-      window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'zoom', scale }, '*');
+      window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'zoom', zoom }, '*');
     } catch {
       // Ignore.
     }
@@ -291,13 +294,13 @@ try {
   window.addEventListener('wheel', (event) => {
     if (!event.ctrlKey) return;
     event.preventDefault();
-    applyScale(scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+    applyScale(zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
   }, { passive: false });
 
   // 宿主工具栏的 +/- 走这里
   window.addEventListener('message', (event) => {
     if (event.data?.source !== 'ds-pdf-host') return;
-    if (event.data.type === 'set-zoom') applyScale(event.data.scale);
+    if (event.data.type === 'set-zoom') applyScale(event.data.zoom);
   });
 
   // 记住读到第几页。以"容器顶部上沿落在哪一页"为准,不存像素偏移——
