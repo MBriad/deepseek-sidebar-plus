@@ -260,13 +260,30 @@ try {
 
   for (const pageElement of pageElements.values()) observer.observe(pageElement);
 
-  // 缩放：自己重排重渲染，页面位置按“页单位”保住（scrollTop / 页高），
-  // 否则放大时会跳回第一页顶部。入参是用户看到的百分比（1 = 100%）。
+  // 缩放后要回到原处：记「哪一页 + 页内比例」，不能拿 scrollTop / 页高当页码——
+  // 滚动偏移里混着顶部内边距和页间距，它们不随缩放变化，比例会一步步漂，
+  // 连缩几次就跳到相邻页去了。
+  function anchorAtViewportTop() {
+    const containerTop = scrollContainer.getBoundingClientRect().top;
+    let last = { page: 1, ratio: 0 };
+    for (const [number, element] of pageElements) {
+      const rect = element.getBoundingClientRect();
+      if (rect.bottom <= containerTop) {
+        last = { page: number, ratio: 0 };
+        continue;
+      }
+      const height = rect.height || 1;
+      return { page: number, ratio: Math.min(1, Math.max(0, (containerTop - rect.top) / height)) };
+    }
+    return last;
+  }
+
+  // 缩放：自己重排重渲染。入参是用户看到的百分比（1 = 100%）。
   function applyScale(nextZoom) {
     const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(nextZoom) || 1));
     if (Math.abs(target - zoom) < 0.005) return;
-    const oldPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
-    const pageUnits = oldPageHeight ? scrollContainer.scrollTop / oldPageHeight : 0;
+
+    const anchor = anchorAtViewportTop();
 
     zoom = target;
     scale = zoom * CSS_PX_PER_POINT;
@@ -277,10 +294,12 @@ try {
     buildPages();
     for (const element of pageElements.values()) observer.observe(element);
 
-    const newPageHeight = pageElements.get(1)?.getBoundingClientRect().height || 0;
-    if (newPageHeight) scrollContainer.scrollTop = pageUnits * newPageHeight;
-    const current = Math.min(pdfDocument.numPages, Math.max(1, Math.round(pageUnits) + 1));
-    renderPage(current).catch(() => {});
+    const targetPage = pageElements.get(anchor.page);
+    if (targetPage) {
+      // offsetTop 是相对 #pdfjs-viewer 的，直接就是容器里的滚动坐标。
+      scrollContainer.scrollTop = targetPage.offsetTop + anchor.ratio * (targetPage.offsetHeight || 0);
+    }
+    renderPage(anchor.page).catch(() => {});
 
     // 让宿主更新工具栏上的百分比，并记进 URL
     try {
@@ -290,17 +309,33 @@ try {
     }
   }
 
+  // Ctrl+滚轮一秒能来十几次。每次 applyScale 都要拆掉重建全部页面元素，
+  // 挨个处理会把布局撕开、锚点量到正在被替换的节点，看起来就是"跳页"。
+  // 所以只在最后一次停下时重排一次。
+  let pendingZoom = null;
+  let zoomTimer = null;
+  function requestZoom(next) {
+    pendingZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next) || 1));
+    if (zoomTimer) return;
+    zoomTimer = setTimeout(() => {
+      zoomTimer = null;
+      const target = pendingZoom;
+      pendingZoom = null;
+      if (target != null) applyScale(target);
+    }, 140);
+  }
+
   // Ctrl+滚轮只缩放 PDF，不让浏览器缩放整个扩展 origin（那会把侧边栏一起放大）。
   window.addEventListener('wheel', (event) => {
     if (!event.ctrlKey) return;
     event.preventDefault();
-    applyScale(zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+    requestZoom((pendingZoom ?? zoom) * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
   }, { passive: false });
 
   // 宿主工具栏的 +/- 走这里
   window.addEventListener('message', (event) => {
     if (event.data?.source !== 'ds-pdf-host') return;
-    if (event.data.type === 'set-zoom') applyScale(event.data.zoom);
+    if (event.data.type === 'set-zoom') requestZoom(event.data.zoom);
   });
 
   // 记住读到第几页。以"容器顶部上沿落在哪一页"为准,不存像素偏移——

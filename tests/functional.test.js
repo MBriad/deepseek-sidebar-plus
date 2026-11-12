@@ -52,7 +52,7 @@ let context;
 let extensionId;
 let server;
 let pdfUrl;
-let threePagePdfUrl;
+let multiPagePdfUrl;
 
 async function waitFor(check, { timeout = 15000, interval = 200, message = 'condition' } = {}) {
   const start = Date.now();
@@ -118,8 +118,8 @@ async function setup() {
       send(fs.readFileSync(pdfFixture));
       return;
     }
-    if (request.url === '/three-pages.pdf') {
-      send(threePagePdf());
+    if (request.url === '/multi-page.pdf') {
+      send(multiPagePdf());
       return;
     }
     response.writeHead(404);
@@ -127,27 +127,31 @@ async function setup() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   pdfUrl = `http://127.0.0.1:${server.address().port}/text.pdf`;
-  threePagePdfUrl = `http://127.0.0.1:${server.address().port}/three-pages.pdf`;
+  multiPagePdfUrl = `http://127.0.0.1:${server.address().port}/multi-page.pdf`;
 }
 
 // 现造一份两页 PDF:夹具只有一页,而"记住读到第几页"必须跨页才验得出来。
-// 三页 A4（612×792pt）。默认 100% 显示时单页 792px 高，两页凑不满一屏，
-// "跳转后页顶对齐" 和 "记住读到第几页" 都得跨三页才验得出来。
-function threePagePdf() {
-  const content = (text) => `BT /F1 24 Tf 40 700 Td (${text}) Tj ET`;
-  const streams = [content('Page One'), content('Page Two'), content('Page Three')];
-  const page = (contentsRef) => `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents ${contentsRef} 0 R >>`;
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R 6 0 R 8 0 R] /Count 3 >>',
-    page(5),
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Length ${streams[0].length} >>\nstream\n${streams[0]}\nendstream`,
-    page(7),
-    `<< /Length ${streams[1].length} >>\nstream\n${streams[1]}\nendstream`,
-    page(9),
-    `<< /Length ${streams[2].length} >>\nstream\n${streams[2]}\nendstream`
-  ];
+// A4（612×792pt）多页 PDF。页数要够多：页间距是固定像素、不随缩放变化，
+// 用 scrollTop / 页高 当页码的做法页数越多误差越大——几十页才验得出"缩放跳页"。
+function multiPagePdf(count = 40) {
+  const fonts = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  const pageObjectNumbers = [];
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>'];
+  // 2 号对象是 Pages，稍后填 Kids/Count
+  objects.push('');
+  objects.push(fonts); // 3 号
+
+  const kids = [];
+  for (let index = 0; index < count; index += 1) {
+    const stream = `BT /F1 24 Tf 40 700 Td (Page ${index + 1}) Tj ET`;
+    const pageNumber = objects.length + 1;
+    const contentsNumber = pageNumber + 1;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentsNumber} 0 R >>`);
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    kids.push(`${pageNumber} 0 R`);
+    pageObjectNumbers.push(pageNumber);
+  }
+  objects[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${count} >>`;
 
   let pdf = '%PDF-1.4\n';
   const offsets = [];
@@ -485,7 +489,7 @@ async function testPdfFollowAndSend() {
 async function testPdfRemembersPosition() {
   const reader = await context.newPage();
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=three-pages.pdf`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(multiPagePdfUrl)}&name=multi-page.pdf`
   );
 
   const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
@@ -523,7 +527,7 @@ async function testPdfRemembersPosition() {
 
   // 显式给了 page 参数时,必须以参数为准,不能被历史位置盖掉。
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=three-pages.pdf&page=1`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(multiPagePdfUrl)}&name=multi-page.pdf&page=1`
   );
   await waitFor(async () => {
     for (const candidate of reader.frames().filter((item) => item.url().includes('pdfjs-viewer.html'))) {
@@ -561,7 +565,7 @@ async function testPdfOutlineJumpAndNaturalSize() {
   const reader = await context.newPage();
   await reader.setViewportSize({ width: 1200, height: 900 });
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=natural.pdf`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(multiPagePdfUrl)}&name=natural.pdf`
   );
 
   const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
@@ -634,7 +638,7 @@ async function testPdfZoomStaysInPage() {
   const reader = await context.newPage();
   await reader.setViewportSize({ width: 1100, height: 900 });
   await reader.goto(
-    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(threePagePdfUrl)}&name=zoom.pdf`
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(multiPagePdfUrl)}&name=zoom.pdf`
   );
 
   const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
@@ -677,6 +681,64 @@ async function testPdfZoomStaysInPage() {
 
   await reader.close();
   console.log('PASS PDF zoom stays inside the reader');
+}
+
+// 连续缩放不能把阅读位置缩跑偏：每次缩完，视口顶部还应该停在同一页。
+// 旧实现用 scrollTop / 页高 当"页码"，但页间距和内边距不随缩放变化，
+// 每缩一次漂一点，连缩几次就跳到相邻页。
+async function testPdfZoomKeepsPage() {
+  const reader = await context.newPage();
+  await reader.setViewportSize({ width: 1100, height: 900 });
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(multiPagePdfUrl)}&name=zoom-anchor.pdf`
+  );
+
+  const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
+    timeout: 25000,
+    message: 'PDF.js iframe (zoom anchor)'
+  });
+  await frame.waitForSelector('.pdfjs-page canvas', { timeout: 25000 });
+
+  const pageAtTop = () => frame.evaluate(() => {
+    const container = document.getElementById('pdfjs-container');
+    const top = container.getBoundingClientRect().top + 1;
+    for (const page of document.querySelectorAll('.pdfjs-page')) {
+      const rect = page.getBoundingClientRect();
+      if (rect.bottom > top) return Number(page.dataset.pageNumber);
+    }
+    return 0;
+  });
+
+  // 滚到第 20 页中段。页码要足够大：页间距是固定像素，比例法的误差随页数累积，
+  // 前几页缩几次看不出来，几十页之后就会跳页。
+  const anchorPage = 20;
+  await frame.evaluate((pageNumber) => {
+    const container = document.getElementById('pdfjs-container');
+    const page = document.querySelector(`.pdfjs-page[data-page-number="${pageNumber}"]`);
+    container.scrollTop = page.offsetTop + Math.round(page.offsetHeight * 0.4);
+  }, anchorPage);
+  await reader.waitForTimeout(300);
+
+  const start = await pageAtTop();
+  assert.equal(start, anchorPage, `should start on page ${anchorPage} (got ${start})`);
+
+  for (let step = 0; step < 6; step += 1) {
+    await reader.click('#btn-zoom-in');
+    await reader.waitForTimeout(220);
+    const current = await pageAtTop();
+    assert.equal(current, anchorPage, `zoom step ${step + 1} jumped to page ${current}`);
+  }
+
+  // 缩回去也要守住
+  for (let step = 0; step < 6; step += 1) {
+    await reader.click('#btn-zoom-out');
+    await reader.waitForTimeout(220);
+  }
+  const back = await pageAtTop();
+  assert.equal(back, anchorPage, `zooming back out jumped to page ${back}`);
+
+  await reader.close();
+  console.log('PASS PDF zoom keeps the same page');
 }
 
 async function testBridgeSend() {
@@ -879,6 +941,7 @@ async function testChatgptProvider() {
     await testPdfRemembersPosition();
   await testPdfOutlineJumpAndNaturalSize();
   await testPdfZoomStaysInPage();
+  await testPdfZoomKeepsPage();
     await testChatgptProvider();
     await testBridgeSend();
     console.log('ALL FUNCTIONAL TESTS PASSED');
