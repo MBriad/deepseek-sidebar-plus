@@ -332,11 +332,43 @@ try {
     requestZoom((pendingZoom ?? zoom) * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
   }, { passive: false });
 
-  // 宿主工具栏的 +/- 走这里
-  window.addEventListener('message', (event) => {
+  // 宿主工具栏的 +/- 走这里；截图也走同一根通道
+  window.addEventListener('message', async (event) => {
     if (event.data?.source !== 'ds-pdf-host') return;
-    if (event.data.type === 'set-zoom') requestZoom(event.data.zoom);
+    if (event.data.type === 'set-zoom') {
+      requestZoom(event.data.zoom);
+      return;
+    }
+    if (event.data.type === 'capture-page') {
+      try {
+        const shot = await capturePage(anchorAtViewportTop().page);
+        window.parent.postMessage({ source: 'ds-pdf-viewer', type: 'page-image', page: shot.page, blob: shot.blob }, '*');
+      } catch (error) {
+        window.parent.postMessage({
+          source: 'ds-pdf-viewer',
+          type: 'page-image',
+          error: String(error?.message || error)
+        }, '*');
+      }
+    }
   });
+
+  // 整页按 2× 重新渲染：和当前缩放无关，字号和线条都是重绘的，不是屏幕截图。
+  async function capturePage(pageNumber) {
+    const number = Math.min(pdfDocument.numPages, Math.max(1, Number(pageNumber) || 1));
+    const page = number === 1 ? firstPage : await pdfDocument.getPage(number);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    const context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    const blob = await new Promise((resolve) => canvas.toBlob((value) => resolve(value), 'image/png'));
+    if (!blob) throw new Error('生成 PNG 失败');
+    return { page: number, blob };
+  }
 
   // 记住读到第几页。以"容器顶部上沿落在哪一页"为准,不存像素偏移——
   // 换窗口宽度或缩放比例时,像素值会指向完全不同的地方。

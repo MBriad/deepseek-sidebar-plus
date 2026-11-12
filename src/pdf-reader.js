@@ -29,6 +29,7 @@
   const status = document.getElementById('status');
   const toast = document.getElementById('toast');
   const outlineButton = document.getElementById('btn-outline');
+  const shotButton = document.getElementById('btn-shot');
   const versionLabel = document.getElementById('reader-version');
 
   let embed = null;
@@ -93,7 +94,43 @@
   document.getElementById('btn-zoom-in')?.addEventListener('click', () => setZoom(zoom + 0.25));
   document.getElementById('btn-zoom-out')?.addEventListener('click', () => setZoom(zoom - 0.25));
   zoomLabel?.addEventListener('click', () => setZoom(1));
-  // 阅读器页面本身也拦 Ctrl+滚轮，否则在标题栏上滚一下就把整个扩展缩放了。
+
+  // 截图：整页按 2× 重渲染。默认写剪贴板，Shift 点击或剪贴板被拒时下载。
+  let shotWantsDownload = false;
+  function pdfBaseName() {
+    return (fileName || 'page').replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '-').slice(0, 60);
+  }
+
+  async function copyShot(blob, pageNumber) {
+    if (!shotWantsDownload) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast(`已复制第 ${pageNumber} 页（2× PNG）`);
+        return;
+      } catch {
+        // 剪贴板被拒（没焦点/没权限）就退回下载，不留死路。
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${pdfBaseName()}-p${pageNumber}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showToast(`已保存第 ${pageNumber} 页 PNG`);
+  }
+
+  shotButton?.addEventListener('click', (event) => {
+    shotWantsDownload = Boolean(event.shiftKey);
+    shotButton.disabled = true;
+    try {
+      pdfJsFrame.contentWindow?.postMessage({ source: 'ds-pdf-host', type: 'capture-page' }, '*');
+    } catch {
+      shotButton.disabled = false;
+    }
+  });  // 阅读器页面本身也拦 Ctrl+滚轮，否则在标题栏上滚一下就把整个扩展缩放了。
   window.addEventListener('wheel', (event) => {
     if (!event.ctrlKey) return;
     event.preventDefault();
@@ -428,6 +465,7 @@
   function startPdfJs(blobUrl, startPage, docKey) {
     pdfJsFrame.hidden = false;
     outlineButton.hidden = false;
+    shotButton.hidden = false;
     pdfJsFrame.src = `${chrome.runtime.getURL('src/pdfjs-viewer.html')}?file=${encodeURIComponent(blobUrl)}`
       + `&page=${startPage}`
       + `&zoom=${zoom}`
@@ -559,6 +597,15 @@
     if (event.source !== pdfJsFrame.contentWindow) return;
     const data = event.data;
     if (!data || data.source !== 'ds-pdf-viewer') return;
+    if (data.type === 'page-image') {
+      shotButton.disabled = false;
+      if (data.error) {
+        showToast(`截图失败：${data.error}`);
+        return;
+      }
+      copyShot(data.blob, data.page).catch((error) => showToast(`截图失败：${error.message}`));
+      return;
+    }
     if (data.type === 'zoom') {
       // iframe 里 Ctrl+滚轮改的缩放，回写百分比和 URL。
       if (Number(data.zoom) > 0) {

@@ -741,6 +741,43 @@ async function testPdfZoomKeepsPage() {
   console.log('PASS PDF zoom keeps the same page');
 }
 
+// 截图按钮：整页 2× 重渲染。Shift+点击走下载分支（剪贴板在无头环境不可靠）。
+async function testPdfPageScreenshot() {
+  const reader = await context.newPage();
+  await reader.setViewportSize({ width: 1100, height: 900 });
+  await reader.goto(
+    `chrome-extension://${extensionId}/src/pdf-reader.html?file=${encodeURIComponent(multiPagePdfUrl)}&name=shot.pdf&page=1`
+  );
+
+  const frame = await waitFor(() => reader.frames().find((item) => item.url().includes('pdfjs-viewer.html')), {
+    timeout: 25000,
+    message: 'PDF.js iframe (screenshot)'
+  });
+  await frame.waitForSelector('.pdfjs-page canvas', { timeout: 25000 });
+  await reader.waitForSelector('#btn-shot:not([hidden])', { timeout: 10000 });
+
+  const [download] = await Promise.all([
+    reader.waitForEvent('download', { timeout: 20000 }),
+    reader.click('#btn-shot', { modifiers: ['Shift'] }),
+  ]);
+
+  assert.ok(/shot-p1\.png$/.test(download.suggestedFilename()), `unexpected file name: ${download.suggestedFilename()}`);
+
+  const file = await download.path();
+  const bytes = fs.readFileSync(file);
+  assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'not a PNG');
+
+  // PNG 头：8 字节签名 + 4 长度 + "IHDR" 之后是宽高（大端）
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  // A4 612×792pt 按 2× 渲染 → 1224×1584
+  assert.ok(Math.abs(width - 1224) <= 2, `width should be 2x page (got ${width})`);
+  assert.ok(Math.abs(height - 1584) <= 2, `height should be 2x page (got ${height})`);
+
+  await reader.close();
+  console.log('PASS PDF page screenshot (2x PNG download)');
+}
+
 async function testBridgeSend() {
   const received = [];
   const bridge = http.createServer((request, response) => {
@@ -942,6 +979,7 @@ async function testChatgptProvider() {
   await testPdfOutlineJumpAndNaturalSize();
   await testPdfZoomStaysInPage();
   await testPdfZoomKeepsPage();
+  await testPdfPageScreenshot();
     await testChatgptProvider();
     await testBridgeSend();
     console.log('ALL FUNCTIONAL TESTS PASSED');
